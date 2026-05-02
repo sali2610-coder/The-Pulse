@@ -13,6 +13,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { AnalyticsTab } from "@/components/analytics/analytics-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
+import { SeedPanel } from "@/components/dev/seed-panel";
+
+const isDev = process.env.NODE_ENV !== "production";
 
 export default function Home() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
@@ -72,6 +75,8 @@ export default function Home() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {isDev ? <SeedPanel /> : null}
     </main>
   );
 }

@@ -89,25 +89,76 @@ form עם `useForm` + `zodResolver`. שדות: AmountInput, CategoryGrid, [Payme
 ## Commands
 
 ```sh
-npm install         # להתקנה ראשונה
-npm run dev         # שרת פיתוח (Turbopack) על http://localhost:3000
-npm run build       # production build
-npm run start       # להריץ build בצורת prod
-npm run lint        # ESLint flat config (eslint.config.mjs)
-npx tsc --noEmit    # type-check ללא emit (אין script ייעודי)
+npm install              # להתקנה ראשונה
+npm run dev              # שרת פיתוח (Turbopack) על http://localhost:3000
+npm run build            # production build
+npm run start            # להריץ build בצורת prod
+npm run lint             # ESLint flat config (eslint.config.mjs)
+npm run typecheck        # tsc --noEmit
+npm test                 # Vitest run-once (unit tests ב־tests/)
+npm run test:watch       # Vitest watch mode
+npm run test:e2e:install # להוריד דפדפן Chromium ל־Playwright (חד-פעמי)
+npm run test:e2e         # Playwright E2E (e2e/) — מפעיל אוטומטית את dev server
 ```
 
-אין framework טסטים מוגדר עדיין. אם מוסיפים — לעדכן כאן.
+ריצת בדיקה בודדת: `npm test -- tests/projections.test.ts` או `npm test -- -t "matches by amount"`.
 
 ## Environment
 
-קובץ [.env.local](.env.local) חייב להכיל את ה־endpoint של ההוצאות:
+ראה [.env.example](.env.example) לרשימה מלאה. עיקרי:
 
 ```
 NEXT_PUBLIC_EXPENSE_ENDPOINT=https://your-endpoint.example.com/api/expenses
+WEBHOOK_SECRET=<HMAC-SHA256 secret כדי להפעיל את /api/webhooks/transactions>
+NEXT_PUBLIC_AUTH_ENABLED=false                 # שנה ל־true רק כשיש מפתחות Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
+OPEN_BANKING_PROVIDER=plaid                    # plaid | il-open-banking | mock
 ```
 
-שימושי ל־dev: [webhook.site](https://webhook.site) — מספק URL חינמי שמאפשר לראות payloads בזמן אמת. ה־prefix `NEXT_PUBLIC_` נחוץ כי הקריאה מתבצעת מה־client.
+שימושי ל־dev: [webhook.site](https://webhook.site) — מספק URL חינמי שמאפשר לראות payloads. ה־prefix `NEXT_PUBLIC_` נחוץ כי הקריאה ל־`postExpense` מתבצעת מה־client.
+
+## Auth (Clerk, feature-flagged)
+
+Clerk מותקן כ־SDK ([@clerk/nextjs](node_modules/@clerk/nextjs)) אבל **כבוי כברירת מחדל**. ה־flag נמצא ב־[src/lib/auth-config.ts](src/lib/auth-config.ts) ודורש את כל אלה כדי להפעיל:
+
+1. `NEXT_PUBLIC_AUTH_ENABLED=true`
+2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` קיים ולא ריק
+3. `CLERK_SECRET_KEY` קיים (server-side)
+
+כשהוא כבוי: [middleware.ts](src/middleware.ts) מחזיר `NextResponse.next()` ללא בדיקה, [providers.tsx](src/app/providers.tsx) לא עוטף ב־`ClerkProvider`, ו־`/sign-in` / `/sign-up` מציגים placeholder עברי. כשמופעל: middleware מגן על כל route מלבד `/api/webhooks/*`, manifest, icons, ו־`/sign-in`, `/sign-up`. **MFA**: מופעל ב־Clerk dashboard, לא בקוד.
+
+## PWA
+
+- [src/app/manifest.ts](src/app/manifest.ts) — מטא של אפליקציה (RTL, theme color charcoal, icons SVG).
+- [public/icon.svg](public/icon.svg), [public/icon-maskable.svg](public/icon-maskable.svg) — אייקונים.
+- [public/sw.js](public/sw.js) — Service Worker מינימלי: cache shell + network-first navigation, אגנוסטי ל־`/_next/*` ו־`/api/*`.
+- [src/components/pwa/register-sw.tsx](src/components/pwa/register-sw.tsx) — רושם את ה־SW ב־production בלבד (לא ב־dev כדי לא להפריע ל־HMR).
+- iOS "Add to Home Screen": `appleWebApp` ב־[layout.tsx](src/app/layout.tsx).
+
+## Webhooks (Open Banking ingestion)
+
+[src/app/api/webhooks/transactions/route.ts](src/app/api/webhooks/transactions/route.ts) — Edge runtime (`runtime = "edge"`). שכבות הגנה:
+
+1. דורש `WEBHOOK_SECRET` ב־env, אחרת 503.
+2. תוקף `Content-Type: application/json` ו־`Content-Length ≤ 64KB`.
+3. אימות חתימה: HMAC-SHA256 על body גולמי מול header `x-sally-signature` ([webhook-verify.ts](src/lib/webhook-verify.ts), Web Crypto, constant-time compare).
+4. zod parse על שכבת ה־payload לפני קבלה.
+
+**מגבלה ארכיטקטונית כרגע**: כל ה־state ב־localStorage בלקוח. ה־webhook לא יכול לעדכן את הדאשבורד של משתמש ספציפי בלי DB אמיתי + מנגנון push (SSE/WebSocket). הראוט לוגג ומחזיר 200 — החיבור האמיתי לדאשבורד דורש backend עם DB.
+
+## Open Banking provider abstraction
+
+[src/lib/open-banking.ts](src/lib/open-banking.ts) — interface כללי `OpenBankingProvider` (id, normalize, getLinkUrl). כרגע רק `mockProvider` מימושי (משמש לתיעוד ולבדיקות). מימוש אמיתי יחיה ב־`src/lib/providers/<name>.ts` ויבחר ב־runtime לפי `OPEN_BANKING_PROVIDER`. ראה הערות בקובץ — Plaid דורש sandbox account, ובארץ אין SDK יחיד (אגרגטור per-bank לפי תקן Open Banking של בנק ישראל).
+
+## API security ([src/lib/api.ts](src/lib/api.ts))
+
+`postExpense` עוטף את ה־fetch עם:
+- בדיקת `https:` (או `http://localhost` ב־dev).
+- sanitization של ה־payload: clamp לקטגוריות/סכומים/אורך הערה, סינון C0 control chars + DEL.
+- `AbortController` עם 8s timeout.
+- `cache: "no-store"`, `credentials: "omit"`, `mode: "cors"` — לא שולח cookies או client cache.
+- cap על body size (8KB).
 
 ## Notes for Claude
 
@@ -117,4 +168,5 @@ NEXT_PUBLIC_EXPENSE_ENDPOINT=https://your-endpoint.example.com/api/expenses
 - **RTL:** ה־`<html dir="rtl">` קבוע ב־[layout.tsx](src/app/layout.tsx). כשכותבים flex/grid להעדיף `start/end` במקום `left/right`. מספרים שצריכים להיראות LTR (סכומים, ₪) דורשים `dir="ltr"` מקומי.
 - **React 19 + React Compiler:** ESLint כאן אוסר `setState` סינכרוני בתוך `useEffect`. אם מתעורר צורך — להעביר ל־event handler או לעטוף ב־`onOpenChange` של הרכיב.
 - **localStorage hydration**: `useFinanceStore.persist` מציב `hasHydrated=true` רק אחרי טעינה. לפני זה, חישובים מבוססי־store חייבים להחזיר ערכי ברירת מחדל (0/ריק) כדי למנוע SSR mismatch.
-- **Roadmap (מחוץ ל־scope נוכחי):** קליטת Auto entries מ־Open Banking (כשתהיה — יקראו `addExpense({ source: "auto" })` והשידוך יתפוס אותם), DB אמיתי שיחליף את ה־localStorage, היסטוריית עסקאות, WhatsApp notifications, PWA. Apple Pay אינו חושף API לקריאת עסקאות — כל פתרון קליטה עתידי חייב מקור עקיף (SMS / API בנק / Open Banking).
+- **Dev seed panel**: [src/components/dev/seed-panel.tsx](src/components/dev/seed-panel.tsx) מוצג רק כש־`NODE_ENV !== "production"`. מאפשר טעינת תרחישים מ־[mock-data.ts](src/lib/mock-data.ts) (מאוזן / חריגה / תשלומים ארוכים / מזומן בעיקר / מקרי קצה) או ניקוי הכל.
+- **Roadmap (מחוץ ל־scope נוכחי):** Backend עם DB → יאפשר שתי דברים: webhook ingestion שמעדכן את הדאשבורד בזמן אמת (SSE/WebSocket), ועבר sync של localStorage למשתמש מחובר. Plaid או IL Open Banking integration — להוסיף תחת `src/lib/providers/<name>.ts` ולהפעיל ב־`OPEN_BANKING_PROVIDER`. Apple Pay אינו חושף API לקריאת עסקאות — כל פתרון קליטה עתידי חייב מקור עקיף (SMS / API בנק / Open Banking).

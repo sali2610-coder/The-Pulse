@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Heebo, JetBrains_Mono } from "next/font/google";
 import { Providers } from "./providers";
+import { RegisterSW } from "@/components/pwa/register-sw";
 import "./globals.css";
 
 const heebo = Heebo({
@@ -18,6 +19,13 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Sally — מעקב הוצאות חכם",
   description: "תיעוד הוצאות מהיר ויוקרתי בעברית",
+  applicationName: "Sally",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Sally",
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
@@ -41,6 +49,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>{children}</Providers>
+        <RegisterSW />
       </body>
     </html>
   );
