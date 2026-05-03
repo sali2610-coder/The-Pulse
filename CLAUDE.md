@@ -210,4 +210,45 @@ GET עם `x-sally-device` ו־`?since=<ms>`. מחזיר עד 200 transactions מ
 - **React 19 + React Compiler:** ESLint כאן אוסר `setState` סינכרוני בתוך `useEffect`. אם מתעורר צורך — להעביר ל־event handler או לעטוף ב־`onOpenChange` של הרכיב.
 - **localStorage hydration**: `useFinanceStore.persist` מציב `hasHydrated=true` רק אחרי טעינה. לפני זה, חישובים מבוססי־store חייבים להחזיר ערכי ברירת מחדל (0/ריק) כדי למנוע SSR mismatch.
 - **Dev seed panel**: [src/components/dev/seed-panel.tsx](src/components/dev/seed-panel.tsx) מוצג רק כש־`NODE_ENV !== "production"`. מאפשר טעינת תרחישים מ־[mock-data.ts](src/lib/mock-data.ts) (מאוזן / חריגה / תשלומים ארוכים / מזומן בעיקר / מקרי קצה) או ניקוי הכל.
-- **Roadmap (מחוץ ל־scope נוכחי):** Backend עם DB → יאפשר שתי דברים: webhook ingestion שמעדכן את הדאשבורד בזמן אמת (SSE/WebSocket), ועבר sync של localStorage למשתמש מחובר. Plaid או IL Open Banking integration — להוסיף תחת `src/lib/providers/<name>.ts` ולהפעיל ב־`OPEN_BANKING_PROVIDER`. Apple Pay אינו חושף API לקריאת עסקאות — כל פתרון קליטה עתידי חייב מקור עקיף (SMS / API בנק / Open Banking).
+
+## Predictive engine + History ([src/lib/forecast.ts](src/lib/forecast.ts))
+
+- `forecastMonthEnd({ entries, rules, statuses, monthlyBudget, monthKey })` — מחזיר `Forecast` עם `projectedTotal`, `variance`, `breachDay`, `dailyBurn`, `historicalDailyBurn`, `paceVsHistorical` (lookback 3 חודשים), `confidence` (`low | medium | high`).
+- `categoryTrends(...)` — לכל קטגוריה: `thisMonth`, `priorAverage`, `delta`, `deltaPct`. בשימוש ב־[CategoryTrendsCard](src/components/history/category-trends.tsx).
+- `monthOverMonthTotals(...)` — מערך מסודר של 6 חודשים. בשימוש ב־[MonthOverMonth](src/components/history/month-over-month.tsx).
+- בדיקות ב־[tests/forecast.test.ts](tests/forecast.test.ts).
+- ב־[PulseBar](src/components/pulse/pulse-bar.tsx): המרקר הצהוב מציג את `projectedTotal` על הסקלה; הופך אדום אם `projectedTotal > budget`. כרטיס פרטים מתחת לסרגל מציג חריגה צפויה / מרווח, יום החצייה, קצב מול היסטוריה, רמת ביטחון.
+
+## Statement Importer ([src/components/settings/statement-import.tsx](src/components/settings/statement-import.tsx))
+
+ייבוא היסטוריה ידני מ־CSV של אזור אישי בחברת אשראי — תחליף ל־Open Banking שאינו זמין לפרטיים בארץ.
+
+- [parseStatementCsv](src/lib/parsers/statement-csv.ts) — generic CSV parser שמדלג על preamble, מזהה headers בעברית/אנגלית (תאריך/Date, סכום/Amount, בית עסק/Merchant, כרטיס/Card), מחזיר `StatementRow[]`.
+- UI: בחירת issuer (CAL/MAX), העלאת CSV (cap 1MB), preview של עד 30 שורות, אישור — קורא ל־`addExpense({ source: "auto", externalId })` עם `externalId` דטרמיניסטי `import:<issuer>:<date>:<amount>:<merchant>` כך שייבוא חוזר של אותו דף לא כופל.
+- בדיקות ב־[tests/statement-csv.test.ts](tests/statement-csv.test.ts).
+
+## Why we don't (yet) integrate with Open Banking / Plaid
+
+- **Plaid לא תומך בבנקים ישראלים.** US/Canada/UK/EU בלבד.
+- **CAL/MAX/Isracard לא חושפים API צרכני.** הגישה רק דרך תקן Open Banking של בנק ישראל (PSD2-style מ־2022).
+- **גישה ל־API דורשת רישום כ־TPP מורשה** — תהליך רגולטורי 6-12 חודשים, ביטוח, ISO 27001. לא בר-ביצוע למפתח יחיד.
+- **אגרגטורים מורשים** (RiseUp, Pinsight, Open Finance) לא חושפים API ציבורי.
+- **המסלול שאנחנו עליו** (SMS → iOS Shortcut → Webhook + Statement CSV import) נותן 80% מהערך ללא חסם רגולטורי.
+- אם בעתיד יקום aggregator ישראלי B2B, ה־interface ב־[src/lib/open-banking.ts](src/lib/open-banking.ts) מוכן — להוסיף provider חדש תחת `src/lib/providers/`.
+
+## Security posture
+
+- **TLS:** Vercel terminates HTTPS. [postExpense](src/lib/api.ts) דוחה endpoints שאינם HTTPS בפרודקשן.
+- **HSTS + headers:** [next.config.ts](next.config.ts) מחזיר `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` שמכבה camera/microphone/geolocation.
+- **At-rest:** Upstash AES-256 by default. Vercel env vars מוצפנים at-rest.
+- **Webhook auth:** Bearer + constant-time compare + deviceId whitelist + zod parse + 16KB body cap.
+- **Idempotency:** SHA-256 דטרמיניסטי `externalId` מונע double-charge.
+- **Device ID rotation:** [src/lib/device-id.ts](src/lib/device-id.ts) שומר `createdAt` ב־localStorage. אחרי 90 יום מציג banner ב־[IntegrationInfo](src/components/settings/integration-info.tsx) להזכיר רוטציה. רוטציה דורשת עדכון ה־Shortcut ב־iPhone.
+- **Threat model**: דליפת `WEBHOOK_SECRET` או `deviceId` מאפשרת הזנת transactions מזויפות. שניהם יושבים ב־iPhone של המשתמש בלבד; ללא MFA כי אין מצב multi-user. **כשנפתח multi-user — להפעיל Clerk** (כבר מותקן feature-flagged).
+
+## Roadmap
+
+- Web Push notifications במקום polling.
+- מנפיקים נוספים (ישראכרט / אמריקן אקספרס): להוסיף `src/lib/parsers/<issuer>.ts`.
+- Multi-device sync ב־DB (כיום deviceId הוא per-browser/per-device).
+- Apple Pay אינו חושף API — כל פתרון קליטה עתידי חייב מקור עקיף (SMS / Statement CSV / Open Banking דרך TPP).

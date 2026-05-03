@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, Check, Smartphone } from "lucide-react";
+import { Copy, Check, Smartphone, RotateCcw, ShieldAlert } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
-import { getOrCreateDeviceId } from "@/lib/device-id";
+import {
+  getOrCreateDeviceId,
+  deviceIdAgeDays,
+  rotateDeviceId,
+  DEVICE_ID_ROTATION_DAYS,
+} from "@/lib/device-id";
 import { tap } from "@/lib/haptics";
 
 function CopyRow({ label, value }: { label: string; value: string }) {
@@ -71,6 +76,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 export function IntegrationInfo() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const lastSyncedAt = useFinanceStore((s) => s.lastSyncedAt);
+  const [rotateBump, setRotateBump] = useState(0);
 
   // Render nothing until the persist layer has hydrated; this guarantees
   // we're on the client and `localStorage` / `window` are available, so we
@@ -78,12 +84,31 @@ export function IntegrationInfo() {
   if (!hydrated) return null;
   if (typeof window === "undefined") return null;
 
+  // rotateBump is a noop reference so the IDE / compiler keeps the deps
+  // clean; the real read happens via getOrCreateDeviceId after rotation.
+  void rotateBump;
+
   const deviceId = getOrCreateDeviceId();
+  const ageDays = deviceIdAgeDays();
+  const dueRotation = ageDays >= DEVICE_ID_ROTATION_DAYS;
   const webhookUrl = `${window.location.origin}/api/webhooks/transactions`;
   const lastSync =
     lastSyncedAt > 0
       ? new Date(lastSyncedAt).toLocaleTimeString("he-IL")
       : "טרם סונכרן";
+
+  const handleRotate = () => {
+    if (
+      !confirm(
+        "רענון Device ID יבטל את ה־Shortcut הקיים — תצטרך לעדכן ב־iPhone את ה־header החדש. להמשיך?",
+      )
+    ) {
+      return;
+    }
+    rotateDeviceId();
+    tap();
+    setRotateBump((n) => n + 1);
+  };
 
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">
@@ -100,6 +125,19 @@ export function IntegrationInfo() {
         </div>
       </header>
 
+      {dueRotation ? (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-3 flex items-start gap-2 rounded-lg border border-gold/30 bg-gold/5 p-2.5 text-[11px] text-foreground/90"
+        >
+          <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-gold" />
+          <span>
+            ה־Device ID שלך בן {ageDays} יום. מומלץ לרענן ולעדכן את ה־Shortcut.
+          </span>
+        </motion.div>
+      ) : null}
+
       <div className="space-y-2">
         <CopyRow label="Device ID" value={deviceId} />
         <CopyRow label="Webhook URL" value={webhookUrl} />
@@ -111,6 +149,15 @@ export function IntegrationInfo() {
           {lastSync}
         </span>
       </div>
+
+      <button
+        type="button"
+        onClick={handleRotate}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-gold/50 hover:text-foreground"
+      >
+        <RotateCcw className="size-3" />
+        רענן Device ID
+      </button>
     </section>
   );
 }

@@ -2,9 +2,11 @@
 
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { TrendingUp } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { addMonths, currentMonthKey } from "@/lib/dates";
 import { actualUntilDay, projectMonth } from "@/lib/projections";
+import { forecastMonthEnd, type Forecast } from "@/lib/forecast";
 
 const formatILS = (value: number) =>
   new Intl.NumberFormat("he-IL", {
@@ -39,6 +41,8 @@ const STATUS_LABEL: Record<PulseStatus, string> = {
   over: "חריגה מהיעד",
 };
 
+const FORECAST_COLOR = "#D4AF37"; // brand gold — matches the "trend ahead" feel
+
 type Props = {
   budget: number;
 };
@@ -53,48 +57,61 @@ export function PulseBar({ budget }: Props) {
   const today = new Date();
   const currentDay = today.getDate();
 
-  const { actual, projected, benchmark, status, currentPct, scaleMax } =
-    useMemo(() => {
-      if (!hydrated) {
-        return {
-          actual: 0,
-          projected: 0,
-          benchmark: 0,
-          status: "idle" as PulseStatus,
-          currentPct: 0,
-          scaleMax: budget || 1,
-        };
-      }
-      const proj = projectMonth({
-        entries,
-        rules,
-        statuses,
-        monthKey,
-      });
-      const benchmark = actualUntilDay({
-        entries,
-        monthKey: addMonths(monthKey, -1),
-        day: currentDay,
-      });
-      const safeBudget = budget > 0 ? budget : 0;
-      const currentPct = safeBudget > 0 ? (proj.actual / safeBudget) * 100 : 0;
-      const scaleMax = Math.max(
+  const {
+    actual,
+    projected,
+    benchmark,
+    forecast,
+    status,
+    currentPct,
+    scaleMax,
+  } = useMemo(() => {
+    if (!hydrated) {
+      return {
+        actual: 0,
+        projected: 0,
+        benchmark: 0,
+        forecast: null as Forecast | null,
+        status: "idle" as PulseStatus,
+        currentPct: 0,
+        scaleMax: budget || 1,
+      };
+    }
+    const proj = projectMonth({ entries, rules, statuses, monthKey });
+    const benchmark = actualUntilDay({
+      entries,
+      monthKey: addMonths(monthKey, -1),
+      day: currentDay,
+    });
+    const forecast = forecastMonthEnd({
+      entries,
+      rules,
+      statuses,
+      monthlyBudget: budget,
+      monthKey,
+    });
+    const safeBudget = budget > 0 ? budget : 0;
+    const currentPct = safeBudget > 0 ? (proj.actual / safeBudget) * 100 : 0;
+    const scaleMax =
+      Math.max(
         safeBudget,
         proj.actual,
         benchmark,
         proj.projected,
+        forecast.projectedTotal,
         1,
       ) * 1.05;
 
-      return {
-        actual: proj.actual,
-        projected: proj.projected,
-        benchmark,
-        status: statusOf(currentPct),
-        currentPct,
-        scaleMax,
-      };
-    }, [hydrated, entries, rules, statuses, monthKey, currentDay, budget]);
+    return {
+      actual: proj.actual,
+      projected: proj.projected,
+      benchmark,
+      forecast,
+      status: statusOf(currentPct),
+      currentPct,
+      scaleMax,
+    };
+  }, [hydrated, entries, rules, statuses, monthKey, currentDay, budget]);
 
   const noBudget = !budget || budget <= 0;
 
@@ -106,9 +123,15 @@ export function PulseBar({ budget }: Props) {
   const benchmarkPct = noBudget
     ? 0
     : Math.min(100, (benchmark / scaleMax) * 100);
+  const forecastPct =
+    noBudget || !forecast
+      ? 0
+      : Math.min(100, (forecast.projectedTotal / scaleMax) * 100);
 
   const accent = STATUS_COLOR[status];
   const isOver = status === "over";
+  const forecastBreaches =
+    !!forecast && budget > 0 && forecast.projectedTotal > budget;
 
   return (
     <motion.section
@@ -234,6 +257,30 @@ export function PulseBar({ budget }: Props) {
                 />
               </div>
             ) : null}
+            {forecast && forecast.projectedTotal > 0 ? (
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0"
+                animate={{ right: `${forecastPct}%` }}
+                transition={{ type: "spring", stiffness: 80, damping: 22 }}
+              >
+                <div
+                  className="h-full w-[2px]"
+                  style={{
+                    background: forecastBreaches ? "#EF4444" : FORECAST_COLOR,
+                    boxShadow: `0 0 8px ${forecastBreaches ? "#EF4444" : FORECAST_COLOR}`,
+                  }}
+                />
+                <div
+                  className="absolute -top-1.5 -translate-x-1/2 text-[9px]"
+                  style={{
+                    color: forecastBreaches ? "#EF4444" : FORECAST_COLOR,
+                  }}
+                >
+                  ▼
+                </div>
+              </motion.div>
+            ) : null}
           </>
         ) : (
           <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
@@ -245,6 +292,13 @@ export function PulseBar({ budget }: Props) {
       {!noBudget ? (
         <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
           <Legend dotStyle={{ background: accent }} label="בפועל" />
+          <Legend
+            dotStyle={{
+              background: FORECAST_COLOR,
+              boxShadow: `0 0 6px ${FORECAST_COLOR}`,
+            }}
+            label="תחזית"
+          />
           <Legend
             dotStyle={{
               background: "transparent",
@@ -261,7 +315,100 @@ export function PulseBar({ budget }: Props) {
           />
         </div>
       ) : null}
+
+      {!noBudget && forecast ? (
+        <ForecastDetail forecast={forecast} budget={budget} accent={FORECAST_COLOR} />
+      ) : null}
     </motion.section>
+  );
+}
+
+function ForecastDetail({
+  forecast,
+  budget,
+  accent,
+}: {
+  forecast: Forecast;
+  budget: number;
+  accent: string;
+}) {
+  const breaches = forecast.projectedTotal > budget;
+  const overBy = breaches ? forecast.projectedTotal - budget : 0;
+  const underBy = !breaches ? budget - forecast.projectedTotal : 0;
+
+  const paceLabel = (() => {
+    if (forecast.paceVsHistorical === null) return null;
+    const pct = Math.round(forecast.paceVsHistorical);
+    if (Math.abs(pct) < 5) return "בקצב היסטורי";
+    if (pct > 0) return `מהיר ב־${pct}% מהממוצע`;
+    return `איטי ב־${Math.abs(pct)}% מהממוצע`;
+  })();
+
+  const confidenceLabel = {
+    low: "ביטחון נמוך · מוקדם בחודש",
+    medium: "ביטחון בינוני",
+    high: "ביטחון גבוה",
+  }[forecast.confidence];
+
+  return (
+    <motion.div
+      key={Math.round(forecast.projectedTotal)}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-4 flex items-start gap-3 rounded-2xl border border-white/5 bg-black/30 p-3"
+    >
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+        style={{
+          background: `${accent}1a`,
+          color: breaches ? "#EF4444" : accent,
+        }}
+      >
+        <TrendingUp className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            צפי לסוף חודש
+          </span>
+          <span
+            data-mono="true"
+            className="text-sm text-foreground"
+            style={{
+              direction: "ltr",
+              color: breaches ? "#EF4444" : accent,
+            }}
+          >
+            {new Intl.NumberFormat("he-IL", {
+              style: "currency",
+              currency: "ILS",
+              maximumFractionDigits: 0,
+            }).format(forecast.projectedTotal)}
+          </span>
+        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground">
+          {breaches
+            ? `חריגה צפויה של ${new Intl.NumberFormat("he-IL", {
+                style: "currency",
+                currency: "ILS",
+                maximumFractionDigits: 0,
+              }).format(overBy)}`
+            : `נשארת מרווח של ${new Intl.NumberFormat("he-IL", {
+                style: "currency",
+                currency: "ILS",
+                maximumFractionDigits: 0,
+              }).format(underBy)}`}
+          {forecast.breachDay
+            ? ` · יעד יחצה ב־${forecast.breachDay} בחודש`
+            : ""}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/80">
+          {paceLabel ? <span>{paceLabel}</span> : null}
+          <span>·</span>
+          <span>{confidenceLabel}</span>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

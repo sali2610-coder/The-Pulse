@@ -2,6 +2,7 @@
 
 import { BudgetInput } from "./budget-input";
 import { IntegrationInfo } from "./integration-info";
+import { StatementImport } from "./statement-import";
 import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-panel";
 
 export function SettingsTab() {
@@ -9,6 +10,7 @@ export function SettingsTab() {
     <div className="flex flex-col gap-4">
       <BudgetInput />
       <IntegrationInfo />
+      <StatementImport />
       <RecurringRulesPanel />
     </div>
   );

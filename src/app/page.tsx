@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { AnalyticsTab } from "@/components/analytics/analytics-tab";
+import { HistoryTab } from "@/components/history/history-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
@@ -62,6 +63,7 @@ export default function Home() {
           <TabsList className="w-full bg-surface/60 backdrop-blur-md">
             <TabsTrigger value="dashboard">לוח</TabsTrigger>
             <TabsTrigger value="analytics">ניתוח</TabsTrigger>
+            <TabsTrigger value="history">היסטוריה</TabsTrigger>
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
 
@@ -70,6 +72,9 @@ export default function Home() {
           </TabsContent>
           <TabsContent value="analytics" className="mt-4">
             <AnalyticsTab />
+          </TabsContent>
+          <TabsContent value="history" className="mt-4">
+            <HistoryTab />
           </TabsContent>
           <TabsContent value="settings" className="mt-4">
             <SettingsTab />
