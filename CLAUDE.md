@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Data model ([src/types/finance.ts](src/types/finance.ts))
 
-- **`ExpenseEntry`** — רשומת הוצאה (manual/auto), עם `amount`, `installments`, `paymentMethod` (`cash`/`credit`), ו־`chargeDate`. תשלום חודשי = `amount/installments`, מתחיל מ־chargeDate.
+- **`ExpenseEntry`** — רשומת הוצאה (manual/auto), עם `amount`, `installments`, `paymentMethod` (`cash`/`credit`), ו־`chargeDate`. תשלום חודשי = `amount/installments`, מתחיל מ־chargeDate. Auto-ingested entries כוללים גם `externalId` (deduplication key), `issuer` (`"cal"|"max"`), `cardLast4`, `merchant`.
 - **`RecurringRule`** — הוצאה צפויה חוזרת (חשמל, ועד בית...) עם `dayOfMonth`, `estimatedAmount`, ו־`keywords` לשידוך.
 - **`RecurringStatus`** — מצב per-rule per-month: `pending` או `paid`. סטטוס "paid" מצביע על `matchedExpenseId` ועל `actualAmount` בפועל.
 
@@ -136,16 +136,57 @@ Clerk מותקן כ־SDK ([@clerk/nextjs](node_modules/@clerk/nextjs)) אבל **
 - [src/components/pwa/register-sw.tsx](src/components/pwa/register-sw.tsx) — רושם את ה־SW ב־production בלבד (לא ב־dev כדי לא להפריע ל־HMR).
 - iOS "Add to Home Screen": `appleWebApp` ב־[layout.tsx](src/app/layout.tsx).
 
-## Webhooks (Open Banking ingestion)
+## SMS ingestion pipeline (CAL / MAX → Pulse)
 
-[src/app/api/webhooks/transactions/route.ts](src/app/api/webhooks/transactions/route.ts) — Edge runtime (`runtime = "edge"`). שכבות הגנה:
+זהו הצינור שמחבר חיובי ויזה אמיתיים לדאשבורד דרך iOS Shortcut + Vercel KV. ראה [docs/ios-shortcut.md](docs/ios-shortcut.md) למדריך משתמש.
 
-1. דורש `WEBHOOK_SECRET` ב־env, אחרת 503.
-2. תוקף `Content-Type: application/json` ו־`Content-Length ≤ 64KB`.
-3. אימות חתימה: HMAC-SHA256 על body גולמי מול header `x-sally-signature` ([webhook-verify.ts](src/lib/webhook-verify.ts), Web Crypto, constant-time compare).
-4. zod parse על שכבת ה־payload לפני קבלה.
+```
+SMS חיוב מהבנק
+    ↓
+iOS Shortcut (Automation: When I receive a message from CAL/MAX)
+    ↓ POST { issuer, smsBody } with Bearer + x-sally-device
+/api/webhooks/transactions  (Edge)
+    ↓ parseSmsByIssuer → ZADD to Upstash
+KV: sally:tx:<deviceId>  (sorted set by receivedAt)
+    ↓ on PWA visibility / poll
+/api/transactions/sync?since=<ms>  (Edge)
+    ↓ ZRANGEBYSCORE
+useAutoSync → addExpense({ source: "auto", externalId })  (de-dups)
+    ↓
+The Pulse animates with new charge
+```
 
-**מגבלה ארכיטקטונית כרגע**: כל ה־state ב־localStorage בלקוח. ה־webhook לא יכול לעדכן את הדאשבורד של משתמש ספציפי בלי DB אמיתי + מנגנון push (SSE/WebSocket). הראוט לוגג ומחזיר 200 — החיבור האמיתי לדאשבורד דורש backend עם DB.
+### Webhook ([src/app/api/webhooks/transactions/route.ts](src/app/api/webhooks/transactions/route.ts))
+
+Edge runtime (`runtime = "edge"`). שכבות הגנה:
+
+1. `WEBHOOK_SECRET` חייב להיות מוגדר, אחרת 503.
+2. `Authorization: Bearer <WEBHOOK_SECRET>` (constant-time compare).
+3. `x-sally-device` header עם deviceId שעובר whitelist regex.
+4. Body cap: 16KB.
+5. zod שורף על `{ issuer: "cal"|"max", smsBody: string }`.
+6. `parseSmsByIssuer` → `pushTransaction` ([src/lib/kv.ts](src/lib/kv.ts)) עם ZADD NX (idempotent על externalId).
+
+### Parsers ([src/lib/parsers/](src/lib/parsers))
+
+- [helpers.ts](src/lib/parsers/helpers.ts) — regex משותפים: `extractAmount`, `extractCardLast4` (מטפל ב־ם/מ/מת/מה suffixes), `extractMerchant` (תומך 6 quote variants כולל gershayim/curly), `extractDateDDMMYY`, `detectsApplePay`, `externalIdFor` (SHA-256 דטרמיניסטי).
+- [cal.ts](src/lib/parsers/cal.ts), [max.ts](src/lib/parsers/max.ts) — per-issuer parsers שמחזירים `{ ok: true, result } | { ok: false, reason, missing }`.
+- [index.ts](src/lib/parsers/index.ts) — dispatcher + `categorize(merchant)` heuristic.
+- כיסוי בדיקות ב־[tests/parsers.test.ts](tests/parsers.test.ts) — 9 בדיקות יחידה לדגימות אמיתיות.
+
+### Sync ([src/app/api/transactions/sync/route.ts](src/app/api/transactions/sync/route.ts))
+
+GET עם `x-sally-device` ו־`?since=<ms>`. מחזיר עד 200 transactions מהזמן `since`. clamp של 7 ימי lookback. Edge.
+
+### AutoSync hook ([src/lib/sync.ts](src/lib/sync.ts))
+
+`useAutoSync()` — fires on hydration, on `visibilitychange`, ועל interval של 60s כש־`document.visibilityState === "visible"`. מקבל transactions, קורא ל־`addExpense({ source: "auto", externalId })`. ה־store מבצע dedupe על externalId כדי שריפליי לא יחייב פעמיים.
+
+### Vercel KV ([src/lib/kv.ts](src/lib/kv.ts))
+
+`@upstash/redis` REST client (עובד ב־Edge runtime). Auto-provision ב־Marketplace integration → `KV_REST_API_URL` + `KV_REST_API_TOKEN`. שומר transactions בסוג ZSET תחת `sally:tx:<deviceId>` עם score=`receivedAt` ו־TTL 90 ימים.
+
+`isKvConfigured()` מאפשר ל־endpoints להחזיר `{ persisted: false }` במקום לזרוק כשהאינטגרציה עוד לא מותקנת — שימושי ל־preview deployments.
 
 ## Open Banking provider abstraction
 

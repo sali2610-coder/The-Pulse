@@ -1,41 +1,51 @@
 import { z } from "zod";
-import { verifyHmac } from "@/lib/webhook-verify";
-import { CATEGORY_IDS } from "@/lib/categories";
+import { parseSmsByIssuer } from "@/lib/parsers";
+import { externalIdFor } from "@/lib/parsers/helpers";
+import { pushTransaction, isKvConfigured, type StoredTransaction } from "@/lib/kv";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 16 * 1024;
+const MAX_DEVICE_ID_LEN = 128;
 
-const transactionPayloadSchema = z.object({
-  externalId: z.string().min(1).max(128),
-  amount: z.number().positive().max(1_000_000),
-  currency: z.literal("ILS").default("ILS"),
-  paymentMethod: z.enum(["cash", "credit"]).default("credit"),
-  installments: z.number().int().min(1).max(60).default(1),
-  category: z.enum(CATEGORY_IDS).optional(),
-  merchant: z.string().max(120).optional(),
-  note: z.string().max(200).optional(),
-  occurredAt: z.string().datetime(),
+const smsBodySchema = z.object({
+  issuer: z.enum(["cal", "max"]),
+  smsBody: z.string().min(20).max(2_000),
 });
 
-export type TransactionPayload = z.infer<typeof transactionPayloadSchema>;
+function fail(status: number, code: string, extra?: Record<string, unknown>) {
+  return Response.json({ ok: false, error: code, ...(extra ?? {}) }, { status });
+}
 
-function fail(status: number, code: string) {
-  return Response.json({ ok: false, error: code }, { status });
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export async function POST(req: Request): Promise<Response> {
   const secret = process.env.WEBHOOK_SECRET;
   if (!secret) return fail(503, "webhook_disabled");
 
-  const contentType = req.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return fail(415, "unsupported_media_type");
+  const auth = req.headers.get("authorization") ?? "";
+  const expected = `Bearer ${secret}`;
+  if (!timingSafeEqual(auth, expected)) {
+    return fail(401, "invalid_token");
   }
 
-  const lengthHeader = req.headers.get("content-length");
-  if (lengthHeader && Number(lengthHeader) > MAX_BODY_BYTES) {
+  const deviceId = req.headers.get("x-sally-device") ?? "";
+  if (
+    !deviceId ||
+    deviceId.length > MAX_DEVICE_ID_LEN ||
+    !/^[A-Za-z0-9_\-:.]+$/.test(deviceId)
+  ) {
+    return fail(400, "invalid_device");
+  }
+
+  const contentLength = req.headers.get("content-length");
+  if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
     return fail(413, "payload_too_large");
   }
 
@@ -47,10 +57,6 @@ export async function POST(req: Request): Promise<Response> {
   }
   if (raw.length > MAX_BODY_BYTES) return fail(413, "payload_too_large");
 
-  const signature = req.headers.get("x-sally-signature") ?? "";
-  const valid = await verifyHmac({ rawBody: raw, signatureHex: signature, secret });
-  if (!valid) return fail(401, "invalid_signature");
-
   let json: unknown;
   try {
     json = JSON.parse(raw);
@@ -58,24 +64,51 @@ export async function POST(req: Request): Promise<Response> {
     return fail(400, "invalid_json");
   }
 
-  const parsed = transactionPayloadSchema.safeParse(json);
+  const parsed = smsBodySchema.safeParse(json);
   if (!parsed.success) {
     return fail(422, "schema_violation");
   }
 
-  // The client today is offline-first (zustand+localStorage). Without a
-  // server-side database, we cannot directly mutate a specific user's state.
-  // For now: log and acknowledge. When a DB lands, this is where we'd:
-  //   1. Look up the user by externalId / Open Banking link.
-  //   2. Insert the transaction (idempotent on externalId).
-  //   3. Push to client via SSE/WebSocket so The Pulse animates.
-  console.info("[webhook] tx accepted", {
-    externalId: parsed.data.externalId,
-    amount: parsed.data.amount,
-    occurredAt: parsed.data.occurredAt,
-  });
+  const { issuer, smsBody } = parsed.data;
+  const sms = parseSmsByIssuer(issuer, smsBody);
+  if (!sms.ok) {
+    return fail(422, sms.reason, { missing: sms.missing });
+  }
 
-  return Response.json({ ok: true, accepted: parsed.data.externalId });
+  if (!isKvConfigured()) {
+    // Successful parse but no DB to persist — return 200 with a flag so the
+    // user knows to provision Upstash. The Shortcut still considers it a
+    // successful send.
+    return Response.json({
+      ok: true,
+      persisted: false,
+      reason: "kv_not_configured",
+      parsed: sms.result,
+    });
+  }
+
+  const externalId = await externalIdFor(deviceId, smsBody);
+  const tx: StoredTransaction = {
+    externalId,
+    amount: sms.result.amount,
+    category: sms.result.category,
+    paymentMethod: "credit", // SMS-driven entries are always credit-card.
+    installments: 1, // SMS doesn't expose installment count reliably.
+    issuer: sms.result.issuer,
+    cardLast4: sms.result.cardLast4,
+    merchant: sms.result.merchant,
+    note: sms.result.applePay ? "Apple Pay" : undefined,
+    occurredAt: sms.result.occurredAt,
+    receivedAt: Date.now(),
+  };
+
+  const { added } = await pushTransaction(deviceId, tx);
+  return Response.json({
+    ok: true,
+    persisted: true,
+    duplicate: !added,
+    externalId,
+  });
 }
 
 export function GET(): Response {

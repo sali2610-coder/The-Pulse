@@ -14,6 +14,7 @@ import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { AnalyticsTab } from "@/components/analytics/analytics-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
 import { SeedPanel } from "@/components/dev/seed-panel";
+import { AutoSync } from "@/components/sync/auto-sync";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -76,6 +77,7 @@ export default function Home() {
         </Tabs>
       </div>
 
+      <AutoSync />
       {isDev ? <SeedPanel /> : null}
     </main>
   );

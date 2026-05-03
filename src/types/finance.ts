@@ -2,6 +2,7 @@ import type { CategoryId } from "@/lib/categories";
 
 export type ExpenseSource = "manual" | "auto";
 export type PaymentMethod = "cash" | "credit";
+export type Issuer = "cal" | "max";
 
 export type ExpenseEntry = {
   id: string;
@@ -14,6 +15,11 @@ export type ExpenseEntry = {
   chargeDate: string;
   createdAt: string;
   matchedRuleId?: string;
+  // Auto-ingested fields (from SMS / webhook). Optional for manual entries.
+  externalId?: string;
+  issuer?: Issuer;
+  cardLast4?: string;
+  merchant?: string;
 };
 
 export type RecurringRule = {

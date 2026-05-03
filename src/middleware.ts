@@ -6,6 +6,7 @@ import { AUTH_ENABLED } from "@/lib/auth-config";
 // Routes that NEVER require auth (webhooks, manifest, icons, sign-in pages).
 const isPublic = createRouteMatcher([
   "/api/webhooks/(.*)",
+  "/api/transactions/(.*)",
   "/manifest.webmanifest",
   "/icon.svg",
   "/icon-maskable.svg",

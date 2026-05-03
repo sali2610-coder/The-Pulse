@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   ExpenseEntry,
   ExpenseSource,
+  Issuer,
   PaymentMethod,
   RecurringRule,
   RecurringStatus,
@@ -21,6 +22,10 @@ type AddExpenseInput = {
   paymentMethod: PaymentMethod;
   source?: ExpenseSource;
   chargeDate?: string;
+  externalId?: string;
+  issuer?: Issuer;
+  cardLast4?: string;
+  merchant?: string;
 };
 
 type AddRuleInput = {
@@ -37,12 +42,14 @@ type State = {
   rules: RecurringRule[];
   statuses: RecurringStatus[];
   monthlyBudget: number;
+  lastSyncedAt: number; // ms epoch — used by the auto-sync poller as `since`.
 };
 
 type Actions = {
   addExpense: (input: AddExpenseInput) => {
     entry: ExpenseEntry;
     matched?: RecurringRule;
+    duplicate: boolean;
   };
   deleteExpense: (id: string) => void;
   addRule: (input: AddRuleInput) => RecurringRule;
@@ -50,6 +57,7 @@ type Actions = {
   deleteRule: (id: string) => void;
   toggleRule: (id: string) => void;
   setMonthlyBudget: (value: number) => void;
+  setLastSyncedAt: (ms: number) => void;
   setHydrated: (v: boolean) => void;
   clearAll: () => void;
 };
@@ -69,8 +77,20 @@ export const useFinanceStore = create<State & Actions>()(
       rules: [],
       statuses: [],
       monthlyBudget: 0,
+      lastSyncedAt: 0,
 
       addExpense: (input) => {
+        // De-dup auto-ingested entries by externalId — replays of the same SMS
+        // (Shortcut retries, sync overlap) must not double-charge The Pulse.
+        if (input.externalId) {
+          const existing = get().entries.find(
+            (e) => e.externalId === input.externalId,
+          );
+          if (existing) {
+            return { entry: existing, duplicate: true };
+          }
+        }
+
         const now = new Date();
         const entry: ExpenseEntry = {
           id: uid(),
@@ -82,6 +102,10 @@ export const useFinanceStore = create<State & Actions>()(
           installments: Math.max(1, Math.floor(input.installments)),
           chargeDate: input.chargeDate ?? now.toISOString(),
           createdAt: now.toISOString(),
+          externalId: input.externalId,
+          issuer: input.issuer,
+          cardLast4: input.cardLast4,
+          merchant: input.merchant,
         };
 
         const matched = findMatchingRule({
@@ -110,7 +134,7 @@ export const useFinanceStore = create<State & Actions>()(
           };
         });
 
-        return { entry: finalEntry, matched: matched ?? undefined };
+        return { entry: finalEntry, matched: matched ?? undefined, duplicate: false };
       },
 
       deleteExpense: (id) => {
@@ -201,35 +225,52 @@ export const useFinanceStore = create<State & Actions>()(
         set({ monthlyBudget: safe });
       },
 
+      setLastSyncedAt: (ms) => {
+        const safe = Number.isFinite(ms) && ms >= 0 ? Math.floor(ms) : 0;
+        set({ lastSyncedAt: safe });
+      },
+
       setHydrated: (v) => set({ hasHydrated: v }),
 
       clearAll: () =>
-        set({ entries: [], rules: [], statuses: [], monthlyBudget: 0 }),
+        set({
+          entries: [],
+          rules: [],
+          statuses: [],
+          monthlyBudget: 0,
+          lastSyncedAt: 0,
+        }),
     }),
     {
       name: "sally.finance",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
         rules: s.rules,
         statuses: s.statuses,
         monthlyBudget: s.monthlyBudget,
+        lastSyncedAt: s.lastSyncedAt,
       }),
       migrate: (raw, fromVersion) => {
         const persisted = (raw ?? {}) as Partial<State>;
+        let migrated: Partial<State> = persisted;
         if (fromVersion < 2) {
           const entries = (persisted.entries ?? []).map((e) => ({
             ...e,
             paymentMethod: e.paymentMethod ?? ("credit" as PaymentMethod),
           }));
-          return {
-            ...persisted,
+          migrated = {
+            ...migrated,
             entries,
-            monthlyBudget: persisted.monthlyBudget ?? 0,
+            monthlyBudget: migrated.monthlyBudget ?? 0,
           };
         }
-        return persisted;
+        if (fromVersion < 3) {
+          // v3 added auto-ingestion fields (all optional) + lastSyncedAt.
+          migrated = { ...migrated, lastSyncedAt: migrated.lastSyncedAt ?? 0 };
+        }
+        return migrated;
       },
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
