@@ -232,6 +232,64 @@ export function categoryTrends(args: {
     .sort((a, b) => b.thisMonth - a.thisMonth);
 }
 
+export type DailyAllowance = {
+  /** ₪ that can be spent today without breaching the budget. */
+  allowance: number;
+  /** What's already been spent today. */
+  spentToday: number;
+  /** Days remaining in the month including today. */
+  daysRemaining: number;
+  /** Currently allocated commitments (future installments + pending rules). */
+  committedRemaining: number;
+};
+
+/**
+ * Computes how much the user can spend today without going over budget,
+ * accounting for slices that will charge later this month and recurring
+ * rules that haven't paid out yet.
+ */
+export function dailyAllowance(args: {
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  monthlyBudget: number;
+  monthKey: MonthKey;
+  now?: Date;
+}): DailyAllowance {
+  const now = args.now ?? new Date();
+  const totalDays = daysInMonth(args.monthKey);
+  const dayOfMonth = now.getDate();
+  const daysRemaining = Math.max(1, totalDays - dayOfMonth + 1);
+
+  const proj = projectMonth({
+    entries: args.entries,
+    rules: args.rules,
+    statuses: args.statuses,
+    monthKey: args.monthKey,
+    now,
+  });
+
+  let spentToday = 0;
+  for (const entry of args.entries) {
+    const slice = sliceForMonth(entry, args.monthKey);
+    if (!slice) continue;
+    if (slice.chargeDate.getDate() === dayOfMonth) {
+      spentToday += slice.amount;
+    }
+  }
+
+  const remainingBudget = args.monthlyBudget - proj.actual;
+  const discretionary = Math.max(0, remainingBudget - proj.upcoming);
+  const allowance = Math.max(0, discretionary / daysRemaining);
+
+  return {
+    allowance,
+    spentToday,
+    daysRemaining,
+    committedRemaining: proj.upcoming,
+  };
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;

@@ -71,6 +71,58 @@ export function detectsApplePay(text: string): boolean {
 }
 
 /**
+ * Refunds appear in Israeli SMS as "זיכוי", "החזר", or "Credit". They should
+ * land in the store with a positive amount + isRefund=true so the projection
+ * layer can subtract them. Hebrew letters aren't ASCII word chars, so `\b`
+ * doesn't work — anchor with start/end/whitespace explicitly.
+ */
+export function detectsRefund(text: string): boolean {
+  if (/(^|\s)(זיכוי|החזר)(\s|$)/u.test(text)) return true;
+  return /\b(REFUND|CREDIT(?:ED)?)\b/i.test(text);
+}
+
+/**
+ * Pending SMSes carry "תלוי ועומד" or "ממתין לאישור". Bank hasn't finalized;
+ * UI should hold the entry as upcoming, not actual.
+ */
+export function detectsPending(text: string): boolean {
+  if (/(תלוי\s*ו?עומד|ממתין\s*לאישור)/u.test(text)) return true;
+  return /\bPENDING\b/i.test(text);
+}
+
+const CURRENCY_TOKENS: Array<{ code: "USD" | "EUR" | "GBP" | "OTHER"; re: RegExp }> = [
+  { code: "USD", re: /(\$|USD|דולר)/iu },
+  { code: "EUR", re: /(€|EUR|אירו|יורו)/iu },
+  { code: "GBP", re: /(£|GBP|פאונד)/iu },
+];
+
+/**
+ * Detects non-ILS currency mentions. Returns the ISO code or null when the
+ * message is in shekels.
+ */
+export function detectsForeignCurrency(text: string):
+  | "USD"
+  | "EUR"
+  | "GBP"
+  | "OTHER"
+  | null {
+  // Shortcut: ש"ח / NIS / ILS — definitely ILS.
+  if (/(ש["'׳״]?ח|\bNIS\b|\bILS\b)/iu.test(text)) {
+    // ...unless an FX charge ALSO appears (some SMS quote both sides). Then
+    // we still flag it as foreign so the budget logic stays honest.
+    for (const tok of CURRENCY_TOKENS) {
+      if (tok.re.test(text)) return tok.code;
+    }
+    return null;
+  }
+  for (const tok of CURRENCY_TOKENS) {
+    if (tok.re.test(text)) return tok.code;
+  }
+  // No currency hint at all: assume ILS by default.
+  return null;
+}
+
+/**
  * Build a deterministic externalId so retries of the same SMS de-dup at the
  * store. Collision-resistant within a single device (deviceId scoped).
  */

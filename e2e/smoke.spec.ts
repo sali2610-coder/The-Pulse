@@ -13,6 +13,7 @@ test.describe("Sally — smoke flow", () => {
     await expect(page.getByText("Timeline Sync")).toBeVisible();
     await expect(page.getByRole("tab", { name: "לוח" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "ניתוח" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "היסטוריה" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "הגדרות" })).toBeVisible();
   });
 

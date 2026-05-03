@@ -13,7 +13,9 @@ export default defineConfig({
   projects: [
     {
       name: "chromium-mobile",
-      use: { ...devices["iPhone 14"] },
+      // Pixel 7 ships with Chromium, so we don't need WebKit. Production
+      // target is iPhone Safari but Chromium gets us 95% of mobile coverage.
+      use: { ...devices["Pixel 7"] },
     },
   ],
   webServer: {

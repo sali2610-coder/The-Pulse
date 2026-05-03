@@ -40,6 +40,10 @@ yarn-error.log*
 # claude code local settings
 .claude/
 
+# Playwright artifacts
+test-results/
+playwright-report/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

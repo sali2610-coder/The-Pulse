@@ -4,7 +4,11 @@ import {
   extractDateDDMMYY,
   extractMerchant,
   detectsApplePay,
+  detectsRefund,
+  detectsPending,
+  detectsForeignCurrency,
 } from "./helpers";
+import type { Currency } from "@/types/finance";
 
 export type CalParseResult = {
   amount: number;
@@ -12,6 +16,9 @@ export type CalParseResult = {
   merchant: string;
   occurredAt: string;
   applePay: boolean;
+  isRefund: boolean;
+  pending: boolean;
+  currency: Currency;
 };
 
 export type CalParseFailure = {
@@ -49,6 +56,7 @@ export function parseCal(smsBody: string): CalParseOk | CalParseFailure {
     return { ok: false, reason: "incomplete_cal_sms", missing };
   }
 
+  const fx = detectsForeignCurrency(text);
   return {
     ok: true,
     result: {
@@ -57,6 +65,9 @@ export function parseCal(smsBody: string): CalParseOk | CalParseFailure {
       merchant,
       occurredAt,
       applePay: detectsApplePay(text),
+      isRefund: detectsRefund(text),
+      pending: detectsPending(text),
+      currency: fx ?? "ILS",
     },
   };
 }

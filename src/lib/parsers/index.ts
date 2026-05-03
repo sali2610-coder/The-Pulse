@@ -1,5 +1,6 @@
 import type { CategoryId } from "@/lib/categories";
-import type { Issuer } from "@/types/finance";
+import type { Currency, Issuer } from "@/types/finance";
+import { sanitizeMerchant } from "@/lib/sanitize";
 import { parseCal } from "./cal";
 import { parseMax } from "./max";
 
@@ -7,8 +8,12 @@ export type ParsedSms = {
   amount: number;
   cardLast4: string;
   merchant: string;
+  merchantRaw: string;
   occurredAt: string;
   applePay: boolean;
+  isRefund: boolean;
+  pending: boolean;
+  currency: Currency;
   issuer: Issuer;
   category: CategoryId;
 };
@@ -55,29 +60,28 @@ export function parseSmsByIssuer(
   smsBody: string,
 ): ParseSuccess | ParseFailure {
   const lower = issuer.toLowerCase();
-  if (lower === "cal") {
-    const r = parseCal(smsBody);
-    if (!r.ok) return r;
+
+  const finalize = (
+    parsed:
+      | ReturnType<typeof parseCal>
+      | ReturnType<typeof parseMax>,
+    issuerId: Issuer,
+  ): ParseSuccess | ParseFailure => {
+    if (!parsed.ok) return parsed;
+    const cleanMerchant = sanitizeMerchant(parsed.result.merchant);
     return {
       ok: true,
       result: {
-        ...r.result,
-        issuer: "cal",
-        category: categorize(r.result.merchant),
+        ...parsed.result,
+        issuer: issuerId,
+        merchant: cleanMerchant,
+        merchantRaw: parsed.result.merchant,
+        category: categorize(cleanMerchant || parsed.result.merchant),
       },
     };
-  }
-  if (lower === "max") {
-    const r = parseMax(smsBody);
-    if (!r.ok) return r;
-    return {
-      ok: true,
-      result: {
-        ...r.result,
-        issuer: "max",
-        category: categorize(r.result.merchant),
-      },
-    };
-  }
+  };
+
+  if (lower === "cal") return finalize(parseCal(smsBody), "cal");
+  if (lower === "max") return finalize(parseMax(smsBody), "max");
   return { ok: false, reason: "unknown_issuer" };
 }

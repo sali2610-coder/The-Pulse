@@ -4,7 +4,11 @@ import {
   extractDateDDMMYY,
   extractMerchant,
   detectsApplePay,
+  detectsRefund,
+  detectsPending,
+  detectsForeignCurrency,
 } from "./helpers";
+import type { Currency } from "@/types/finance";
 
 export type MaxParseResult = {
   amount: number;
@@ -12,6 +16,9 @@ export type MaxParseResult = {
   merchant: string;
   occurredAt: string;
   applePay: boolean;
+  isRefund: boolean;
+  pending: boolean;
+  currency: Currency;
 };
 
 type MaxParseFailure = { ok: false; reason: string; missing: string[] };
@@ -41,6 +48,7 @@ export function parseMax(smsBody: string): MaxParseOk | MaxParseFailure {
     return { ok: false, reason: "incomplete_max_sms", missing };
   }
 
+  const fx = detectsForeignCurrency(text);
   return {
     ok: true,
     result: {
@@ -49,6 +57,9 @@ export function parseMax(smsBody: string): MaxParseOk | MaxParseFailure {
       merchant,
       occurredAt,
       applePay: detectsApplePay(text),
+      isRefund: detectsRefund(text),
+      pending: detectsPending(text),
+      currency: fx ?? "ILS",
     },
   };
 }

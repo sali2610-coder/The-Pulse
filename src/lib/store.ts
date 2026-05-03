@@ -12,6 +12,8 @@ import type {
 } from "@/types/finance";
 import type { CategoryId } from "@/lib/categories";
 import { findMatchingRule } from "@/lib/match";
+import { findFuzzyDuplicate } from "@/lib/dedup";
+import { sanitizeMerchant } from "@/lib/sanitize";
 import { monthKeyOf } from "@/lib/dates";
 
 type AddExpenseInput = {
@@ -80,8 +82,12 @@ export const useFinanceStore = create<State & Actions>()(
       lastSyncedAt: 0,
 
       addExpense: (input) => {
-        // De-dup auto-ingested entries by externalId — replays of the same SMS
-        // (Shortcut retries, sync overlap) must not double-charge The Pulse.
+        const cleanMerchant = input.merchant
+          ? sanitizeMerchant(input.merchant)
+          : undefined;
+        const chargeDate = input.chargeDate ?? new Date().toISOString();
+
+        // 1. Exact externalId match — handles SMS replays and CSV re-imports.
         if (input.externalId) {
           const existing = get().entries.find(
             (e) => e.externalId === input.externalId,
@@ -89,6 +95,21 @@ export const useFinanceStore = create<State & Actions>()(
           if (existing) {
             return { entry: existing, duplicate: true };
           }
+        }
+
+        // 2. Fuzzy match across sources (SMS arrived first, statement
+        //    re-imports the same charge later, or vice-versa).
+        const fuzzyHit = findFuzzyDuplicate(
+          {
+            amount: input.amount,
+            chargeDate,
+            merchant: cleanMerchant,
+            cardLast4: input.cardLast4,
+          },
+          get().entries,
+        );
+        if (fuzzyHit) {
+          return { entry: fuzzyHit, duplicate: true };
         }
 
         const now = new Date();
@@ -100,12 +121,12 @@ export const useFinanceStore = create<State & Actions>()(
           source: input.source ?? "manual",
           paymentMethod: input.paymentMethod,
           installments: Math.max(1, Math.floor(input.installments)),
-          chargeDate: input.chargeDate ?? now.toISOString(),
+          chargeDate,
           createdAt: now.toISOString(),
           externalId: input.externalId,
           issuer: input.issuer,
           cardLast4: input.cardLast4,
-          merchant: input.merchant,
+          merchant: cleanMerchant,
         };
 
         const matched = findMatchingRule({

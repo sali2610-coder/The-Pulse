@@ -3,6 +3,7 @@ import {
   forecastMonthEnd,
   categoryTrends,
   monthOverMonthTotals,
+  dailyAllowance,
 } from "@/lib/forecast";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -137,6 +138,56 @@ describe("categoryTrends", () => {
     ];
     const t = categoryTrends({ entries, monthKey: "2026-05" });
     expect(t.some((x) => x.category === "shopping")).toBe(false);
+  });
+});
+
+describe("dailyAllowance", () => {
+  it("divides remaining budget over remaining days", () => {
+    // 5000 budget, 1000 spent so far on day 10 → 4000 remaining over 22 days
+    // ≈ 181.8 ₪/day.
+    const entries = [
+      entry({ amount: 1000, chargeDate: new Date(2026, 4, 5).toISOString() }),
+    ];
+    const r = dailyAllowance({
+      entries,
+      rules: [],
+      statuses: [],
+      monthlyBudget: 5000,
+      monthKey: "2026-05",
+      now: new Date(2026, 4, 10),
+    });
+    expect(r.daysRemaining).toBe(22);
+    expect(Math.round(r.allowance)).toBe(182);
+  });
+
+  it("counts today's slice into spentToday", () => {
+    const entries = [
+      entry({ amount: 75, chargeDate: new Date(2026, 4, 10).toISOString() }),
+    ];
+    const r = dailyAllowance({
+      entries,
+      rules: [],
+      statuses: [],
+      monthlyBudget: 5000,
+      monthKey: "2026-05",
+      now: new Date(2026, 4, 10),
+    });
+    expect(r.spentToday).toBe(75);
+  });
+
+  it("returns zero when budget already breached", () => {
+    const entries = [
+      entry({ amount: 6000, chargeDate: new Date(2026, 4, 5).toISOString() }),
+    ];
+    const r = dailyAllowance({
+      entries,
+      rules: [],
+      statuses: [],
+      monthlyBudget: 5000,
+      monthKey: "2026-05",
+      now: new Date(2026, 4, 10),
+    });
+    expect(r.allowance).toBe(0);
   });
 });
 

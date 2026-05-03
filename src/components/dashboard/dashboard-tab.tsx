@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFinanceStore } from "@/lib/store";
 import { PulseBar } from "@/components/pulse/pulse-bar";
 import { TimelineSync } from "@/components/pulse/timeline-sync";
+import { DailyAllowance } from "@/components/dashboard/daily-allowance";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { NewExpenseButton } from "@/components/dashboard/new-expense-button";
 import { UpcomingExpenses } from "@/components/dashboard/upcoming-expenses";
@@ -16,6 +17,7 @@ export function DashboardTab() {
   return (
     <div className="flex flex-col gap-4">
       <PulseBar budget={monthlyBudget} />
+      <DailyAllowance />
       <TimelineSync budget={monthlyBudget} />
       <StatsCards />
       <NewExpenseButton onClick={() => setOpen(true)} />

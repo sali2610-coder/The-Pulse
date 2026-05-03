@@ -214,10 +214,18 @@ GET עם `x-sally-device` ו־`?since=<ms>`. מחזיר עד 200 transactions מ
 ## Predictive engine + History ([src/lib/forecast.ts](src/lib/forecast.ts))
 
 - `forecastMonthEnd({ entries, rules, statuses, monthlyBudget, monthKey })` — מחזיר `Forecast` עם `projectedTotal`, `variance`, `breachDay`, `dailyBurn`, `historicalDailyBurn`, `paceVsHistorical` (lookback 3 חודשים), `confidence` (`low | medium | high`).
+- `dailyAllowance(...)` — `{ allowance, spentToday, daysRemaining, committedRemaining }`. כמה ₪ אפשר להוציא היום בלי לחרוג: `(budget − actual − upcoming) / daysRemaining`. בשימוש ב־[DailyAllowance](src/components/dashboard/daily-allowance.tsx) כרטיס "מותר היום" שצובע אדום אם הוצאת היום גדולה מהמכסה.
 - `categoryTrends(...)` — לכל קטגוריה: `thisMonth`, `priorAverage`, `delta`, `deltaPct`. בשימוש ב־[CategoryTrendsCard](src/components/history/category-trends.tsx).
 - `monthOverMonthTotals(...)` — מערך מסודר של 6 חודשים. בשימוש ב־[MonthOverMonth](src/components/history/month-over-month.tsx).
-- בדיקות ב־[tests/forecast.test.ts](tests/forecast.test.ts).
+- בדיקות ב־[tests/forecast.test.ts](tests/forecast.test.ts) — 11 unit tests.
 - ב־[PulseBar](src/components/pulse/pulse-bar.tsx): המרקר הצהוב מציג את `projectedTotal` על הסקלה; הופך אדום אם `projectedTotal > budget`. כרטיס פרטים מתחת לסרגל מציג חריגה צפויה / מרווח, יום החצייה, קצב מול היסטוריה, רמת ביטחון.
+
+## Hardening: dedup + edge cases + sanitization
+
+- **Cross-source de-duplication** ([src/lib/dedup.ts](src/lib/dedup.ts)): `findFuzzyDuplicate(candidate, entries)` מתאים עסקה חדשה ל־entry קיים לפי **(תאריך ±2 ימים, סכום ±1₪ או ±1%, normalized merchant)**. מטפל במקרה ש־SMS וייבוא CSV מציגים את אותו חיוב. מופעל ב־`addExpense` אחרי בדיקת `externalId` המדויקת.
+- **Merchant sanitization** ([src/lib/sanitize.ts](src/lib/sanitize.ts)): `sanitizeMerchant("שופרסל דיל סניף 123") === "שופרסל"`. עובד דרך טבלת brand canonicals (שופרסל, רמי לוי, סופר פארם, פז, Apple, Netflix, ZARA, חברת חשמל, סלקום וכד'), ואז strip של noise tokens (DEAL/EXPRESS/ONLINE/בע"מ/סניף NN/store IDs). `merchantKey()` מחזיר נורמליזציה לצורכי השוואה (lowercase, no whitespace/punctuation). הסניטיזציה מוחלת ב־parsers וב־`addExpense` עצמו, כך ש־UI תמיד מציג שם נקי. בדיקות ב־[tests/sanitize.test.ts](tests/sanitize.test.ts).
+- **SMS edge cases** ([helpers.ts](src/lib/parsers/helpers.ts)): `detectsRefund` (זיכוי / החזר / REFUND / CREDIT) → `isRefund: true` ב־`ExpenseEntry`. `detectsPending` (תלוי ועומד / ממתין לאישור / PENDING) → `pending: true`. `detectsForeignCurrency` (USD / EUR / GBP) → `currency` ב־`ExpenseEntry`; SMS שכוללים גם `ש"ח` וגם `$` עדיין מסומנים כ־FX. בדיקות ב־[tests/parser-edge-cases.test.ts](tests/parser-edge-cases.test.ts).
+- **Schema v3 → v4**: נוספו `isRefund?`, `pending?`, `currency?` ל־`ExpenseEntry`. שדות אופציונליים, אז מיגרציה אוטומטית.
 
 ## Statement Importer ([src/components/settings/statement-import.tsx](src/components/settings/statement-import.tsx))
 
