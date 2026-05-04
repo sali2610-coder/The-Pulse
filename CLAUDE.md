@@ -16,14 +16,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Mutations / cache:** `@tanstack/react-query` ([src/app/providers.tsx](src/app/providers.tsx)).
 - **State (persisted):** `zustand` עם middleware `persist` (localStorage) ב־[src/lib/store.ts](src/lib/store.ts).
 - **Toasts:** `sonner` (Toaster ב־providers, RTL).
-- **פונטים:** Heebo (sans, hebrew+latin) + JetBrains Mono (numbers).
+- **פונטים:** Geist Sans + Heebo (Hebrew fallback) + Geist Mono. Tabular numerals גלובלי על `[data-mono="true"]`, `[data-financial]`, `<output>`, `.font-mono`. הוגדר ב־[layout.tsx](src/app/layout.tsx) ו־[globals.css](src/app/globals.css).
 - **צבעי מותג:** Charcoal `#0A0A0A`, Surface `#1A1A1A`, Neon `#00E5FF`, Gold `#D4AF37` — מוגדרים תחת `.dark` ב־[globals.css](src/app/globals.css).
 
 ## Architecture
 
 ### Data model ([src/types/finance.ts](src/types/finance.ts))
 
-- **`ExpenseEntry`** — רשומת הוצאה (manual/auto), עם `amount`, `installments`, `paymentMethod` (`cash`/`credit`), ו־`chargeDate`. תשלום חודשי = `amount/installments`, מתחיל מ־chargeDate. Auto-ingested entries כוללים גם `externalId` (deduplication key), `issuer` (`"cal"|"max"`), `cardLast4`, `merchant`.
+- **`Account`** — ישות multi-account (`kind: "bank" | "card"`). חשבונות בנק נושאים `anchorBalance` (יתרה חיה שהמשתמש מזין ידנית) + `anchorUpdatedAt`. כרטיסים נושאים `issuer` + `cardLast4`. ב־`addExpense` חיוב SMS מקבל `accountId` אוטומטי דרך `resolveAccountId()` (חיפוש כרטיס פעיל לפי `issuer`+`cardLast4`).
+- **`Loan`** — הלוואה: `monthlyInstallment`, `remainingBalance`, `endDate`, `dayOfMonth`. נכנסת אוטומטית ל־CFO forecast.
+- **`Income`** — הכנסה צפויה: `amount`, `dayOfMonth`. נספרת ב־CFO forecast רק אם dayOfMonth >= היום.
+- **`ExpenseEntry`** — רשומת הוצאה (manual/auto), עם `amount`, `installments`, `paymentMethod` (`cash`/`credit`), ו־`chargeDate`. תשלום חודשי = `amount/installments`, מתחיל מ־chargeDate. Auto-ingested entries כוללים גם `externalId` (deduplication key), `issuer` (`"cal"|"max"`), `cardLast4`, `merchant`, ו־`accountId` כשניתן לפתור.
 - **`RecurringRule`** — הוצאה צפויה חוזרת (חשמל, ועד בית...) עם `dayOfMonth`, `estimatedAmount`, ו־`keywords` לשידוך.
 - **`RecurringStatus`** — מצב per-rule per-month: `pending` או `paid`. סטטוס "paid" מצביע על `matchedExpenseId` ועל `actualAmount` בפועל.
 
@@ -39,7 +42,11 @@ Zustand יחיד עם persistence ב־localStorage תחת `sally.finance` (`vers
 - `deleteExpense(id)` — מסיר הוצאה ומחזיר rule ששודך אליה ל־pending.
 - `addRule / updateRule / deleteRule / toggleRule` — CRUD על הוצאות קבועות. מחיקה מנקה גם statuses וקישורים מ־entries.
 - `setMonthlyBudget(value)` — קובע יעד חודשי גלובלי.
-- **Migration v1→v2**: מילוי `paymentMethod: "credit"` ברשומות ישנות, ו־`monthlyBudget: 0`.
+- `addAccount / updateAccount / setAnchor / toggleAccount / deleteAccount` — multi-account CRUD. `setAnchor` הוא הקיצור הנפוץ ל"עדכן יתרה חיה".
+- `addLoan / updateLoan / toggleLoan / deleteLoan` — Loans CRUD.
+- `addIncome / updateIncome / toggleIncome / deleteIncome` — Incomes CRUD.
+- `setAudioEnabled(v)` — toggle של chime על sync.
+- **Migrations**: v1→v2 (paymentMethod), v2→v3 (lastSyncedAt), v3→v5 (accounts/loans/incomes/audioEnabled). v4 דולג.
 
 ### Matching ([src/lib/match.ts](src/lib/match.ts))
 
@@ -211,6 +218,23 @@ GET עם `x-sally-device` ו־`?since=<ms>`. מחזיר עד 200 transactions מ
 - **localStorage hydration**: `useFinanceStore.persist` מציב `hasHydrated=true` רק אחרי טעינה. לפני זה, חישובים מבוססי־store חייבים להחזיר ערכי ברירת מחדל (0/ריק) כדי למנוע SSR mismatch.
 - **Dev seed panel**: [src/components/dev/seed-panel.tsx](src/components/dev/seed-panel.tsx) מוצג רק כש־`NODE_ENV !== "production"`. מאפשר טעינת תרחישים מ־[mock-data.ts](src/lib/mock-data.ts) (מאוזן / חריגה / תשלומים ארוכים / מזומן בעיקר / מקרי קצה) או ניקוי הכל.
 
+## CFO Brain — `forecastEndOfMonth` ([src/lib/forecast.ts](src/lib/forecast.ts))
+
+הנוסחה:
+
+```
+forecast = totalAnchors + expectedIncome
+        − pendingFixed − pendingLoans − futureCardSlices
+```
+
+- `totalAnchors` — Σ active bank `anchorBalance` (כולל שליליים).
+- `expectedIncome` — Σ `incomes` שעוד לא הגיעו (`dayOfMonth >= today`).
+- `pendingFixed` — Σ `RecurringRule.estimatedAmount` שעדיין pending החודש.
+- `pendingLoans` — Σ `Loan.monthlyInstallment` שעוד לא חויבו (`dayOfMonth >= today`, פעיל וביתרה > 0).
+- `futureCardSlices` — Σ slices של `entries` שיחויבו בהמשך החודש (slice.chargeDate > now). מתעלם מ־refunds ו־FX.
+
+הצגת התוצאה ב־[CfoSummary](src/components/dashboard/cfo-summary.tsx): כרטיס bento ירוק/אדום עם 6 שורות פירוק. **אם אין anchors פעילים → CTA להגדיר.** בדיקות יחידה ב־[tests/forecast-eom.test.ts](tests/forecast-eom.test.ts) (7 specs).
+
 ## Predictive engine + History ([src/lib/forecast.ts](src/lib/forecast.ts))
 
 - `forecastMonthEnd({ entries, rules, statuses, monthlyBudget, monthKey })` — מחזיר `Forecast` עם `projectedTotal`, `variance`, `breachDay`, `dailyBurn`, `historicalDailyBurn`, `paceVsHistorical` (lookback 3 חודשים), `confidence` (`low | medium | high`).
@@ -226,6 +250,37 @@ GET עם `x-sally-device` ו־`?since=<ms>`. מחזיר עד 200 transactions מ
 - **Merchant sanitization** ([src/lib/sanitize.ts](src/lib/sanitize.ts)): `sanitizeMerchant("שופרסל דיל סניף 123") === "שופרסל"`. עובד דרך טבלת brand canonicals (שופרסל, רמי לוי, סופר פארם, פז, Apple, Netflix, ZARA, חברת חשמל, סלקום וכד'), ואז strip של noise tokens (DEAL/EXPRESS/ONLINE/בע"מ/סניף NN/store IDs). `merchantKey()` מחזיר נורמליזציה לצורכי השוואה (lowercase, no whitespace/punctuation). הסניטיזציה מוחלת ב־parsers וב־`addExpense` עצמו, כך ש־UI תמיד מציג שם נקי. בדיקות ב־[tests/sanitize.test.ts](tests/sanitize.test.ts).
 - **SMS edge cases** ([helpers.ts](src/lib/parsers/helpers.ts)): `detectsRefund` (זיכוי / החזר / REFUND / CREDIT) → `isRefund: true` ב־`ExpenseEntry`. `detectsPending` (תלוי ועומד / ממתין לאישור / PENDING) → `pending: true`. `detectsForeignCurrency` (USD / EUR / GBP) → `currency` ב־`ExpenseEntry`; SMS שכוללים גם `ש"ח` וגם `$` עדיין מסומנים כ־FX. בדיקות ב־[tests/parser-edge-cases.test.ts](tests/parser-edge-cases.test.ts).
 - **Schema v3 → v4**: נוספו `isRefund?`, `pending?`, `currency?` ל־`ExpenseEntry`. שדות אופציונליים, אז מיגרציה אוטומטית.
+
+## Tap-to-Pulse — Web Push category prompt
+
+זרימה (כל פעם שמגיע SMS חיוב):
+
+```
+SMS → iOS Shortcut → POST /api/webhooks/transactions  (Node runtime)
+       → parseSms → ZADD KV → sendCategorizePush(VAPID)
+                                       ↓
+iPhone PWA → SW push event → showNotification(food/transport actions)
+       → notificationclick → POST /api/push/categorize  (Edge)
+                                       ↓
+                       KV: sally:cat:<deviceId>:<externalId>
+       sync route reads override and overlays on the queued tx before
+       returning to the PWA. Auto-sync hook applies it via addExpense.
+```
+
+קבצים מרכזיים:
+
+- [src/lib/push-server.ts](src/lib/push-server.ts) — wrapper על `web-push` (Node-only). `sendCategorizePush()` מחזיר `{ ok, gone }`; `gone=true` למחוק את ה־subscription.
+- [src/app/api/push/subscribe/route.ts](src/app/api/push/subscribe/route.ts) (Edge) — POST שומר `endpoint+keys`, DELETE מסיר. KV key: `sally:push:<deviceId>`.
+- [src/app/api/push/categorize/route.ts](src/app/api/push/categorize/route.ts) (Edge) — שומר `category` ב־`sally:cat:<deviceId>:<externalId>` (TTL 7 ימים).
+- [src/app/api/transactions/sync/route.ts](src/app/api/transactions/sync/route.ts) — לפני החזרה, קורא overrides ב־`readCategoryOverride` ומשרשר אותם.
+- [public/sw.js](public/sw.js) — `push` handler מציג notification עם 2 actions (iOS תקרה); `notificationclick` שולח את ה־category ל־`/api/push/categorize` עם `x-sally-device` שהגיע ב־payload.
+- [src/components/settings/push-toggle.tsx](src/components/settings/push-toggle.tsx) — UI לצרכן: בודק תמיכה, מבקש הרשאה, נרשם דרך VAPID public key.
+
+**מגבלות iOS**: Web Push דורש iOS 16.4+ + הוספת ה־PWA ל־Home Screen. הדפדפן הוא Safari דרך WebKit. iOS מאפשר עד 2 action buttons; בחרנו `food` ו־`transport` כפעולות גלויות; `other` הוא ברירת המחדל ל־tap על ה־body.
+
+## Audio chime ([src/lib/chime.ts](src/lib/chime.ts))
+
+`playSyncChime()` — Web Audio synth שני oscillators (E5 + B5) דרך master gain ב־8%. נורה אחרי AutoSync שהכניס לפחות עסקה אחת חדשה ו־`audioEnabled` true. ב־[settings/audio-toggle.tsx](src/components/settings/audio-toggle.tsx) toggle + כפתור "השמע" לדגימה.
 
 ## Statement Importer ([src/components/settings/statement-import.tsx](src/components/settings/statement-import.tsx))
 

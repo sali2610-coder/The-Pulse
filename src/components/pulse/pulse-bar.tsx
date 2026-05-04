@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useCallback, useMemo, useRef } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { addMonths, currentMonthKey } from "@/lib/dates";
@@ -132,14 +132,48 @@ export function PulseBar({ budget }: Props) {
   const isOver = status === "over";
   const forecastBreaches =
     !!forecast && budget > 0 && forecast.projectedTotal > budget;
+  const reducedMotion = useReducedMotion();
+
+  // Spotlight border that follows the pointer / touch. Updates a CSS
+  // variable instead of re-rendering, which keeps it a 60fps no-op.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--spot-x", `${((e.clientX - rect.left) / rect.width) * 100}%`);
+    el.style.setProperty("--spot-y", `${((e.clientY - rect.top) / rect.height) * 100}%`);
+  }, []);
+  const onPointerLeave = useCallback(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    el.style.removeProperty("--spot-x");
+    el.style.removeProperty("--spot-y");
+  }, []);
 
   return (
     <motion.section
+      ref={sectionRef}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-5 backdrop-blur-2xl"
+      className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.045] to-white/[0.01] p-5 backdrop-blur-2xl"
+      style={{
+        // Layered glass: top inner highlight + bottom inner shadow + colored
+        // outer drop tinted to the current status accent.
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.4), 0 30px 60px -40px ${accent}88`,
+      }}
     >
+      {/* Spotlight border — illuminates under the pointer. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-3xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(220px circle at var(--spot-x, 50%) var(--spot-y, 50%), ${accent}22, transparent 60%)`,
+        }}
+      />
       <AnimatePresence>
         {isOver ? (
           <motion.div
@@ -217,19 +251,29 @@ export function PulseBar({ budget }: Props) {
               aria-hidden
               className="absolute inset-y-0 right-0 rounded-full"
               animate={{ width: `${projectedPct}%` }}
-              transition={{ type: "spring", stiffness: 80, damping: 22 }}
+              transition={{ type: "spring", stiffness: 90, damping: 24, mass: 0.8 }}
               style={{
                 background: `linear-gradient(90deg, ${accent}33, ${accent}11)`,
               }}
             />
             <motion.div
+              key={`fill-${Math.round(actual)}`}
               aria-hidden
               className="absolute inset-y-0 right-0 rounded-full"
-              animate={{ width: `${fillPct}%` }}
-              transition={{ type: "spring", stiffness: 140, damping: 18 }}
+              initial={false}
+              animate={
+                reducedMotion
+                  ? { width: `${fillPct}%` }
+                  : { width: `${fillPct}%`, scaleY: [1, 1.08, 1] }
+              }
+              transition={{
+                width: { type: "spring", stiffness: 110, damping: 18, mass: 0.8 },
+                scaleY: { duration: 0.5, times: [0, 0.4, 1], ease: "easeOut" },
+              }}
               style={{
                 background: `linear-gradient(90deg, ${accent}, color-mix(in oklab, ${accent} 60%, white))`,
-                boxShadow: `0 0 24px -4px ${accent}`,
+                boxShadow: `0 0 28px -4px ${accent}`,
+                transformOrigin: "center",
               }}
             />
             <div

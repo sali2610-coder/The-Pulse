@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
+import { playSyncChime } from "@/lib/chime";
 import type { CategoryId } from "@/lib/categories";
 import type { Issuer, PaymentMethod } from "@/types/finance";
 type FinanceStoreApi = typeof useFinanceStore;
@@ -65,12 +66,14 @@ export function useAutoSync(): void {
         // Read the current values directly from the store at fire time so we
         // don't need ref-mirroring (which lints flag as ref-during-render).
         const store: FinanceStoreApi = useFinanceStore;
-        const { lastSyncedAt, addExpense, setLastSyncedAt } = store.getState();
+        const { lastSyncedAt, addExpense, setLastSyncedAt, audioEnabled } =
+          store.getState();
         const deviceId = getOrCreateDeviceId();
         const res = await fetchSync(deviceId, lastSyncedAt);
         if (!res || !res.ok) return;
+        let added = 0;
         for (const tx of res.transactions) {
-          addExpense({
+          const result = addExpense({
             amount: tx.amount,
             category: tx.category as CategoryId,
             note: tx.note,
@@ -83,8 +86,13 @@ export function useAutoSync(): void {
             cardLast4: tx.cardLast4,
             merchant: tx.merchant,
           });
+          if (!result.duplicate) added += 1;
         }
         setLastSyncedAt(res.now);
+        if (added > 0 && audioEnabled) {
+          // Best-effort, non-blocking — autoplay rules may still gate it.
+          void playSyncChime();
+        }
       } finally {
         inFlight.current = false;
       }

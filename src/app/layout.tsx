@@ -1,17 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo, JetBrains_Mono } from "next/font/google";
+import { Heebo, Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { RegisterSW } from "@/components/pwa/register-sw";
 import "./globals.css";
 
+// Heebo handles Hebrew glyphs — keep it as the body font.
+// Geist Sans is layered on top for Latin text and gives the elite fintech
+// feel called out in the design audit. Geist Mono replaces JetBrains Mono
+// for tabular numerals.
 const heebo = Heebo({
-  variable: "--font-sans",
+  variable: "--font-heebo",
   subsets: ["hebrew", "latin"],
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-mono",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
 });
@@ -44,7 +54,7 @@ export default function RootLayout({
     <html
       lang="he"
       dir="rtl"
-      className={`${heebo.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
+      className={`${heebo.variable} ${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">

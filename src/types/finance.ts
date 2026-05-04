@@ -4,6 +4,46 @@ export type ExpenseSource = "manual" | "auto";
 export type PaymentMethod = "cash" | "credit";
 export type Issuer = "cal" | "max";
 export type Currency = "ILS" | "USD" | "EUR" | "GBP" | "OTHER";
+export type AccountKind = "bank" | "card";
+
+export type Account = {
+  id: string;
+  kind: AccountKind;
+  label: string;
+  /** Cards only */
+  issuer?: Issuer;
+  /** Cards only */
+  cardLast4?: string;
+  /** Banks only — live balance the user types in (may be negative). */
+  anchorBalance?: number;
+  /** Banks only — last manual update timestamp. */
+  anchorUpdatedAt?: string;
+  active: boolean;
+  createdAt: string;
+};
+
+export type Loan = {
+  id: string;
+  label: string;
+  monthlyInstallment: number;
+  remainingBalance: number;
+  /** ISO date — when the loan completes. */
+  endDate: string;
+  /** 1-31; when it auto-debits each month. */
+  dayOfMonth: number;
+  active: boolean;
+  createdAt: string;
+};
+
+export type Income = {
+  id: string;
+  label: string;
+  amount: number;
+  /** 1-31; expected income day of month. */
+  dayOfMonth: number;
+  active: boolean;
+  createdAt: string;
+};
 
 export type ExpenseEntry = {
   id: string;
@@ -31,6 +71,9 @@ export type ExpenseEntry = {
    *  `actual`; appears in `upcoming`. Once the SMS replays without the
    *  pending flag, the existing entry is finalized. */
   pending?: boolean;
+  /** Multi-account: which Account this entry is bound to. Optional for
+   *  legacy entries; resolution falls back to (issuer + cardLast4). */
+  accountId?: string;
 };
 
 export type RecurringRule = {

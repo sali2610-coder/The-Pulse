@@ -21,6 +21,10 @@ export type FuzzyCandidate = {
   chargeDate: string;
   merchant?: string;
   cardLast4?: string;
+  /** When the candidate is bound to an Account, refuse to merge it into an
+   *  entry that's already bound to a *different* Account. Two banks/cards
+   *  legitimately can charge the same merchant for similar amounts. */
+  accountId?: string;
 };
 
 function dateDeltaDays(aIso: string, bIso: string): number {
@@ -66,6 +70,16 @@ export function findFuzzyDuplicate(
     if (!amountClose(entry.amount, candidate.amount)) continue;
     if (dateDeltaDays(entry.chargeDate, candidate.chargeDate) > DAY_TOLERANCE_DAYS)
       continue;
+    // If both sides know which account, they must agree. Different accounts
+    // legitimately produce identical-looking charges (e.g. two cards at the
+    // same merchant on the same day).
+    if (
+      candidate.accountId &&
+      entry.accountId &&
+      candidate.accountId !== entry.accountId
+    ) {
+      continue;
+    }
     // If both sides have card last4 and they disagree → not a match.
     if (
       candidate.cardLast4 &&

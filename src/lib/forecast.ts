@@ -1,4 +1,11 @@
-import type { ExpenseEntry, RecurringRule, RecurringStatus } from "@/types/finance";
+import type {
+  Account,
+  ExpenseEntry,
+  Income,
+  Loan,
+  RecurringRule,
+  RecurringStatus,
+} from "@/types/finance";
 import type { MonthKey } from "@/types/finance";
 import { daysInMonth, projectMonth, sliceForMonth } from "@/lib/projections";
 import { addMonths, dayWithinMonth, monthKeyOf } from "@/lib/dates";
@@ -289,6 +296,118 @@ export function dailyAllowance(args: {
     committedRemaining: proj.upcoming,
   };
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// CFO Brain — multi-account end-of-month projection.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type EndOfMonthForecast = {
+  /** Σ active bank-account anchors (live balances, may be negative). */
+  totalAnchors: number;
+  /** Σ active incomes whose dayOfMonth >= today (still expected this month). */
+  expectedIncome: number;
+  /** Σ unpaid recurring rules this month (expected outflows). */
+  pendingFixed: number;
+  /** Σ active loan installments whose dayOfMonth >= today. */
+  pendingLoans: number;
+  /** Σ entry slices in this month with chargeDate > today (future card debits). */
+  futureCardSlices: number;
+  /** Final estimate: anchors + income − fixed − loans − futureCardSlices. */
+  forecast: number;
+  /** Forecast vs zero — useful as a "in the red?" indicator. */
+  variance: number;
+};
+
+function loanIsActiveInMonth(loan: Loan, monthKey: MonthKey): boolean {
+  if (!loan.active) return false;
+  if (loan.remainingBalance <= 0) return false;
+  if (!loan.endDate) return true;
+  // The loan still bills this month if endDate >= the 1st of the month.
+  const endTime = new Date(loan.endDate).getTime();
+  if (Number.isNaN(endTime)) return true;
+  const [y, m] = monthKey.split("-").map(Number);
+  const firstOfMonthTime = new Date(y, m - 1, 1).getTime();
+  return endTime >= firstOfMonthTime;
+}
+
+export function forecastEndOfMonth(args: {
+  accounts: Account[];
+  loans: Loan[];
+  incomes: Income[];
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  monthKey: MonthKey;
+  now?: Date;
+}): EndOfMonthForecast {
+  const now = args.now ?? new Date();
+  const isCurrentMonth = monthKeyOf(now) === args.monthKey;
+  const dayOfMonth = isCurrentMonth ? now.getDate() : 1;
+  const startOfMonthForecast = !isCurrentMonth || dayOfMonth <= 1;
+
+  // 1. Total anchors across all active bank accounts.
+  const totalAnchors = args.accounts
+    .filter((a) => a.active && a.kind === "bank" && a.anchorBalance !== undefined)
+    .reduce((sum, a) => sum + (a.anchorBalance ?? 0), 0);
+
+  // 2. Future income — incomes whose day hasn't arrived yet this month.
+  const expectedIncome = args.incomes
+    .filter(
+      (i) =>
+        i.active &&
+        (startOfMonthForecast || i.dayOfMonth >= dayOfMonth),
+    )
+    .reduce((sum, i) => sum + i.amount, 0);
+
+  // 3. Pending fixed expenses — active rules whose status is not "paid".
+  const statusKey = (ruleId: string) => `${ruleId}__${args.monthKey}`;
+  const paidThisMonth = new Set(
+    args.statuses
+      .filter((s) => s.monthKey === args.monthKey && s.status === "paid")
+      .map((s) => statusKey(s.ruleId)),
+  );
+  const pendingFixed = args.rules
+    .filter((r) => r.active && !paidThisMonth.has(statusKey(r.id)))
+    .reduce((sum, r) => sum + r.estimatedAmount, 0);
+
+  // 4. Pending loan installments still due this month.
+  const pendingLoans = args.loans
+    .filter(
+      (l) =>
+        loanIsActiveInMonth(l, args.monthKey) &&
+        (startOfMonthForecast || l.dayOfMonth >= dayOfMonth),
+    )
+    .reduce((sum, l) => sum + l.monthlyInstallment, 0);
+
+  // 5. Future card slices — entry slices in this month not yet posted.
+  let futureCardSlices = 0;
+  for (const entry of args.entries) {
+    const slice = sliceForMonth(entry, args.monthKey);
+    if (!slice) continue;
+    if (entry.isRefund) continue; // refunds don't deplete forecast
+    if (entry.currency && entry.currency !== "ILS") continue;
+    if (!startOfMonthForecast && slice.chargeDate.getTime() <= now.getTime()) {
+      // Already charged — already reflected in the bank anchor (in theory).
+      continue;
+    }
+    futureCardSlices += slice.amount;
+  }
+
+  const forecast =
+    totalAnchors + expectedIncome - pendingFixed - pendingLoans - futureCardSlices;
+  const variance = forecast; // negative = ending the month in the red
+
+  return {
+    totalAnchors,
+    expectedIncome,
+    pendingFixed,
+    pendingLoans,
+    futureCardSlices,
+    forecast,
+    variance,
+  };
+}
+
 
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];

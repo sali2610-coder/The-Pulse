@@ -1,9 +1,22 @@
 import { z } from "zod";
 import { parseSmsByIssuer } from "@/lib/parsers";
 import { externalIdFor } from "@/lib/parsers/helpers";
-import { pushTransaction, isKvConfigured, type StoredTransaction } from "@/lib/kv";
+import {
+  pushTransaction,
+  isKvConfigured,
+  getPushSubscription,
+  deletePushSubscription,
+  type StoredTransaction,
+} from "@/lib/kv";
+import {
+  isPushConfigured,
+  sendCategorizePush,
+} from "@/lib/push-server";
 
-export const runtime = "edge";
+// We move to the Node runtime here so we can use the web-push library, which
+// depends on `node:crypto` for VAPID signing. Sync + push subscribe stay at
+// the Edge.
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -103,11 +116,35 @@ export async function POST(req: Request): Promise<Response> {
   };
 
   const { added } = await pushTransaction(deviceId, tx);
+
+  // Best-effort Web Push fan-out for the categorize prompt. Doesn't block
+  // the response — Israeli SMS arrives within seconds of the tap, so we
+  // need the webhook ack to be fast.
+  let pushed: "sent" | "skipped" | "no_sub" | "gone" = "skipped";
+  if (added && isPushConfigured()) {
+    const sub = await getPushSubscription(deviceId);
+    if (!sub) {
+      pushed = "no_sub";
+    } else {
+      const result = await sendCategorizePush(sub, {
+        kind: "categorize",
+        externalId,
+        deviceId,
+        amount: tx.amount,
+        merchant: tx.merchant,
+        cardLast4: tx.cardLast4,
+      });
+      pushed = result.gone ? "gone" : result.ok ? "sent" : "skipped";
+      if (result.gone) await deletePushSubscription(deviceId);
+    }
+  }
+
   return Response.json({
     ok: true,
     persisted: true,
     duplicate: !added,
     externalId,
+    pushed,
   });
 }
 

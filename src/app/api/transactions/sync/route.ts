@@ -1,4 +1,8 @@
-import { isKvConfigured, pullTransactionsSince } from "@/lib/kv";
+import {
+  isKvConfigured,
+  pullTransactionsSince,
+  readCategoryOverride,
+} from "@/lib/kv";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -40,10 +44,18 @@ export async function GET(req: Request): Promise<Response> {
       : minSince;
 
   const transactions = await pullTransactionsSince(deviceId, since);
+  // Overlay any category overrides from push notifications. This is a small
+  // per-tx KV read; for 200 max items it's well within Edge limits.
+  const overlaid = await Promise.all(
+    transactions.map(async (tx) => {
+      const override = await readCategoryOverride(deviceId, tx.externalId);
+      return override ? { ...tx, category: override } : tx;
+    }),
+  );
   return Response.json({
     ok: true,
     configured: true,
-    transactions,
+    transactions: overlaid,
     now: Date.now(),
   });
 }

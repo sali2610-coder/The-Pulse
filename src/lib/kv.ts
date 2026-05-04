@@ -62,6 +62,66 @@ export async function pushTransaction(
   return { added: added === 1 };
 }
 
+const SUB_KEY = (deviceId: string) => `sally:push:${deviceId}`;
+const CATEGORY_OVERRIDE_KEY = (deviceId: string, externalId: string) =>
+  `sally:cat:${deviceId}:${externalId}`;
+const CATEGORY_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+export type PushSubscriptionRecord = {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  registeredAt: number;
+};
+
+export async function savePushSubscription(
+  deviceId: string,
+  sub: PushSubscriptionRecord,
+): Promise<void> {
+  await kv().set(SUB_KEY(deviceId), sub);
+  await kv().expire(SUB_KEY(deviceId), TX_TTL_SECONDS);
+}
+
+export async function getPushSubscription(
+  deviceId: string,
+): Promise<PushSubscriptionRecord | null> {
+  const raw = await kv().get(SUB_KEY(deviceId));
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as PushSubscriptionRecord;
+    } catch {
+      return null;
+    }
+  }
+  return raw as PushSubscriptionRecord;
+}
+
+export async function deletePushSubscription(deviceId: string): Promise<void> {
+  await kv().del(SUB_KEY(deviceId));
+}
+
+/**
+ * Persist a category override coming from a push notification tap. Used by
+ * the sync endpoint to overlay onto the queued transaction before it lands
+ * in the client store.
+ */
+export async function recordCategoryOverride(
+  deviceId: string,
+  externalId: string,
+  category: string,
+): Promise<void> {
+  const key = CATEGORY_OVERRIDE_KEY(deviceId, externalId);
+  await kv().set(key, category, { ex: CATEGORY_TTL_SECONDS });
+}
+
+export async function readCategoryOverride(
+  deviceId: string,
+  externalId: string,
+): Promise<string | null> {
+  const v = await kv().get(CATEGORY_OVERRIDE_KEY(deviceId, externalId));
+  return typeof v === "string" ? v : null;
+}
+
 /**
  * Pull all transactions for `deviceId` strictly newer than `since` (ms epoch).
  * Returns up to 200 to keep the response small.

@@ -1,6 +1,6 @@
-// Sally PWA service worker — minimal shell cache + network-first.
-// Versioned cache name; bump SW_VERSION to invalidate.
-const SW_VERSION = "sally-v1";
+// Sally PWA service worker — shell cache + Web Push categorize prompt.
+// Bump SW_VERSION whenever cache shape changes so stale workers retire.
+const SW_VERSION = "sally-v2";
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const SHELL_ASSETS = ["/", "/manifest.webmanifest", "/icon.svg"];
 
@@ -15,7 +15,9 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((k) => !k.startsWith(SW_VERSION)).map((k) => caches.delete(k)),
+        keys
+          .filter((k) => !k.startsWith(SW_VERSION))
+          .map((k) => caches.delete(k)),
       ),
     ),
   );
@@ -24,19 +26,14 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-
-  // Never intercept Next.js dev HMR or API/webhook traffic.
   if (
     url.pathname.startsWith("/_next/") ||
     url.pathname.startsWith("/api/")
   ) {
     return;
   }
-
-  // Network-first for navigations; fall back to cached shell.
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -49,8 +46,6 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-
-  // For static assets: cache-first.
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
@@ -63,3 +58,102 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Web Push: receive a "categorize" prompt and surface 3 quick actions.
+// iOS Safari supports up to 2 visible action buttons; we render the third
+// option ("personal") as the default tap target.
+// ────────────────────────────────────────────────────────────────────────────
+
+const ILS = (n) =>
+  new Intl.NumberFormat("he-IL", {
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: 0,
+  }).format(n);
+
+self.addEventListener("push", (event) => {
+  let payload;
+  try {
+    payload = event.data ? event.data.json() : null;
+  } catch {
+    payload = null;
+  }
+  if (!payload || payload.kind !== "categorize") return;
+
+  const merchant = payload.merchant ?? "חיוב חדש";
+  const amount = typeof payload.amount === "number" ? ILS(payload.amount) : "";
+  const cardSuffix = payload.cardLast4 ? ` ····${payload.cardLast4}` : "";
+
+  const title = `${merchant} · ${amount}`;
+  const body = `Sally — בחר קטגוריה${cardSuffix}`;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      tag: `sally-cat-${payload.externalId}`,
+      renotify: false,
+      requireInteraction: false,
+      data: {
+        externalId: payload.externalId,
+        deviceId: payload.deviceId,
+      },
+      actions: [
+        { action: "food", title: "אוכל" },
+        { action: "transport", title: "תחבורה" },
+      ],
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  const data = event.notification.data || {};
+  const externalId = data.externalId;
+  // Action button → category id; tapping body without an action → "other".
+  const ACTION_TO_CATEGORY = {
+    food: "food",
+    transport: "transport",
+    "": "other",
+  };
+  const category = ACTION_TO_CATEGORY[event.action] || "other";
+
+  event.notification.close();
+
+  if (!externalId) return;
+
+  event.waitUntil(
+    fetch("/api/push/categorize", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-sally-device": data.deviceId || "",
+      },
+      body: JSON.stringify({ externalId, category }),
+      keepalive: true,
+    })
+      .catch(() => undefined)
+      .then(() => focusOrOpen()),
+  );
+});
+
+async function focusOrOpen() {
+  const list = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of list) {
+    if ("focus" in client) {
+      try {
+        await client.focus();
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+  }
+  if (self.clients.openWindow) {
+    await self.clients.openWindow("/");
+  }
+}
