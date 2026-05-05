@@ -7,6 +7,11 @@ import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { tap } from "@/lib/haptics";
 import { toast } from "sonner";
+import { AUTH_ENABLED } from "@/lib/auth-config";
+
+function scopeHeaders(): Record<string, string> {
+  return AUTH_ENABLED ? {} : { "x-sally-device": getOrCreateDeviceId() };
+}
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -101,10 +106,8 @@ export function PushToggle() {
       }
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-sally-device": getOrCreateDeviceId(),
-        },
+        headers: { "Content-Type": "application/json", ...scopeHeaders() },
+        credentials: "same-origin",
         body: JSON.stringify({
           endpoint: json.endpoint,
           keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
@@ -131,7 +134,8 @@ export function PushToggle() {
       if (sub) await sub.unsubscribe();
       await fetch("/api/push/subscribe", {
         method: "DELETE",
-        headers: { "x-sally-device": getOrCreateDeviceId() },
+        headers: scopeHeaders(),
+        credentials: "same-origin",
       });
       setStatus("idle");
       tap();

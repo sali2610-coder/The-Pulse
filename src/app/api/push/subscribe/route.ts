@@ -4,6 +4,7 @@ import {
   savePushSubscription,
   deletePushSubscription,
 } from "@/lib/kv";
+import { resolveRequestScope } from "@/lib/scope-resolver";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -16,23 +17,13 @@ const subscribeSchema = z.object({
   }),
 });
 
-const MAX_DEVICE_ID_LEN = 128;
-
 function fail(status: number, code: string) {
   return Response.json({ ok: false, error: code }, { status });
 }
 
-function validDevice(id: string): boolean {
-  return (
-    !!id &&
-    id.length <= MAX_DEVICE_ID_LEN &&
-    /^[A-Za-z0-9_\-:.]+$/.test(id)
-  );
-}
-
 export async function POST(req: Request): Promise<Response> {
-  const deviceId = req.headers.get("x-sally-device") ?? "";
-  if (!validDevice(deviceId)) return fail(400, "invalid_device");
+  const scopeRes = await resolveRequestScope(req);
+  if (!scopeRes.ok) return fail(scopeRes.status, scopeRes.code);
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
 
   let raw: unknown;
@@ -44,7 +35,7 @@ export async function POST(req: Request): Promise<Response> {
   const parsed = subscribeSchema.safeParse(raw);
   if (!parsed.success) return fail(422, "schema_violation");
 
-  await savePushSubscription(deviceId, {
+  await savePushSubscription(scopeRes.scope, {
     ...parsed.data,
     registeredAt: Date.now(),
   });
@@ -52,9 +43,9 @@ export async function POST(req: Request): Promise<Response> {
 }
 
 export async function DELETE(req: Request): Promise<Response> {
-  const deviceId = req.headers.get("x-sally-device") ?? "";
-  if (!validDevice(deviceId)) return fail(400, "invalid_device");
+  const scopeRes = await resolveRequestScope(req);
+  if (!scopeRes.ok) return fail(scopeRes.status, scopeRes.code);
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
-  await deletePushSubscription(deviceId);
+  await deletePushSubscription(scopeRes.scope);
   return Response.json({ ok: true });
 }

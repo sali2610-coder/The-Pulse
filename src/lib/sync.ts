@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { playSyncChime } from "@/lib/chime";
+import { AUTH_ENABLED } from "@/lib/auth-config";
 import type { CategoryId } from "@/lib/categories";
 import type { Issuer, PaymentMethod } from "@/types/finance";
 type FinanceStoreApi = typeof useFinanceStore;
@@ -29,13 +30,18 @@ type SyncResponse = {
 
 const POLL_INTERVAL_MS = 60_000; // background poll every minute when visible
 
-async function fetchSync(deviceId: string, since: number): Promise<SyncResponse | null> {
+async function fetchSync(since: number): Promise<SyncResponse | null> {
   try {
     const url = `/api/transactions/sync?since=${since}`;
+    // In multi-user mode the Clerk session cookie carries identity. In legacy
+    // single-user mode the server expects an x-sally-device header.
+    const headers: Record<string, string> = {};
+    if (!AUTH_ENABLED) headers["x-sally-device"] = getOrCreateDeviceId();
     const res = await fetch(url, {
       method: "GET",
-      headers: { "x-sally-device": deviceId },
+      headers,
       cache: "no-store",
+      credentials: "same-origin",
     });
     if (!res.ok) return null;
     return (await res.json()) as SyncResponse;
@@ -68,8 +74,7 @@ export function useAutoSync(): void {
         const store: FinanceStoreApi = useFinanceStore;
         const { lastSyncedAt, addExpense, setLastSyncedAt, audioEnabled } =
           store.getState();
-        const deviceId = getOrCreateDeviceId();
-        const res = await fetchSync(deviceId, lastSyncedAt);
+        const res = await fetchSync(lastSyncedAt);
         if (!res || !res.ok) return;
         let added = 0;
         for (const tx of res.transactions) {

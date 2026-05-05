@@ -8,14 +8,13 @@ import {
   deletePushSubscription,
   type StoredTransaction,
 } from "@/lib/kv";
-import {
-  isPushConfigured,
-  sendCategorizePush,
-} from "@/lib/push-server";
+import { isPushConfigured, sendCategorizePush } from "@/lib/push-server";
+import { resolveTokenToUserId } from "@/lib/api-token";
+import { AUTH_ENABLED } from "@/lib/auth-config";
+import type { Scope } from "@/lib/scope";
 
-// We move to the Node runtime here so we can use the web-push library, which
-// depends on `node:crypto` for VAPID signing. Sync + push subscribe stay at
-// the Edge.
+// Node runtime so we can use the web-push library (depends on `node:crypto`).
+// Sync + push subscribe stay at the Edge.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -38,16 +37,33 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function POST(req: Request): Promise<Response> {
-  const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) return fail(503, "webhook_disabled");
-
+/**
+ * Resolve the inbound webhook to a Scope.
+ *
+ * - **Multi-user mode (AUTH_ENABLED=true)**: requires `Authorization: Bearer
+ *   stk_<token>`. The token resolves to a Clerk userId via Upstash. Global
+ *   `WEBHOOK_SECRET` is rejected because there's no way to attribute its
+ *   transactions to a specific user.
+ * - **Legacy single-user (AUTH_ENABLED=false)**: requires global
+ *   `WEBHOOK_SECRET` + `x-sally-device` header.
+ */
+async function resolveScope(req: Request): Promise<Scope | Response> {
   const auth = req.headers.get("authorization") ?? "";
-  const expected = `Bearer ${secret}`;
-  if (!timingSafeEqual(auth, expected)) {
-    return fail(401, "invalid_token");
+  const bearer = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+
+  if (AUTH_ENABLED) {
+    if (!bearer.startsWith("stk_")) return fail(401, "missing_personal_token");
+    const userId = await resolveTokenToUserId(bearer);
+    if (!userId) return fail(401, "invalid_token");
+    return { kind: "user", id: userId };
   }
 
+  // Legacy mode.
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!secret) return fail(503, "webhook_disabled");
+  if (!timingSafeEqual(bearer, secret)) {
+    return fail(401, "invalid_token");
+  }
   const deviceId = req.headers.get("x-sally-device") ?? "";
   if (
     !deviceId ||
@@ -56,6 +72,13 @@ export async function POST(req: Request): Promise<Response> {
   ) {
     return fail(400, "invalid_device");
   }
+  return { kind: "device", id: deviceId };
+}
+
+export async function POST(req: Request): Promise<Response> {
+  const scopeOr = await resolveScope(req);
+  if (scopeOr instanceof Response) return scopeOr;
+  const scope = scopeOr;
 
   const contentLength = req.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
@@ -78,20 +101,13 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const parsed = smsBodySchema.safeParse(json);
-  if (!parsed.success) {
-    return fail(422, "schema_violation");
-  }
+  if (!parsed.success) return fail(422, "schema_violation");
 
   const { issuer, smsBody } = parsed.data;
   const sms = parseSmsByIssuer(issuer, smsBody);
-  if (!sms.ok) {
-    return fail(422, sms.reason, { missing: sms.missing });
-  }
+  if (!sms.ok) return fail(422, sms.reason, { missing: sms.missing });
 
   if (!isKvConfigured()) {
-    // Successful parse but no DB to persist — return 200 with a flag so the
-    // user knows to provision Upstash. The Shortcut still considers it a
-    // successful send.
     return Response.json({
       ok: true,
       persisted: false,
@@ -100,13 +116,13 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const externalId = await externalIdFor(deviceId, smsBody);
+  const externalId = await externalIdFor(scope.id, smsBody);
   const tx: StoredTransaction = {
     externalId,
     amount: sms.result.amount,
     category: sms.result.category,
-    paymentMethod: "credit", // SMS-driven entries are always credit-card.
-    installments: 1, // SMS doesn't expose installment count reliably.
+    paymentMethod: "credit",
+    installments: 1,
     issuer: sms.result.issuer,
     cardLast4: sms.result.cardLast4,
     merchant: sms.result.merchant,
@@ -115,27 +131,27 @@ export async function POST(req: Request): Promise<Response> {
     receivedAt: Date.now(),
   };
 
-  const { added } = await pushTransaction(deviceId, tx);
+  const { added } = await pushTransaction(scope, tx);
 
-  // Best-effort Web Push fan-out for the categorize prompt. Doesn't block
-  // the response — Israeli SMS arrives within seconds of the tap, so we
-  // need the webhook ack to be fast.
+  // Best-effort Web Push fan-out.
   let pushed: "sent" | "skipped" | "no_sub" | "gone" = "skipped";
   if (added && isPushConfigured()) {
-    const sub = await getPushSubscription(deviceId);
+    const sub = await getPushSubscription(scope);
     if (!sub) {
       pushed = "no_sub";
     } else {
       const result = await sendCategorizePush(sub, {
         kind: "categorize",
         externalId,
-        deviceId,
+        // Echo the scope id back to the SW so notificationclick can attribute
+        // its categorize POST to the right user / device.
+        deviceId: scope.id,
         amount: tx.amount,
         merchant: tx.merchant,
         cardLast4: tx.cardLast4,
       });
       pushed = result.gone ? "gone" : result.ok ? "sent" : "skipped";
-      if (result.gone) await deletePushSubscription(deviceId);
+      if (result.gone) await deletePushSubscription(scope);
     }
   }
 

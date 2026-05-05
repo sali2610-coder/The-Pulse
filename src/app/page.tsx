@@ -16,6 +16,7 @@ import { HistoryTab } from "@/components/history/history-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
+import { HeaderUser } from "@/components/auth/header-user";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -49,14 +50,17 @@ export default function Home() {
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="flex flex-col gap-1 text-right"
+          className="flex items-start justify-between gap-3"
         >
-          <span className="text-xs uppercase tracking-[0.3em] text-gold/80">
-            Sally
-          </span>
-          <h1 className="text-2xl font-light leading-tight tracking-tight text-foreground sm:text-3xl">
-            תקציב נקי, החלטות חכמות.
-          </h1>
+          <div className="flex flex-col gap-1 text-right">
+            <span className="text-xs uppercase tracking-[0.3em] text-gold/80">
+              Sally
+            </span>
+            <h1 className="text-2xl font-light leading-tight tracking-tight text-foreground sm:text-3xl">
+              תקציב נקי, החלטות חכמות.
+            </h1>
+          </div>
+          <HeaderUser />
         </motion.header>
 
         <Tabs defaultValue="dashboard">

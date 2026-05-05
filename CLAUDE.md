@@ -125,15 +125,34 @@ OPEN_BANKING_PROVIDER=plaid                    # plaid | il-open-banking | mock
 
 שימושי ל־dev: [webhook.site](https://webhook.site) — מספק URL חינמי שמאפשר לראות payloads. ה־prefix `NEXT_PUBLIC_` נחוץ כי הקריאה ל־`postExpense` מתבצעת מה־client.
 
-## Auth (Clerk, feature-flagged)
+## Multi-user mode (Clerk + per-user data isolation)
 
-Clerk מותקן כ־SDK ([@clerk/nextjs](node_modules/@clerk/nextjs)) אבל **כבוי כברירת מחדל**. ה־flag נמצא ב־[src/lib/auth-config.ts](src/lib/auth-config.ts) ודורש את כל אלה כדי להפעיל:
+Auth flag at [src/lib/auth-config.ts](src/lib/auth-config.ts) — true once `NEXT_PUBLIC_AUTH_ENABLED=true` + Clerk publishable + secret keys are set. When ON:
 
-1. `NEXT_PUBLIC_AUTH_ENABLED=true`
-2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` קיים ולא ריק
-3. `CLERK_SECRET_KEY` קיים (server-side)
+- [middleware.ts](src/middleware.ts) protects everything except `/api/webhooks/*`, the manifest, icons, the SW file, and `/sign-{in,up}`. Every other route (`/api/transactions/*`, `/api/push/*`, `/api/auth/*`, the dashboard itself) requires a Clerk session.
+- [providers.tsx](src/app/providers.tsx) wraps the tree in `ClerkProvider`.
+- [HeaderUser](src/components/auth/header-user.tsx) renders Clerk's `UserButton` (avatar + sign-out) at the dashboard top-right.
 
-כשהוא כבוי: [middleware.ts](src/middleware.ts) מחזיר `NextResponse.next()` ללא בדיקה, [providers.tsx](src/app/providers.tsx) לא עוטף ב־`ClerkProvider`, ו־`/sign-in` / `/sign-up` מציגים placeholder עברי. כשמופעל: middleware מגן על כל route מלבד `/api/webhooks/*`, manifest, icons, ו־`/sign-in`, `/sign-up`. **MFA**: מופעל ב־Clerk dashboard, לא בקוד.
+### Scope model
+
+[src/lib/scope.ts](src/lib/scope.ts) + [src/lib/scope-resolver.ts](src/lib/scope-resolver.ts).
+
+A **Scope** is either `{ kind: "user", id: <Clerk userId> }` (multi-user) or `{ kind: "device", id: <deviceId> }` (legacy single-user). All KV functions in [src/lib/kv.ts](src/lib/kv.ts) accept a `Scope` and embed it into key prefixes — `sally:user:<userId>:tx`, `sally:device:<deviceId>:tx`, etc. There is **no path** for one user to read another user's data: the routes call `resolveRequestScope(req)` which uses Clerk's `auth()` server helper, never trusting a client-supplied identifier.
+
+### Personal API Tokens
+
+[src/lib/api-token.ts](src/lib/api-token.ts) — each Clerk user owns one `stk_…` token (256-bit random, hex-encoded). KV layout:
+
+- `sally:apitoken:<token>` → userId (reverse index, used by webhook to resolve)
+- `sally:user:<userId>:apitoken` → token (forward, for display in Settings)
+
+The iOS Shortcut sends `Authorization: Bearer stk_…` to the webhook; in multi-user mode the global `WEBHOOK_SECRET` is rejected. Rotating the token immediately invalidates the old one (DEL on the reverse-index key).
+
+UI: [src/components/settings/api-token-card.tsx](src/components/settings/api-token-card.tsx) — generate / reveal / copy / rotate / revoke. CRUD endpoint at [src/app/api/auth/token/route.ts](src/app/api/auth/token/route.ts) (Clerk-required).
+
+### MFA + dashboard config
+
+MFA is configured in the Clerk dashboard (Sign-in factors → enable Authenticator app / SMS). Code doesn't enforce it; Clerk does on the sign-in flow.
 
 ## PWA
 
