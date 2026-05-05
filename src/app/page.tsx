@@ -14,6 +14,7 @@ import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { AnalyticsTab } from "@/components/analytics/analytics-tab";
 import { HistoryTab } from "@/components/history/history-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
+import { SetupGuide } from "@/components/setup/setup-guide";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
@@ -68,6 +69,7 @@ export default function Home() {
             <TabsTrigger value="dashboard">לוח</TabsTrigger>
             <TabsTrigger value="analytics">ניתוח</TabsTrigger>
             <TabsTrigger value="history">היסטוריה</TabsTrigger>
+            <TabsTrigger value="setup">מדריך</TabsTrigger>
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
 
@@ -79,6 +81,9 @@ export default function Home() {
           </TabsContent>
           <TabsContent value="history" className="mt-4">
             <HistoryTab />
+          </TabsContent>
+          <TabsContent value="setup" className="mt-4">
+            <SetupGuide />
           </TabsContent>
           <TabsContent value="settings" className="mt-4">
             <SettingsTab />
