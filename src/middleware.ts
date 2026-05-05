@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
+import type { NextFetchEvent } from "next/server";
 import { NextResponse } from "next/server";
 import { AUTH_ENABLED } from "@/lib/auth-config";
 
@@ -29,9 +30,13 @@ const clerk = clerkMiddleware(async (auth, req) => {
   await auth.protect();
 });
 
-export default function middleware(req: NextRequest) {
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  // Single-user / legacy mode: no auth wrapping.
   if (!AUTH_ENABLED) return NextResponse.next();
-  return clerk(req, {} as never);
+  // Forward both args verbatim so Clerk can use the FetchEvent for
+  // waitUntil() telemetry. Passing `{} as never` here breaks the request
+  // pipeline and Next renders a 404 for `/`.
+  return clerk(req, event);
 }
 
 export const config = {
