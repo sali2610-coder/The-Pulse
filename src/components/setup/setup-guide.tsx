@@ -213,6 +213,31 @@ export function SetupGuide() {
         accent="#A78BFA"
         icon={<Workflow className="size-5" />}
       >
+        <a
+          href="/setup/shortcut"
+          className="block rounded-2xl border border-[#A78BFA]/40 bg-gradient-to-b from-[#A78BFA]/15 to-[#A78BFA]/[0.02] p-3 transition-colors hover:border-[#A78BFA]/70"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl text-[18px]"
+              style={{
+                background: "rgba(167, 139, 250, 0.12)",
+                color: "#A78BFA",
+              }}
+            >
+              ◇
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12px] font-medium text-foreground">
+                ויזואל מלא של ה־Shortcut →
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                דף נפרד שמראה איך כל שדה צריך להיראות, עם כפתור העתקה ליד כל
+                ערך — מומלץ אם השלבים למטה לא ברורים מספיק.
+              </div>
+            </div>
+          </div>
+        </a>
         <ShortcutSteps />
         <ShortcutCheatsheet webhookUrl={webhookUrl} token={token} />
         <TestConnection webhookUrl={webhookUrl} token={token} />
