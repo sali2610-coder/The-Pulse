@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, AlertCircle, Loader2, PlugZap } from "lucide-react";
 import { tap } from "@/lib/haptics";
 
+type ZodIssue = { field: string; message: string; code: string };
+
 type Result =
   | { kind: "idle" }
   | { kind: "running" }
   | { kind: "ok"; externalId: string }
-  | { kind: "fail"; reason: string };
+  | { kind: "fail"; reason: string; issues?: ZodIssue[] };
 
 const SAMPLE_SMS = String.raw`לקוח יקר, בוצעה עסקה בכרטיסך המסתיימת ב-1234 בבית עסק 'בדיקת חיבור Sally' בסכום 1.00 ש"ח בתאריך 05/05/26.`;
 
@@ -45,6 +47,7 @@ export function TestConnection({ webhookUrl, token }: Props) {
       const json = (await res.json().catch(() => null)) as {
         ok?: boolean;
         error?: string;
+        issues?: ZodIssue[];
         persisted?: boolean;
         duplicate?: boolean;
         externalId?: string;
@@ -53,6 +56,7 @@ export function TestConnection({ webhookUrl, token }: Props) {
         setResult({
           kind: "fail",
           reason: json?.error ?? `HTTP ${res.status}`,
+          issues: json?.issues,
         });
         return;
       }
@@ -126,6 +130,18 @@ export function TestConnection({ webhookUrl, token }: Props) {
                     {result.reason}
                   </code>
                 </div>
+                {result.issues && result.issues.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
+                    {result.issues.map((iss, i) => (
+                      <li key={i}>
+                        <code className="font-mono text-foreground/80">
+                          {iss.field}
+                        </code>{" "}
+                        — {iss.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <FailHint reason={result.reason} />
               </div>
             </div>

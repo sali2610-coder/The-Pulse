@@ -16,6 +16,7 @@ import { AUTH_ENABLED } from "@/lib/auth-config";
 import { StepCard, type StepState } from "./step-card";
 import { ShortcutCheatsheet } from "./shortcut-cheatsheet";
 import { TestConnection } from "./test-connection";
+import { WebhookDiagnostics } from "./diagnostics";
 import { CopyChip } from "./copy-chip";
 import { Button } from "@/components/ui/button";
 
@@ -216,6 +217,9 @@ export function SetupGuide() {
         <ShortcutCheatsheet webhookUrl={webhookUrl} token={token} />
         <TestConnection webhookUrl={webhookUrl} token={token} />
       </StepCard>
+
+      {/* Live diagnostics — last webhook calls + anon ring buffer */}
+      <WebhookDiagnostics />
     </div>
   );
 }

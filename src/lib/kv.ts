@@ -41,6 +41,11 @@ const TX_KEY = (scope: Scope) => `${scopePrefix(scope)}:tx`;
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
 const CAT_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:cat:${externalId}`;
+const WH_LOG_KEY = (scope: Scope) => `${scopePrefix(scope)}:wh`;
+const WH_ANON_LOG_KEY = "sally:wh:anon";
+const WH_LOG_KEEP = 20;
+const WH_ANON_KEEP = 10;
+const WH_LOG_TTL_SECONDS = 14 * 24 * 60 * 60;
 
 export type StoredTransaction = {
   externalId: string;
@@ -153,4 +158,84 @@ export async function readCategoryOverride(
 ): Promise<string | null> {
   const v = await kv().get(CAT_KEY(scope, externalId));
   return typeof v === "string" ? v : null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Webhook diagnostic log.
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Two ring buffers:
+//
+//   sally:user:<userId>:wh   — last 20 webhook calls authenticated as that
+//                              user, stored as JSON values in a sorted set
+//                              scored by epoch ms.
+//   sally:wh:anon            — last 10 calls that failed authentication
+//                              (no token resolved), so the user can see
+//                              "an unauth attempt happened ~5s ago".
+//
+// Both rings are trimmed on every write via ZREMRANGEBYRANK to a fixed cap.
+
+export type WebhookLogEntry = {
+  ts: number;
+  ok: boolean;
+  status: number;
+  reason: string;
+  externalId?: string;
+  pushed?: string;
+  merchant?: string;
+};
+
+async function logRingPush(
+  key: string,
+  keep: number,
+  entry: WebhookLogEntry,
+): Promise<void> {
+  const member = JSON.stringify({ ...entry });
+  await kv().zadd(key, { score: entry.ts, member });
+  // Trim to last `keep` entries (highest scores survive). Negative indexes
+  // count from the high end. ZREMRANGEBYRANK with [0, -keep-1] removes
+  // everything below the most recent `keep`.
+  await kv().zremrangebyrank(key, 0, -keep - 1);
+  await kv().expire(key, WH_LOG_TTL_SECONDS);
+}
+
+export async function appendUserWebhookLog(
+  scope: Scope,
+  entry: WebhookLogEntry,
+): Promise<void> {
+  await logRingPush(WH_LOG_KEY(scope), WH_LOG_KEEP, entry);
+}
+
+export async function appendAnonWebhookLog(
+  entry: WebhookLogEntry,
+): Promise<void> {
+  await logRingPush(WH_ANON_LOG_KEY, WH_ANON_KEEP, entry);
+}
+
+async function readRing(key: string, count: number): Promise<WebhookLogEntry[]> {
+  const raw = (await kv().zrange(key, 0, count - 1, {
+    rev: true,
+  })) as Array<string | WebhookLogEntry>;
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") {
+        try {
+          return JSON.parse(entry) as WebhookLogEntry;
+        } catch {
+          return null;
+        }
+      }
+      return entry;
+    })
+    .filter((v): v is WebhookLogEntry => v !== null);
+}
+
+export async function readUserWebhookLog(
+  scope: Scope,
+): Promise<WebhookLogEntry[]> {
+  return readRing(WH_LOG_KEY(scope), WH_LOG_KEEP);
+}
+
+export async function readAnonWebhookLog(): Promise<WebhookLogEntry[]> {
+  return readRing(WH_ANON_LOG_KEY, WH_ANON_KEEP);
 }

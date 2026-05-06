@@ -6,7 +6,10 @@ import {
   isKvConfigured,
   getPushSubscription,
   deletePushSubscription,
+  appendUserWebhookLog,
+  appendAnonWebhookLog,
   type StoredTransaction,
+  type WebhookLogEntry,
 } from "@/lib/kv";
 import { isPushConfigured, sendCategorizePush } from "@/lib/push-server";
 import { resolveTokenToUserId } from "@/lib/api-token";
@@ -26,6 +29,17 @@ const smsBodySchema = z.object({
   smsBody: z.string().min(20).max(2_000),
 });
 
+/** Echoed back on schema_violation so the client knows the exact contract. */
+const SCHEMA_HELP = {
+  issuer: 'string, exactly "cal" or "max"',
+  smsBody: "string, 20-2000 chars (the raw SMS body from the bank)",
+  example: {
+    issuer: "cal",
+    smsBody:
+      "לקוח יקר, בוצעה עסקה בכרטיסך המסתיימת ב-1234 בבית עסק 'שופרסל' בסכום 150.50 ש\"ח בתאריך 06/05/26.",
+  },
+} as const;
+
 function fail(status: number, code: string, extra?: Record<string, unknown>) {
   return Response.json({ ok: false, error: code, ...(extra ?? {}) }, { status });
 }
@@ -37,32 +51,27 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/**
- * Resolve the inbound webhook to a Scope.
- *
- * - **Multi-user mode (AUTH_ENABLED=true)**: requires `Authorization: Bearer
- *   stk_<token>`. The token resolves to a Clerk userId via Upstash. Global
- *   `WEBHOOK_SECRET` is rejected because there's no way to attribute its
- *   transactions to a specific user.
- * - **Legacy single-user (AUTH_ENABLED=false)**: requires global
- *   `WEBHOOK_SECRET` + `x-sally-device` header.
- */
-async function resolveScope(req: Request): Promise<Scope | Response> {
-  const auth = req.headers.get("authorization") ?? "";
-  const bearer = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+type ResolvedScope = { scope: Scope } | { errorResponse: Response };
+
+async function resolveScope(req: Request): Promise<ResolvedScope> {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const bearer = authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : "";
 
   if (AUTH_ENABLED) {
-    if (!bearer.startsWith("stk_")) return fail(401, "missing_personal_token");
+    if (!bearer.startsWith("stk_")) {
+      return { errorResponse: fail(401, "missing_personal_token") };
+    }
     const userId = await resolveTokenToUserId(bearer);
-    if (!userId) return fail(401, "invalid_token");
-    return { kind: "user", id: userId };
+    if (!userId) return { errorResponse: fail(401, "invalid_token") };
+    return { scope: { kind: "user", id: userId } };
   }
 
-  // Legacy mode.
   const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) return fail(503, "webhook_disabled");
+  if (!secret) return { errorResponse: fail(503, "webhook_disabled") };
   if (!timingSafeEqual(bearer, secret)) {
-    return fail(401, "invalid_token");
+    return { errorResponse: fail(401, "invalid_token") };
   }
   const deviceId = req.headers.get("x-sally-device") ?? "";
   if (
@@ -70,18 +79,56 @@ async function resolveScope(req: Request): Promise<Scope | Response> {
     deviceId.length > MAX_DEVICE_ID_LEN ||
     !/^[A-Za-z0-9_\-:.]+$/.test(deviceId)
   ) {
-    return fail(400, "invalid_device");
+    return { errorResponse: fail(400, "invalid_device") };
   }
-  return { kind: "device", id: deviceId };
+  return { scope: { kind: "device", id: deviceId } };
+}
+
+/**
+ * Best-effort log writer. We never let logging failures abort the request
+ * — diagnostics matter, but not more than the actual webhook.
+ */
+async function safeLog(target: () => Promise<void>): Promise<void> {
+  try {
+    await target();
+  } catch {
+    /* swallow — KV may be unconfigured or temporarily unavailable */
+  }
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const scopeOr = await resolveScope(req);
-  if (scopeOr instanceof Response) return scopeOr;
-  const scope = scopeOr;
+  const startedAt = Date.now();
+
+  const resolved = await resolveScope(req);
+  if ("errorResponse" in resolved) {
+    // Auth failed before we knew which user this was. Log to the anon ring
+    // so the operator can see "an unauth'd attempt happened recently".
+    if (isKvConfigured()) {
+      const status = resolved.errorResponse.status;
+      const reason = await readErrorReason(resolved.errorResponse);
+      await safeLog(() =>
+        appendAnonWebhookLog({
+          ts: startedAt,
+          ok: false,
+          status,
+          reason,
+        }),
+      );
+    }
+    return resolved.errorResponse;
+  }
+  const scope = resolved.scope;
 
   const contentLength = req.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
+    await safeLog(() =>
+      appendUserWebhookLog(scope, {
+        ts: startedAt,
+        ok: false,
+        status: 413,
+        reason: "payload_too_large",
+      }),
+    );
     return fail(413, "payload_too_large");
   }
 
@@ -89,23 +136,79 @@ export async function POST(req: Request): Promise<Response> {
   try {
     raw = await req.text();
   } catch {
+    await safeLog(() =>
+      appendUserWebhookLog(scope, {
+        ts: startedAt,
+        ok: false,
+        status: 400,
+        reason: "unreadable_body",
+      }),
+    );
     return fail(400, "unreadable_body");
   }
-  if (raw.length > MAX_BODY_BYTES) return fail(413, "payload_too_large");
+  if (raw.length > MAX_BODY_BYTES) {
+    await safeLog(() =>
+      appendUserWebhookLog(scope, {
+        ts: startedAt,
+        ok: false,
+        status: 413,
+        reason: "payload_too_large",
+      }),
+    );
+    return fail(413, "payload_too_large");
+  }
 
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
+    await safeLog(() =>
+      appendUserWebhookLog(scope, {
+        ts: startedAt,
+        ok: false,
+        status: 400,
+        reason: "invalid_json",
+      }),
+    );
     return fail(400, "invalid_json");
   }
 
   const parsed = smsBodySchema.safeParse(json);
-  if (!parsed.success) return fail(422, "schema_violation");
+  if (!parsed.success) {
+    // Surface the exact field + constraint that failed so the iOS Shortcut
+    // author can fix their POST body without guessing. Common cases:
+    //   - sent `message` instead of `smsBody` → "Required"
+    //   - sent the SMS text raw (not JSON-stringified) → invalid_json earlier
+    //   - sent a 5-char preview → "String must contain at least 20 character(s)"
+    const issues = parsed.error.issues.map((i) => ({
+      field: i.path.join(".") || "(root)",
+      message: i.message,
+      code: i.code,
+    }));
+    await safeLog(() =>
+      appendUserWebhookLog(scope, {
+        ts: startedAt,
+        ok: false,
+        status: 422,
+        reason: "schema_violation",
+      }),
+    );
+    return fail(422, "schema_violation", { issues, expected: SCHEMA_HELP });
+  }
 
   const { issuer, smsBody } = parsed.data;
   const sms = parseSmsByIssuer(issuer, smsBody);
-  if (!sms.ok) return fail(422, sms.reason, { missing: sms.missing });
+  if (!sms.ok) {
+    await safeLog(() =>
+      appendUserWebhookLog(scope, {
+        ts: startedAt,
+        ok: false,
+        status: 422,
+        reason: sms.reason,
+      }),
+    );
+    return fail(422, sms.reason, { missing: sms.missing });
+  }
 
   if (!isKvConfigured()) {
     return Response.json({
@@ -143,8 +246,6 @@ export async function POST(req: Request): Promise<Response> {
       const result = await sendCategorizePush(sub, {
         kind: "categorize",
         externalId,
-        // Echo the scope id back to the SW so notificationclick can attribute
-        // its categorize POST to the right user / device.
         deviceId: scope.id,
         amount: tx.amount,
         merchant: tx.merchant,
@@ -154,6 +255,17 @@ export async function POST(req: Request): Promise<Response> {
       if (result.gone) await deletePushSubscription(scope);
     }
   }
+
+  const logEntry: WebhookLogEntry = {
+    ts: startedAt,
+    ok: true,
+    status: 200,
+    reason: added ? "saved" : "duplicate",
+    externalId,
+    pushed,
+    merchant: tx.merchant,
+  };
+  await safeLog(() => appendUserWebhookLog(scope, logEntry));
 
   return Response.json({
     ok: true,
@@ -166,4 +278,15 @@ export async function POST(req: Request): Promise<Response> {
 
 export function GET(): Response {
   return fail(405, "method_not_allowed");
+}
+
+/** Read the JSON `error` field out of an already-prepared error Response. */
+async function readErrorReason(res: Response): Promise<string> {
+  try {
+    const clone = res.clone();
+    const data = (await clone.json()) as { error?: string };
+    return data.error ?? `http_${res.status}`;
+  } catch {
+    return `http_${res.status}`;
+  }
 }

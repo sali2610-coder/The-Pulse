@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { playSyncChime } from "@/lib/chime";
@@ -28,9 +29,15 @@ type SyncResponse = {
   now: number;
 };
 
+type FetchOutcome =
+  | { kind: "ok"; data: SyncResponse }
+  | { kind: "unauthenticated" }
+  | { kind: "error"; status: number }
+  | { kind: "network" };
+
 const POLL_INTERVAL_MS = 60_000; // background poll every minute when visible
 
-async function fetchSync(since: number): Promise<SyncResponse | null> {
+async function fetchSync(since: number): Promise<FetchOutcome> {
   try {
     const url = `/api/transactions/sync?since=${since}`;
     // In multi-user mode the Clerk session cookie carries identity. In legacy
@@ -43,10 +50,11 @@ async function fetchSync(since: number): Promise<SyncResponse | null> {
       cache: "no-store",
       credentials: "same-origin",
     });
-    if (!res.ok) return null;
-    return (await res.json()) as SyncResponse;
+    if (res.status === 401) return { kind: "unauthenticated" };
+    if (!res.ok) return { kind: "error", status: res.status };
+    return { kind: "ok", data: (await res.json()) as SyncResponse };
   } catch {
-    return null;
+    return { kind: "network" };
   }
 }
 
@@ -54,10 +62,15 @@ async function fetchSync(since: number): Promise<SyncResponse | null> {
  * Pulls server-side queued transactions for this device, applies them through
  * `addExpense({ source: "auto" })` (which de-dups by externalId), and stamps
  * `lastSyncedAt`. Runs on mount, on visibility-change, and on a slow poll.
+ *
+ * Failures used to swallow silently. Now we surface a one-time toast on the
+ * first 401 (session expired) so the user knows to sign in again instead of
+ * staring at a static dashboard wondering why nothing shows up.
  */
 export function useAutoSync(): void {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const inFlight = useRef(false);
+  const warnedAuth = useRef(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -69,15 +82,25 @@ export function useAutoSync(): void {
       }
       inFlight.current = true;
       try {
-        // Read the current values directly from the store at fire time so we
-        // don't need ref-mirroring (which lints flag as ref-during-render).
         const store: FinanceStoreApi = useFinanceStore;
         const { lastSyncedAt, addExpense, setLastSyncedAt, audioEnabled } =
           store.getState();
-        const res = await fetchSync(lastSyncedAt);
-        if (!res || !res.ok) return;
+        const out = await fetchSync(lastSyncedAt);
+
+        if (out.kind === "unauthenticated") {
+          if (!warnedAuth.current) {
+            warnedAuth.current = true;
+            toast.error("פג הסשן — התחבר שוב כדי לסנכרן");
+          }
+          return;
+        }
+        // Reset the auth-warning latch on any non-401 response.
+        warnedAuth.current = false;
+
+        if (out.kind !== "ok") return;
+
         let added = 0;
-        for (const tx of res.transactions) {
+        for (const tx of out.data.transactions) {
           const result = addExpense({
             amount: tx.amount,
             category: tx.category as CategoryId,
@@ -93,9 +116,8 @@ export function useAutoSync(): void {
           });
           if (!result.duplicate) added += 1;
         }
-        setLastSyncedAt(res.now);
+        setLastSyncedAt(out.data.now);
         if (added > 0 && audioEnabled) {
-          // Best-effort, non-blocking — autoplay rules may still gate it.
           void playSyncChime();
         }
       } finally {
@@ -117,4 +139,33 @@ export function useAutoSync(): void {
       window.clearInterval(interval);
     };
   }, [hydrated]);
+}
+
+/** Force a one-shot sync, ignoring the visibility gate. Used by the "Sync now" button. */
+export async function forceSyncNow(): Promise<{ added: number; ok: boolean }> {
+  const store: FinanceStoreApi = useFinanceStore;
+  const { lastSyncedAt, addExpense, setLastSyncedAt, audioEnabled } =
+    store.getState();
+  const out = await fetchSync(lastSyncedAt);
+  if (out.kind !== "ok") return { added: 0, ok: false };
+  let added = 0;
+  for (const tx of out.data.transactions) {
+    const result = addExpense({
+      amount: tx.amount,
+      category: tx.category as CategoryId,
+      note: tx.note,
+      installments: Math.max(1, tx.installments),
+      paymentMethod: tx.paymentMethod,
+      source: "auto",
+      chargeDate: tx.occurredAt,
+      externalId: tx.externalId,
+      issuer: tx.issuer,
+      cardLast4: tx.cardLast4,
+      merchant: tx.merchant,
+    });
+    if (!result.duplicate) added += 1;
+  }
+  setLastSyncedAt(out.data.now);
+  if (added > 0 && audioEnabled) void playSyncChime();
+  return { added, ok: true };
 }
