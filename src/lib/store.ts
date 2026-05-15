@@ -16,7 +16,7 @@ import type {
 } from "@/types/finance";
 import type { CategoryId } from "@/lib/categories";
 import { findMatchingRule } from "@/lib/match";
-import { findFuzzyDuplicate } from "@/lib/dedup";
+import { findFuzzyDuplicate, findMergeTarget } from "@/lib/dedup";
 import { sanitizeMerchant } from "@/lib/sanitize";
 import { monthKeyOf } from "@/lib/dates";
 
@@ -33,6 +33,13 @@ type AddExpenseInput = {
   cardLast4?: string;
   merchant?: string;
   accountId?: string;
+  /** Bank-side pending — "תלוי ועומד" SMS or matching wallet flag. */
+  bankPending?: boolean;
+  /** User-side pending — Wallet partial that needs confirmation. */
+  needsConfirmation?: boolean;
+  /** Original Wallet notification body, retained so the confirmation sheet
+   *  can offer a re-parse later. */
+  rawNotificationBody?: string;
 };
 
 type AddRuleInput = {
@@ -84,6 +91,10 @@ type Actions = {
     entry: ExpenseEntry;
     matched?: RecurringRule;
     duplicate: boolean;
+    /** True when an existing partial/pending entry was enriched in place
+     *  instead of a new entry being created. The returned `entry` is the
+     *  updated existing one. */
+    merged?: boolean;
   };
   deleteExpense: (id: string) => void;
 
@@ -194,18 +205,49 @@ export const useFinanceStore = create<State & Actions>()(
           }
         }
 
+        const fuzzyCandidate = {
+          amount: input.amount,
+          chargeDate,
+          merchant: cleanMerchant,
+          cardLast4: input.cardLast4,
+          accountId,
+        };
+
+        // 1.5 Merge-on-enrichment: if an existing entry is partial (needs
+        //     confirmation, or missing merchant/cardLast4) and the candidate
+        //     can fill in fields, update in place rather than creating a
+        //     duplicate. Lets a Wallet partial graduate to a full charge
+        //     when the SMS arrives shortly after.
+        const mergeHit = findMergeTarget(fuzzyCandidate, get().entries);
+        if (mergeHit) {
+          const target = mergeHit.target;
+          const fromSms = input.source === "sms";
+          const filled: ExpenseEntry = {
+            ...target,
+            merchant: target.merchant ?? cleanMerchant,
+            cardLast4: target.cardLast4 ?? input.cardLast4,
+            issuer: target.issuer ?? input.issuer,
+            accountId: target.accountId ?? accountId,
+            note: target.note ?? input.note,
+            externalId: target.externalId ?? input.externalId,
+            // When the richer payload is from SMS, the row is now fully
+            // identified — drop the user-confirmation gate.
+            needsConfirmation: fromSms
+              ? undefined
+              : target.needsConfirmation,
+          };
+          set((state) => ({
+            entries: state.entries.map((e) =>
+              e.id === target.id ? filled : e,
+            ),
+          }));
+          return { entry: filled, duplicate: false, merged: true };
+        }
+
         // 2. Fuzzy match across sources (SMS arrived first, statement
-        //    re-imports the same charge later, or vice-versa).
-        const fuzzyHit = findFuzzyDuplicate(
-          {
-            amount: input.amount,
-            chargeDate,
-            merchant: cleanMerchant,
-            cardLast4: input.cardLast4,
-            accountId,
-          },
-          get().entries,
-        );
+        //    re-imports the same charge later, or vice-versa). Blocks
+        //    duplicates outright.
+        const fuzzyHit = findFuzzyDuplicate(fuzzyCandidate, get().entries);
         if (fuzzyHit) {
           return { entry: fuzzyHit, duplicate: true };
         }
@@ -226,6 +268,9 @@ export const useFinanceStore = create<State & Actions>()(
           cardLast4: input.cardLast4,
           merchant: cleanMerchant,
           accountId,
+          bankPending: input.bankPending,
+          needsConfirmation: input.needsConfirmation,
+          rawNotificationBody: input.rawNotificationBody,
         };
 
         const matched = findMatchingRule({
@@ -566,7 +611,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -604,6 +649,18 @@ export const useFinanceStore = create<State & Actions>()(
             incomes: migrated.incomes ?? [],
             audioEnabled: migrated.audioEnabled ?? true,
           };
+        }
+        if (fromVersion < 6) {
+          // Rename legacy ExpenseEntry.pending → bankPending so the new
+          // `needsConfirmation` flag can carry user-side state without
+          // overloading the same field.
+          const entries = (migrated.entries ?? []).map((e) => {
+            const legacy = e as ExpenseEntry & { pending?: boolean };
+            if (legacy.pending === undefined) return e;
+            const { pending, ...rest } = legacy;
+            return { ...rest, bankPending: pending } as ExpenseEntry;
+          });
+          migrated = { ...migrated, entries };
         }
         return migrated;
       },

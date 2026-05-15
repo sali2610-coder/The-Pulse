@@ -10,22 +10,29 @@ import type { CategoryId } from "@/lib/categories";
 import type { Issuer, PaymentMethod } from "@/types/finance";
 type FinanceStoreApi = typeof useFinanceStore;
 
+type SyncedTx = {
+  externalId: string;
+  amount: number;
+  category: string;
+  paymentMethod: PaymentMethod;
+  installments: number;
+  /** Card issuer for SMS rows; `"wallet"` for Wallet notifications. */
+  issuer: Issuer | "wallet";
+  source?: "sms" | "wallet";
+  cardLast4?: string;
+  merchant?: string;
+  note?: string;
+  occurredAt: string;
+  receivedAt: number;
+  bankPending?: boolean;
+  needsConfirmation?: boolean;
+  rawNotificationBody?: string;
+};
+
 type SyncResponse = {
   ok: boolean;
   configured: boolean;
-  transactions: Array<{
-    externalId: string;
-    amount: number;
-    category: string;
-    paymentMethod: PaymentMethod;
-    installments: number;
-    issuer: Issuer;
-    cardLast4?: string;
-    merchant?: string;
-    note?: string;
-    occurredAt: string;
-    receivedAt: number;
-  }>;
+  transactions: Array<SyncedTx>;
   now: number;
 };
 
@@ -107,12 +114,15 @@ export function useAutoSync(): void {
             note: tx.note,
             installments: Math.max(1, tx.installments),
             paymentMethod: tx.paymentMethod,
-            source: "auto",
+            source: tx.source ?? (tx.issuer === "wallet" ? "wallet" : "sms"),
             chargeDate: tx.occurredAt,
             externalId: tx.externalId,
-            issuer: tx.issuer,
+            issuer: tx.issuer === "wallet" ? undefined : tx.issuer,
             cardLast4: tx.cardLast4,
             merchant: tx.merchant,
+            bankPending: tx.bankPending,
+            needsConfirmation: tx.needsConfirmation,
+            rawNotificationBody: tx.rawNotificationBody,
           });
           if (!result.duplicate) added += 1;
         }
@@ -156,12 +166,15 @@ export async function forceSyncNow(): Promise<{ added: number; ok: boolean }> {
       note: tx.note,
       installments: Math.max(1, tx.installments),
       paymentMethod: tx.paymentMethod,
-      source: "auto",
+      source: tx.source ?? (tx.issuer === "wallet" ? "wallet" : "sms"),
       chargeDate: tx.occurredAt,
       externalId: tx.externalId,
-      issuer: tx.issuer,
+      issuer: tx.issuer === "wallet" ? undefined : tx.issuer,
       cardLast4: tx.cardLast4,
       merchant: tx.merchant,
+      bankPending: tx.bankPending,
+      needsConfirmation: tx.needsConfirmation,
+      rawNotificationBody: tx.rawNotificationBody,
     });
     if (!result.duplicate) added += 1;
   }

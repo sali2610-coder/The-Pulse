@@ -26,7 +26,7 @@ export type ParseFailure = {
 
 export type ParseSuccess = { ok: true; result: ParsedSms };
 
-function categorize(merchant: string): CategoryId {
+export function categorize(merchant: string): CategoryId {
   const m = merchant.toLowerCase();
   if (
     /(שופר|רמי לוי|ויקטורי|אושר|טיב טעם|יוחננוף|מגה|grocer|supermarket)/i.test(

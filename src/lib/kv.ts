@@ -53,12 +53,25 @@ export type StoredTransaction = {
   category: string;
   paymentMethod: "cash" | "credit";
   installments: number;
-  issuer: "cal" | "max";
+  /** Card issuer for SMS rows; `"wallet"` for Wallet notifications where
+   *  we don't always know which card was tapped. */
+  issuer: "cal" | "max" | "wallet";
+  /** Channel the row arrived on. New writes always set this; older rows
+   *  may be undefined and should be treated as `"sms"`. */
+  source?: "sms" | "wallet";
   cardLast4?: string;
   merchant?: string;
   note?: string;
   occurredAt: string;
   receivedAt: number;
+  /** Bank hasn't finalized the charge yet ("תלוי ועומד" in CAL/MAX). */
+  bankPending?: boolean;
+  /** Arrived via Wallet with partial data; user must review before the
+   *  entry counts toward forecast/upcoming. */
+  needsConfirmation?: boolean;
+  /** Original notification body — kept so the confirmation sheet can
+   *  re-parse if needed. Only present for `source === "wallet"`. */
+  rawNotificationBody?: string;
 };
 
 export type PushSubscriptionRecord = {

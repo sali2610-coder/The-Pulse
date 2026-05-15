@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { parseSmsByIssuer } from "@/lib/parsers";
+import { parseWalletNotification } from "@/lib/parsers/wallet";
 import { externalIdFor } from "@/lib/parsers/helpers";
+import { sanitizeMerchant } from "@/lib/sanitize";
+import { categorize } from "@/lib/parsers";
 import {
   pushTransaction,
   isKvConfigured,
@@ -29,14 +32,46 @@ const smsBodySchema = z.object({
   smsBody: z.string().min(20).max(2_000),
 });
 
+const walletBodySchema = z.object({
+  issuer: z.literal("wallet"),
+  notification: z.object({
+    title: z.string().min(1).max(200),
+    body: z.string().min(1).max(2_000),
+    receivedAt: z.number().int().positive().optional(),
+  }),
+});
+
+const payloadSchema = z.discriminatedUnion("issuer", [
+  smsBodySchema,
+  walletBodySchema,
+]);
+
 /** Echoed back on schema_violation so the client knows the exact contract. */
 const SCHEMA_HELP = {
-  issuer: 'string, exactly "cal" or "max"',
-  smsBody: "string, 20-2000 chars (the raw SMS body from the bank)",
-  example: {
-    issuer: "cal",
-    smsBody:
-      "לקוח יקר, בוצעה עסקה בכרטיסך המסתיימת ב-1234 בבית עסק 'שופרסל' בסכום 150.50 ש\"ח בתאריך 06/05/26.",
+  sms: {
+    issuer: 'string, exactly "cal" or "max"',
+    smsBody: "string, 20-2000 chars (the raw SMS body from the bank)",
+    example: {
+      issuer: "cal",
+      smsBody:
+        "לקוח יקר, בוצעה עסקה בכרטיסך המסתיימת ב-1234 בבית עסק 'שופרסל' בסכום 150.50 ש\"ח בתאריך 06/05/26.",
+    },
+  },
+  wallet: {
+    issuer: 'string, exactly "wallet"',
+    notification: {
+      title: "string, 1-200 chars (notification title, e.g. \"Apple Pay\")",
+      body: "string, 1-2000 chars (notification body — merchant + amount)",
+      receivedAt: "optional number, unix epoch ms",
+    },
+    example: {
+      issuer: "wallet",
+      notification: {
+        title: "Apple Pay",
+        body: "Shufersal · ₪42.90",
+        receivedAt: 1715000000000,
+      },
+    },
   },
 } as const;
 
@@ -173,7 +208,7 @@ export async function POST(req: Request): Promise<Response> {
     return fail(400, "invalid_json");
   }
 
-  const parsed = smsBodySchema.safeParse(json);
+  const parsed = payloadSchema.safeParse(json);
   if (!parsed.success) {
     // Surface the exact field + constraint that failed so the iOS Shortcut
     // author can fix their POST body without guessing. Common cases:
@@ -196,43 +231,96 @@ export async function POST(req: Request): Promise<Response> {
     return fail(422, "schema_violation", { issues, expected: SCHEMA_HELP });
   }
 
-  const { issuer, smsBody } = parsed.data;
-  const sms = parseSmsByIssuer(issuer, smsBody);
-  if (!sms.ok) {
-    await safeLog(() =>
-      appendUserWebhookLog(scope, {
-        ts: startedAt,
-        ok: false,
-        status: 422,
-        reason: sms.reason,
-      }),
-    );
-    return fail(422, sms.reason, { missing: sms.missing });
-  }
+  let tx: StoredTransaction;
+  let externalId: string;
 
-  if (!isKvConfigured()) {
-    return Response.json({
-      ok: true,
-      persisted: false,
-      reason: "kv_not_configured",
-      parsed: sms.result,
-    });
-  }
+  if (parsed.data.issuer === "wallet") {
+    // Wallet branch — partial data is OK; we persist with needsConfirmation
+    // so the user can review later from the in-app pending tray.
+    const { notification } = parsed.data;
+    const wallet = parseWalletNotification(notification);
+    if (!wallet.ok) {
+      await safeLog(() =>
+        appendUserWebhookLog(scope, {
+          ts: startedAt,
+          ok: false,
+          status: 422,
+          reason: wallet.reason,
+        }),
+      );
+      return fail(422, wallet.reason, { missing: wallet.missing });
+    }
+    if (!isKvConfigured()) {
+      return Response.json({
+        ok: true,
+        persisted: false,
+        reason: "kv_not_configured",
+        parsed: wallet.result,
+      });
+    }
 
-  const externalId = await externalIdFor(scope.id, smsBody);
-  const tx: StoredTransaction = {
-    externalId,
-    amount: sms.result.amount,
-    category: sms.result.category,
-    paymentMethod: "credit",
-    installments: 1,
-    issuer: sms.result.issuer,
-    cardLast4: sms.result.cardLast4,
-    merchant: sms.result.merchant,
-    note: sms.result.applePay ? "Apple Pay" : undefined,
-    occurredAt: sms.result.occurredAt,
-    receivedAt: Date.now(),
-  };
+    const idSource = `wallet|${notification.body}|${notification.receivedAt ?? ""}`;
+    externalId = await externalIdFor(scope.id, idSource);
+    const merchantClean = wallet.result.merchant
+      ? sanitizeMerchant(wallet.result.merchant)
+      : undefined;
+    tx = {
+      externalId,
+      amount: wallet.result.amount,
+      category: categorize(merchantClean ?? wallet.result.merchant ?? ""),
+      paymentMethod: "credit",
+      installments: 1,
+      issuer: "wallet",
+      source: "wallet",
+      cardLast4: wallet.result.cardLast4,
+      merchant: merchantClean,
+      note: wallet.result.applePay ? "Apple Pay" : undefined,
+      occurredAt: wallet.result.occurredAt,
+      receivedAt: Date.now(),
+      bankPending: wallet.result.bankPending || undefined,
+      needsConfirmation: true,
+      rawNotificationBody: notification.body,
+    };
+  } else {
+    const { issuer, smsBody } = parsed.data;
+    const sms = parseSmsByIssuer(issuer, smsBody);
+    if (!sms.ok) {
+      await safeLog(() =>
+        appendUserWebhookLog(scope, {
+          ts: startedAt,
+          ok: false,
+          status: 422,
+          reason: sms.reason,
+        }),
+      );
+      return fail(422, sms.reason, { missing: sms.missing });
+    }
+    if (!isKvConfigured()) {
+      return Response.json({
+        ok: true,
+        persisted: false,
+        reason: "kv_not_configured",
+        parsed: sms.result,
+      });
+    }
+
+    externalId = await externalIdFor(scope.id, smsBody);
+    tx = {
+      externalId,
+      amount: sms.result.amount,
+      category: sms.result.category,
+      paymentMethod: "credit",
+      installments: 1,
+      issuer: sms.result.issuer,
+      source: "sms",
+      cardLast4: sms.result.cardLast4,
+      merchant: sms.result.merchant,
+      note: sms.result.applePay ? "Apple Pay" : undefined,
+      occurredAt: sms.result.occurredAt,
+      receivedAt: Date.now(),
+      bankPending: sms.result.pending || undefined,
+    };
+  }
 
   const { added } = await pushTransaction(scope, tx);
 

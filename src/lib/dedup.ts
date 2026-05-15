@@ -57,6 +57,32 @@ function merchantsMatch(
   return a.includes(b) || b.includes(a);
 }
 
+function fuzzyMatches(
+  candidate: FuzzyCandidate,
+  entry: ExpenseEntry,
+): boolean {
+  if (!amountClose(entry.amount, candidate.amount)) return false;
+  if (dateDeltaDays(entry.chargeDate, candidate.chargeDate) > DAY_TOLERANCE_DAYS) {
+    return false;
+  }
+  if (
+    candidate.accountId &&
+    entry.accountId &&
+    candidate.accountId !== entry.accountId
+  ) {
+    return false;
+  }
+  if (
+    candidate.cardLast4 &&
+    entry.cardLast4 &&
+    candidate.cardLast4 !== entry.cardLast4
+  ) {
+    return false;
+  }
+  if (!merchantsMatch(candidate.merchant, entry.merchant)) return false;
+  return true;
+}
+
 /**
  * Find an existing entry that's "the same charge" as the candidate. Returns
  * undefined if no match. Used by addExpense as a second-line dedup after
@@ -67,29 +93,37 @@ export function findFuzzyDuplicate(
   existing: ExpenseEntry[],
 ): ExpenseEntry | undefined {
   for (const entry of existing) {
-    if (!amountClose(entry.amount, candidate.amount)) continue;
-    if (dateDeltaDays(entry.chargeDate, candidate.chargeDate) > DAY_TOLERANCE_DAYS)
-      continue;
-    // If both sides know which account, they must agree. Different accounts
-    // legitimately produce identical-looking charges (e.g. two cards at the
-    // same merchant on the same day).
-    if (
-      candidate.accountId &&
-      entry.accountId &&
-      candidate.accountId !== entry.accountId
-    ) {
-      continue;
-    }
-    // If both sides have card last4 and they disagree → not a match.
-    if (
-      candidate.cardLast4 &&
-      entry.cardLast4 &&
-      candidate.cardLast4 !== entry.cardLast4
-    ) {
-      continue;
-    }
-    if (!merchantsMatch(candidate.merchant, entry.merchant)) continue;
-    return entry;
+    if (fuzzyMatches(candidate, entry)) return entry;
   }
   return undefined;
+}
+
+/**
+ * Find an existing entry that is the same charge as the candidate AND would
+ * benefit from being enriched with the candidate's data. Used by addExpense
+ * before `findFuzzyDuplicate`: when a Wallet partial sits in the store and a
+ * full SMS arrives, we update the existing entry in place rather than
+ * blocking the SMS as a duplicate.
+ *
+ * `richness` counts how many fields the candidate fills in. Higher = better
+ * merge target.
+ */
+export function findMergeTarget(
+  candidate: FuzzyCandidate,
+  existing: ExpenseEntry[],
+): { target: ExpenseEntry; richness: number } | undefined {
+  let best: { target: ExpenseEntry; richness: number } | undefined;
+  for (const entry of existing) {
+    if (!fuzzyMatches(candidate, entry)) continue;
+    let richness = 0;
+    if (entry.needsConfirmation) richness += 2; // strongest enrichment signal
+    if (!entry.merchant && candidate.merchant) richness += 1;
+    if (!entry.cardLast4 && candidate.cardLast4) richness += 1;
+    if (!entry.accountId && candidate.accountId) richness += 1;
+    if (richness === 0) continue;
+    if (!best || richness > best.richness) {
+      best = { target: entry, richness };
+    }
+  }
+  return best;
 }
