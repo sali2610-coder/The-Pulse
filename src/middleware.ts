@@ -21,6 +21,7 @@ const isPublic = createRouteMatcher([
   "/icon.svg",
   "/icon-maskable.svg",
   "/sw.js",
+  "/healthz",
   "/sign-in(.*)",
   "/sign-up(.*)",
 ]);
