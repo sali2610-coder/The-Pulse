@@ -121,14 +121,15 @@ test.describe("Sally — Statement Importer + Pulse hardening", () => {
     await setBudget(page, "5000");
     await page.getByRole("tab", { name: "לוח" }).click();
     await page.getByRole("button", { name: /תיעוד הוצאה חדשה/ }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    const sheetTitle = page.getByRole("heading", { name: "תיעוד הוצאה" });
+    await expect(sheetTitle).toBeVisible();
     await page
       .getByRole("textbox", { name: "סכום ההוצאה בשקלים" })
       .fill("250");
+    await page.getByRole("button", { name: /בחר קטגוריה/ }).click();
     await page.getByRole("radio", { name: /אוכל/ }).click();
     await page.getByRole("button", { name: /^שמור הוצאה$/ }).click();
-    await expect(dialog).toBeHidden({ timeout: 5_000 });
+    await expect(sheetTitle).toBeHidden({ timeout: 5_000 });
     // 250 / 5000 = 5%
     await expect(page.getByText(/5% מהיעד/)).toBeVisible();
   });

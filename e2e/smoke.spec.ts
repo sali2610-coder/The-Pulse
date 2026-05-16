@@ -26,22 +26,24 @@ test.describe("Sally — smoke flow", () => {
     // Back to dashboard.
     await page.getByRole("tab", { name: "לוח" }).click();
 
-    // Open the new-expense dialog.
+    // Open the new-expense sheet.
     await page.getByRole("button", { name: /תיעוד הוצאה חדשה/ }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    const sheetTitle = page.getByRole("heading", { name: "תיעוד הוצאה" });
+    await expect(sheetTitle).toBeVisible();
 
     // Fill in 250 ILS, food category, credit (default).
     await page
       .getByRole("textbox", { name: "סכום ההוצאה בשקלים" })
       .fill("250");
+    // Open the category picker sheet, then select "אוכל".
+    await page.getByRole("button", { name: /בחר קטגוריה/ }).click();
     await page.getByRole("radio", { name: /אוכל/ }).click();
 
     // Submit.
     await page.getByRole("button", { name: /^שמור הוצאה$/ }).click();
 
-    // Dialog auto-closes after success animation.
-    await expect(dialog).toBeHidden({ timeout: 5_000 });
+    // Sheet auto-closes after success animation.
+    await expect(sheetTitle).toBeHidden({ timeout: 5_000 });
 
     // The Pulse should now reflect ~250 actual on a 5000 budget = 5%.
     await expect(page.getByText(/5% מהיעד/)).toBeVisible();

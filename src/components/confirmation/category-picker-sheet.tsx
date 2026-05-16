@@ -29,7 +29,11 @@ export function CategoryPickerSheet({
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div
+        role="radiogroup"
+        aria-label="קטגוריית הוצאה"
+        className="grid grid-cols-3 gap-3"
+      >
         {CATEGORIES.map((cat, idx) => {
           const Icon = cat.icon;
           const isSelected = selected === cat.id;
@@ -37,6 +41,9 @@ export function CategoryPickerSheet({
             <motion.button
               key={cat.id}
               type="button"
+              role="radio"
+              aria-checked={isSelected}
+              aria-label={cat.label}
               onClick={() => {
                 tap();
                 onSelect(cat.id);
