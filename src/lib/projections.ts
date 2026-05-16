@@ -19,6 +19,84 @@ export function sliceAmount(entry: ExpenseEntry): number {
   return entry.amount / entry.installments;
 }
 
+export type InstallmentProgress = {
+  /** Total number of installments scheduled (entry.installments). */
+  total: number;
+  /** Slices already charged (offset+1 of slices whose chargeDate <= now). */
+  paid: number;
+  /** Slices yet to charge. */
+  remaining: number;
+  /** Sum already charged. */
+  paidAmount: number;
+  /** Sum still to charge. */
+  remainingAmount: number;
+  /** Slice index (1-based) that will charge next, or undefined when done. */
+  nextIndex?: number;
+  /** Charge date of the next pending slice, undefined when complete. */
+  nextChargeDate?: Date;
+  /** True when total installments have all been paid. */
+  isComplete: boolean;
+};
+
+/**
+ * Compute installment lifecycle state for a single entry. Treats single-charge
+ * entries (installments === 1) as either paid (chargeDate <= now) or pending.
+ */
+export function installmentProgress(
+  entry: ExpenseEntry,
+  now: Date = new Date(),
+): InstallmentProgress {
+  const total = Math.max(1, Math.floor(entry.installments));
+  const start = new Date(entry.chargeDate);
+  const startIdx = monthIndex(monthKeyOf(start));
+  const slice = total > 1 ? entry.amount / total : entry.amount;
+
+  // How many slices have a chargeDate strictly on/before today?
+  let paid = 0;
+  for (let i = 0; i < total; i++) {
+    const targetIdx = startIdx + i;
+    // Compute charge day for this offset month.
+    const targetY = Math.floor(targetIdx / 12);
+    const targetM0 = targetIdx % 12;
+    const lastDay = new Date(targetY, targetM0 + 1, 0).getDate();
+    const day = Math.min(start.getDate(), lastDay);
+    const chargeDate = new Date(targetY, targetM0, day);
+    if (chargeDate.getTime() <= now.getTime()) {
+      paid++;
+    } else {
+      break;
+    }
+  }
+
+  const remaining = Math.max(0, total - paid);
+  const paidAmount = paid * slice;
+  const remainingAmount = remaining * slice;
+  const isComplete = paid >= total;
+
+  let nextIndex: number | undefined;
+  let nextChargeDate: Date | undefined;
+  if (!isComplete) {
+    nextIndex = paid + 1;
+    const targetIdx = startIdx + paid;
+    const targetY = Math.floor(targetIdx / 12);
+    const targetM0 = targetIdx % 12;
+    const lastDay = new Date(targetY, targetM0 + 1, 0).getDate();
+    const day = Math.min(start.getDate(), lastDay);
+    nextChargeDate = new Date(targetY, targetM0, day);
+  }
+
+  return {
+    total,
+    paid,
+    remaining,
+    paidAmount,
+    remainingAmount,
+    nextIndex,
+    nextChargeDate,
+    isComplete,
+  };
+}
+
 export function sliceForMonth(
   entry: ExpenseEntry,
   monthKey: MonthKey,

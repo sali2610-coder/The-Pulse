@@ -546,6 +546,95 @@ export function forecastBalanceTimeline(args: {
   };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Future monthly pressure — month-by-month projected outflows for the next N
+// months, broken down into installment slices, recurring rules, and loan
+// installments. Helps the user see the wall of commitments before deciding
+// to add a new 27-payment installment plan.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type MonthlyPressure = {
+  monthKey: MonthKey;
+  /** Σ entry slices that will charge in this month. */
+  installmentSlices: number;
+  /** Σ active recurring-rule estimated amounts in this month. */
+  recurring: number;
+  /** Σ active loan installments in this month. */
+  loans: number;
+  /** installmentSlices + recurring + loans. */
+  total: number;
+  /** Active count of distinct entries contributing slices. */
+  activeInstallmentEntries: number;
+};
+
+export function futureMonthlyPressure(args: {
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  loans: Loan[];
+  monthKey: MonthKey;
+  /** How many months forward to project, including the start month. */
+  months?: number;
+  now?: Date;
+}): MonthlyPressure[] {
+  const months = Math.max(1, Math.min(12, args.months ?? 3));
+  const now = args.now ?? new Date();
+  const startMonth = args.monthKey;
+  const currentMonth = monthKeyOf(now);
+  const out: MonthlyPressure[] = [];
+
+  for (let i = 0; i < months; i++) {
+    const monthKey = addMonths(startMonth, i);
+    const isCurrent = monthKey === currentMonth;
+
+    let installmentSlices = 0;
+    let activeInstallmentEntries = 0;
+    for (const entry of args.entries) {
+      if (entry.needsConfirmation) continue;
+      if (entry.bankPending) continue;
+      if (entry.isRefund) continue;
+      if (entry.currency && entry.currency !== "ILS") continue;
+      const slice = sliceForMonth(entry, monthKey);
+      if (!slice) continue;
+      // For the current month, only count slices not yet charged.
+      if (isCurrent && slice.chargeDate.getTime() <= now.getTime()) continue;
+      installmentSlices += slice.amount;
+      activeInstallmentEntries++;
+    }
+
+    // Recurring rules — same logic as forecastEndOfMonth: exclude `paid`
+    // statuses for the *current* month; future months always pending.
+    const paidIds = new Set(
+      args.statuses
+        .filter((s) => s.monthKey === monthKey && s.status === "paid")
+        .map((s) => s.ruleId),
+    );
+    const recurring = args.rules
+      .filter((r) => r.active && (!isCurrent || !paidIds.has(r.id)))
+      .reduce((sum, r) => sum + r.estimatedAmount, 0);
+
+    // Loans — must still be active in this monthKey AND, for the current
+    // month, only count if dayOfMonth hasn't passed yet.
+    const loansSum = args.loans
+      .filter((l) => {
+        if (!loanIsActiveInMonth(l, monthKey)) return false;
+        if (isCurrent && l.dayOfMonth < now.getDate()) return false;
+        return true;
+      })
+      .reduce((sum, l) => sum + l.monthlyInstallment, 0);
+
+    out.push({
+      monthKey,
+      installmentSlices,
+      recurring,
+      loans: loansSum,
+      total: installmentSlices + recurring + loansSum,
+      activeInstallmentEntries,
+    });
+  }
+  return out;
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;

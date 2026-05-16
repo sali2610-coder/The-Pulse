@@ -13,6 +13,8 @@ import { PendingTray } from "@/components/dashboard/pending-tray";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { HeatmapMini } from "@/components/dashboard/heatmap-mini";
 import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-card";
+import { ActiveInstallmentsCard } from "@/components/dashboard/active-installments-card";
+import { FuturePressureCard } from "@/components/dashboard/future-pressure-card";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 
 export function DashboardTab() {
@@ -50,7 +52,15 @@ export function DashboardTab() {
         <StatsCards />
       </div>
 
-      {/* New charts — donut + heatmap */}
+      {/* Installments + future pressure — paired (gold + neon) */}
+      <div className="sm:col-span-3">
+        <ActiveInstallmentsCard />
+      </div>
+      <div className="sm:col-span-3">
+        <FuturePressureCard />
+      </div>
+
+      {/* Charts — donut + heatmap */}
       <div className="sm:col-span-3">
         <CategoryDonut />
       </div>
