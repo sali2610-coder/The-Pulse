@@ -714,6 +714,46 @@ export function forecastBalanceChain(args: {
   return chain;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Per-category monthly series — feeds the drill-down sparkline.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type CategoryMonthlyPoint = {
+  monthKey: MonthKey;
+  total: number;
+};
+
+/**
+ * Returns the per-month spend total for `category` over `monthsBack` months
+ * ending at `monthKey` (inclusive). Honors the standard skip rules
+ * (needsConfirmation, bankPending, refund, non-ILS).
+ */
+export function categoryMonthlySeries(args: {
+  entries: ExpenseEntry[];
+  category: string;
+  monthKey: MonthKey;
+  monthsBack?: number;
+}): CategoryMonthlyPoint[] {
+  const monthsBack = Math.max(1, Math.min(24, args.monthsBack ?? 6));
+  const out: CategoryMonthlyPoint[] = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const mk = addMonths(args.monthKey, -i);
+    let total = 0;
+    for (const entry of args.entries) {
+      if (entry.category !== args.category) continue;
+      if (entry.needsConfirmation) continue;
+      if (entry.bankPending) continue;
+      if (entry.isRefund) continue;
+      if (entry.currency && entry.currency !== "ILS") continue;
+      const slice = sliceForMonth(entry, mk);
+      if (!slice) continue;
+      total += slice.amount;
+    }
+    out.push({ monthKey: mk, total });
+  }
+  return out;
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;
