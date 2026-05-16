@@ -15,6 +15,7 @@ import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { HeatmapMini } from "@/components/dashboard/heatmap-mini";
 import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-card";
 import { BalanceHorizonCard } from "@/components/dashboard/balance-horizon-card";
+import { AccountForecastCard } from "@/components/dashboard/account-forecast-card";
 import { ActiveInstallmentsCard } from "@/components/dashboard/active-installments-card";
 import { FuturePressureCard } from "@/components/dashboard/future-pressure-card";
 import { SubscriptionRadarCard } from "@/components/dashboard/subscription-radar-card";
@@ -59,6 +60,11 @@ export function DashboardTab() {
       {/* Multi-month horizon (carryover) — full-width sparkline 6 months out */}
       <div className="sm:col-span-6">
         <BalanceHorizonCard />
+      </div>
+
+      {/* Per-account forecast — shows only when ≥ 2 active bank anchors */}
+      <div className="sm:col-span-6">
+        <AccountForecastCard />
       </div>
 
       {/* Stats — full width grid that already uses 2 columns internally */}

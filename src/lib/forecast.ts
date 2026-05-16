@@ -829,6 +829,151 @@ export function dayOfWeekSpend(args: {
   return points;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Per-account end-of-month forecast.
+//
+// `forecastEndOfMonth` returns a single combined number across all active
+// bank accounts. This helper distributes the same calculation per-account,
+// so the user can see which bank is at risk individually.
+//
+// Distribution rule for shared obligations (rules, incomes, loans, future
+// card slices that aren't bound to an accountId): split *proportionally*
+// across active bank anchors. Entries / loans / incomes whose entity has
+// an `accountId` go to that account directly.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type AccountForecast = {
+  accountId: string;
+  label: string;
+  anchorBalance: number;
+  expectedIncome: number;
+  pendingFixed: number;
+  pendingLoans: number;
+  futureCardSlices: number;
+  forecast: number;
+  goesNegative: boolean;
+};
+
+export function forecastByAccount(args: {
+  accounts: Account[];
+  loans: Loan[];
+  incomes: Income[];
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  monthKey: MonthKey;
+  now?: Date;
+}): AccountForecast[] {
+  const now = args.now ?? new Date();
+  const isCurrent = monthKeyOf(now) === args.monthKey;
+  const dayOfMonth = isCurrent ? now.getDate() : 1;
+  const startOfMonthForecast = !isCurrent || dayOfMonth <= 1;
+
+  const banks = args.accounts.filter(
+    (a) => a.active && a.kind === "bank" && a.anchorBalance !== undefined,
+  );
+  if (banks.length === 0) return [];
+
+  // Proportional split weights — anchors normalized. If all anchors are
+  // ≤ 0, fall back to an even split so the math doesn't blow up.
+  const totalPositive = banks.reduce(
+    (sum, b) => sum + Math.max(0, b.anchorBalance ?? 0),
+    0,
+  );
+  const weightOf = (bank: Account): number => {
+    if (totalPositive <= 0) return 1 / banks.length;
+    const w = Math.max(0, bank.anchorBalance ?? 0) / totalPositive;
+    return w;
+  };
+
+  // Pre-bucket per-account direct obligations.
+  const directIncome = new Map<string, number>();
+  const directLoans = new Map<string, number>();
+  const directRules = new Map<string, number>();
+  const directSlices = new Map<string, number>();
+
+  // Shared (unbound) buckets that need to be split.
+  let sharedIncome = 0;
+  let sharedLoans = 0;
+  let sharedRules = 0;
+  let sharedSlices = 0;
+
+  // Income
+  for (const inc of args.incomes) {
+    if (!inc.active) continue;
+    if (!startOfMonthForecast && inc.dayOfMonth < dayOfMonth) continue;
+    sharedIncome += inc.amount;
+  }
+
+  // Loans
+  for (const loan of args.loans) {
+    if (!loanIsActiveInMonth(loan, args.monthKey)) continue;
+    if (!startOfMonthForecast && loan.dayOfMonth < dayOfMonth) continue;
+    sharedLoans += loan.monthlyInstallment;
+  }
+
+  // Pending recurring rules
+  const paidIds = new Set(
+    args.statuses
+      .filter((s) => s.monthKey === args.monthKey && s.status === "paid")
+      .map((s) => s.ruleId),
+  );
+  for (const rule of args.rules) {
+    if (!rule.active) continue;
+    if (paidIds.has(rule.id)) continue;
+    sharedRules += rule.estimatedAmount;
+  }
+
+  // Entry slices — accountId-bound entries hit their account directly,
+  // unbound entries go into the shared pool.
+  for (const entry of args.entries) {
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
+    if (entry.isRefund) continue;
+    if (entry.currency && entry.currency !== "ILS") continue;
+    const slice = sliceForMonth(entry, args.monthKey);
+    if (!slice) continue;
+    if (!startOfMonthForecast && slice.chargeDate.getTime() <= now.getTime()) {
+      continue;
+    }
+    if (entry.accountId) {
+      directSlices.set(
+        entry.accountId,
+        (directSlices.get(entry.accountId) ?? 0) + slice.amount,
+      );
+    } else {
+      sharedSlices += slice.amount;
+    }
+  }
+
+  return banks.map((bank): AccountForecast => {
+    const w = weightOf(bank);
+    const expectedIncome =
+      (directIncome.get(bank.id) ?? 0) + sharedIncome * w;
+    const pendingLoans = (directLoans.get(bank.id) ?? 0) + sharedLoans * w;
+    const pendingFixed = (directRules.get(bank.id) ?? 0) + sharedRules * w;
+    const futureCardSlices =
+      (directSlices.get(bank.id) ?? 0) + sharedSlices * w;
+    const forecast =
+      (bank.anchorBalance ?? 0) +
+      expectedIncome -
+      pendingFixed -
+      pendingLoans -
+      futureCardSlices;
+    return {
+      accountId: bank.id,
+      label: bank.label,
+      anchorBalance: bank.anchorBalance ?? 0,
+      expectedIncome,
+      pendingFixed,
+      pendingLoans,
+      futureCardSlices,
+      forecast,
+      goesNegative: forecast < 0,
+    };
+  });
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;
