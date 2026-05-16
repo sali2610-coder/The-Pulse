@@ -2,49 +2,33 @@
 
 import { useEffect } from "react";
 
-// Service Worker registration.
+// Service Worker registration is FULLY DISABLED.
 //
-// Gated on:
-//   1. Production build (no SW during dev — would break HMR).
-//   2. Window has SW support.
-//   3. URL does NOT carry `?nosw=1` — escape hatch for QA when a previous
-//      SW is suspected to be intercepting navigation incorrectly.
+// Production was experiencing Safari "This page couldn't load" failures
+// that survived `?reset=1` runs, suggesting either WebKit + SW
+// incompatibility on the user's macOS build or a stale SW that no
+// `?reset=1` query could reach. To rule SW out completely, this
+// component now ONLY unregisters every prior registration and never
+// registers a new one.
 //
-// If the URL carries `?nosw=1` or `?reset=1`, we ALSO actively
-// `unregister()` any prior registrations so the user can recover from
-// being stuck behind a stale Service Worker.
+// Re-enable later by restoring the `navigator.serviceWorker.register`
+// branch — but only after confirming the SW isn't the failure cause.
 
 export function RegisterSW() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
-    if (process.env.NODE_ENV !== "production") return;
-
-    const search = new URLSearchParams(window.location.search);
-    const optOut = search.has("nosw") || search.has("reset");
-
-    if (optOut) {
-      // Tear down any prior SW so subsequent navigations hit the network
-      // fresh. Also drop the cache storage shell so old chunks aren't
-      // served from disk.
-      navigator.serviceWorker
-        .getRegistrations()
-        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-        .catch(() => undefined);
-      if ("caches" in window) {
-        caches
-          .keys()
-          .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-          .catch(() => undefined);
-      }
-      return;
-    }
 
     navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
-      .catch((err) => {
-        console.warn("[sw] registration failed", err);
-      });
+      .getRegistrations()
+      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .catch(() => undefined);
+    if ("caches" in window) {
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+        .catch(() => undefined);
+    }
   }, []);
 
   return null;
