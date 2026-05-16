@@ -9,7 +9,13 @@ export const metadata = {
 
 export default function WalletSetupPage() {
   return (
-    <main className="relative flex flex-1 flex-col items-stretch px-5 pb-12 pt-8 sm:items-center">
+    <main
+      className="relative flex flex-1 flex-col items-stretch px-5 pb-safe-plus sm:items-center"
+      style={{
+        paddingTop: "max(env(safe-area-inset-top), 2rem)",
+        paddingBottom: "max(env(safe-area-inset-bottom), 3rem)",
+      }}
+    >
       <div className="mx-auto flex w-full max-w-md flex-col gap-5">
         <Link
           href="/"

@@ -127,11 +127,36 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
+  /* Kill the blue/grey iOS Safari tap flash on every interactive surface.
+     Framer Motion / our own active-scale handles tactile feedback. */
+  a, button, [role="button"], [role="radio"], [role="tab"], summary {
+    -webkit-tap-highlight-color: transparent;
   }
   html {
     @apply font-sans;
+    /* Prevent iOS auto-enlarging text after orientation change. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100dvh;
+    /* Prevent pull-to-refresh from yanking the PWA shell when scrolling
+       finishes inside a tab. */
+    overscroll-behavior-y: contain;
+    /* Smooth momentum scroll on iOS WebKit. */
+    -webkit-overflow-scrolling: touch;
+  }
+  /* The UI chrome (icons, chips, tab triggers, labels above values) should
+     never be text-selectable on touch — long-press picks values, not labels. */
+  [data-mono="true"], output, .select-text {
+    /* explicit allow */
+    user-select: text;
+  }
+  [data-slot="tabs-list"],
+  [role="tab"],
+  [data-slot="tabs-trigger"] {
+    user-select: none;
   }
   .font-mono,
   [data-mono="true"] {
