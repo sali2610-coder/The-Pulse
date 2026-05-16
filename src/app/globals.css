@@ -271,6 +271,22 @@
   animation: pending-pulse 2.4s ease-in-out infinite;
 }
 
+/* Respect OS-level reduced-motion preference. We don't disable transforms
+   wholesale (some interactions depend on them) — only kill long-running
+   ambient loops so the dashboard doesn't strobe for users who opted out. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.12s !important;
+  }
+  .animate-aurora,
+  .animate-pending-pulse,
+  main[data-danger="true"]::after {
+    animation: none !important;
+  }
+}
+
 @keyframes shine {
   0% {
     transform: translateX(-100%);

@@ -73,7 +73,14 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      className={cn(
+        "flex-1 text-sm outline-none",
+        // Crossfade + slide-up when the panel becomes active. tw-animate-css
+        // ships these utility classes; gated on `data-active` so non-active
+        // panels stay still.
+        "data-active:animate-in data-active:fade-in-0 data-active:slide-in-from-bottom-2 data-active:duration-300 motion-reduce:animate-none",
+        className,
+      )}
       {...props}
     />
   )

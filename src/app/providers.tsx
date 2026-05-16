@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClerkProvider } from "@clerk/nextjs";
+import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { AUTH_ENABLED } from "@/lib/auth-config";
 
@@ -20,8 +21,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const inner = (
     <QueryClientProvider client={client}>
-      {children}
-      <Toaster richColors position="top-center" dir="rtl" />
+      {/* `reducedMotion="user"` makes every Framer Motion animation honour
+       *  the OS `prefers-reduced-motion` setting without per-component code. */}
+      <MotionConfig
+        reducedMotion="user"
+        transition={{ type: "spring", stiffness: 220, damping: 26 }}
+      >
+        {children}
+        <Toaster richColors position="top-center" dir="rtl" />
+      </MotionConfig>
     </QueryClientProvider>
   );
 
