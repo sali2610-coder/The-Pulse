@@ -15,6 +15,7 @@ import { HeatmapMini } from "@/components/dashboard/heatmap-mini";
 import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-card";
 import { ActiveInstallmentsCard } from "@/components/dashboard/active-installments-card";
 import { FuturePressureCard } from "@/components/dashboard/future-pressure-card";
+import { SubscriptionRadarCard } from "@/components/dashboard/subscription-radar-card";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 
 export function DashboardTab() {
@@ -50,6 +51,11 @@ export function DashboardTab() {
       {/* Stats — full width grid that already uses 2 columns internally */}
       <div className="sm:col-span-6">
         <StatsCards />
+      </div>
+
+      {/* Subscription radar — surfaces auto-detected patterns */}
+      <div className="sm:col-span-6">
+        <SubscriptionRadarCard />
       </div>
 
       {/* Installments + future pressure — paired (gold + neon) */}
