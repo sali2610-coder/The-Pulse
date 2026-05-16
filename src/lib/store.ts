@@ -97,6 +97,22 @@ type Actions = {
     merged?: boolean;
   };
   deleteExpense: (id: string) => void;
+  /** Apply user edits from the confirmation sheet, set confirmedAt, clear
+   *  the needsConfirmation gate. */
+  confirmExpense: (
+    id: string,
+    patch?: Partial<{
+      amount: number;
+      category: CategoryId;
+      merchant: string;
+      note: string;
+      installments: number;
+      accountId: string;
+      paymentMethod: PaymentMethod;
+    }>,
+  ) => ExpenseEntry | undefined;
+  /** Drop a Wallet-pending entry the user declined ("not mine"). */
+  dismissPending: (id: string) => void;
 
   addRule: (input: AddRuleInput) => RecurringRule;
   updateRule: (id: string, patch: Partial<AddRuleInput>) => void;
@@ -304,6 +320,44 @@ export const useFinanceStore = create<State & Actions>()(
           matched: matched ?? undefined,
           duplicate: false,
         };
+      },
+
+      confirmExpense: (id, patch) => {
+        let updated: ExpenseEntry | undefined;
+        set((state) => ({
+          entries: state.entries.map((e) => {
+            if (e.id !== id) return e;
+            const merged: ExpenseEntry = {
+              ...e,
+              ...(patch?.amount !== undefined && Number.isFinite(patch.amount)
+                ? { amount: patch.amount }
+                : {}),
+              ...(patch?.category ? { category: patch.category } : {}),
+              ...(patch?.merchant !== undefined
+                ? { merchant: patch.merchant.trim() || undefined }
+                : {}),
+              ...(patch?.note !== undefined ? { note: patch.note } : {}),
+              ...(patch?.installments
+                ? { installments: Math.max(1, Math.floor(patch.installments)) }
+                : {}),
+              ...(patch?.accountId ? { accountId: patch.accountId } : {}),
+              ...(patch?.paymentMethod
+                ? { paymentMethod: patch.paymentMethod }
+                : {}),
+              needsConfirmation: undefined,
+              confirmedAt: new Date().toISOString(),
+            };
+            updated = merged;
+            return merged;
+          }),
+        }));
+        return updated;
+      },
+
+      dismissPending: (id) => {
+        set((state) => ({
+          entries: state.entries.filter((e) => e.id !== id),
+        }));
       },
 
       deleteExpense: (id) => {

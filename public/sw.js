@@ -1,6 +1,6 @@
 // Sally PWA service worker — shell cache + Web Push categorize prompt.
 // Bump SW_VERSION whenever cache shape changes so stale workers retire.
-const SW_VERSION = "sally-v2";
+const SW_VERSION = "sally-v3";
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const SHELL_ASSETS = ["/", "/manifest.webmanifest", "/icon.svg"];
 
@@ -111,49 +111,59 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
   const externalId = data.externalId;
-  // Action button → category id; tapping body without an action → "other".
-  const ACTION_TO_CATEGORY = {
-    food: "food",
-    transport: "transport",
-    "": "other",
-  };
-  const category = ACTION_TO_CATEGORY[event.action] || "other";
+  const action = event.action;
 
   event.notification.close();
 
   if (!externalId) return;
 
-  event.waitUntil(
-    fetch("/api/push/categorize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-sally-device": data.deviceId || "",
-      },
-      body: JSON.stringify({ externalId, category }),
-      keepalive: true,
-    })
-      .catch(() => undefined)
-      .then(() => focusOrOpen()),
-  );
+  // Quick-action buttons → fast categorize, no nav.
+  const QUICK_ACTION_TO_CATEGORY = {
+    food: "food",
+    transport: "transport",
+  };
+  const quickCategory = QUICK_ACTION_TO_CATEGORY[action];
+
+  if (quickCategory) {
+    event.waitUntil(
+      fetch("/api/push/categorize", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-sally-device": data.deviceId || "",
+        },
+        body: JSON.stringify({ externalId, category: quickCategory }),
+        keepalive: true,
+      })
+        .catch(() => undefined)
+        .then(() => focusOrOpen("/")),
+    );
+    return;
+  }
+
+  // Body tap (no action) → deep-link into the confirmation sheet so the
+  // user can review merchant, category, amount, installments.
+  event.waitUntil(focusOrOpen(`/confirm/${encodeURIComponent(externalId)}`));
 });
 
-async function focusOrOpen() {
+async function focusOrOpen(path) {
+  const target = path || "/";
   const list = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
   });
   for (const client of list) {
-    if ("focus" in client) {
+    if ("focus" in client && "navigate" in client) {
       try {
         await client.focus();
+        await client.navigate(target);
+        return;
       } catch {
-        /* noop */
+        /* fall through to openWindow */
       }
-      return;
     }
   }
   if (self.clients.openWindow) {
-    await self.clients.openWindow("/");
+    await self.clients.openWindow(target);
   }
 }

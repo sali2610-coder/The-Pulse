@@ -382,6 +382,11 @@ export function forecastEndOfMonth(args: {
   // 5. Future card slices — entry slices in this month not yet posted.
   let futureCardSlices = 0;
   for (const entry of args.entries) {
+    // Skip user-side pending (Wallet partial awaiting confirm) and
+    // bank-side pending (charge not finalized) — both would distort the
+    // forecast and double-count when richer data eventually arrives.
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (entry.isRefund) continue; // refunds don't deplete forecast

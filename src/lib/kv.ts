@@ -128,6 +128,35 @@ export async function pullTransactionsSince(
     .filter((v): v is StoredTransaction => v !== null);
 }
 
+/**
+ * Look up a single transaction by externalId. Scans the recent ZSET in
+ * descending order — fine for the post-push deep-link use case where the
+ * row is typically minutes old, and we cap at 200 candidates anyway.
+ */
+export async function findTransactionByExternalId(
+  scope: Scope,
+  externalId: string,
+): Promise<StoredTransaction | null> {
+  const key = TX_KEY(scope);
+  const raw = (await kv().zrange(key, 0, 199, {
+    rev: true,
+  })) as Array<string | StoredTransaction>;
+  for (const entry of raw) {
+    const tx =
+      typeof entry === "string"
+        ? (() => {
+            try {
+              return JSON.parse(entry) as StoredTransaction;
+            } catch {
+              return null;
+            }
+          })()
+        : (entry as StoredTransaction);
+    if (tx && tx.externalId === externalId) return tx;
+  }
+  return null;
+}
+
 export async function savePushSubscription(
   scope: Scope,
   sub: PushSubscriptionRecord,

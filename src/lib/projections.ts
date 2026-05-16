@@ -69,6 +69,10 @@ export function projectMonth(args: {
   let upcoming = 0;
 
   for (const entry of args.entries) {
+    // Wallet partials the user hasn't reviewed don't count toward either
+    // bucket — they would double-count once SMS arrives and we merge.
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getTime() <= now.getTime()) {
@@ -96,6 +100,8 @@ export function actualUntilDay(args: {
 }): number {
   let total = 0;
   for (const entry of args.entries) {
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getDate() <= args.day) {
@@ -113,6 +119,8 @@ export function actualByPaymentMethod(args: {
   const now = args.now ?? new Date();
   const totals: Record<PaymentMethod, number> = { cash: 0, credit: 0 };
   for (const entry of args.entries) {
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getTime() > now.getTime()) continue;
@@ -129,6 +137,8 @@ export function categoryTotals(args: {
   const now = args.now ?? new Date();
   const map = new Map<CategoryId, number>();
   for (const entry of args.entries) {
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getTime() > now.getTime()) continue;

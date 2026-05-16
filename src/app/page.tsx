@@ -42,7 +42,8 @@ export default function Home() {
   return (
     <main
       data-danger={isOverBudget ? "true" : undefined}
-      className="relative flex flex-1 flex-col items-stretch px-5 pb-10 pt-10 sm:items-center"
+      className="relative flex flex-1 flex-col items-stretch px-5 pb-10 pt-safe sm:items-center"
+      style={{ paddingTop: "max(env(safe-area-inset-top), 2.5rem)" }}
     >
       <AnimatedBackground />
 
