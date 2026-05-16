@@ -1,6 +1,6 @@
 // Sally PWA service worker — shell cache + Web Push categorize prompt.
 // Bump SW_VERSION whenever cache shape changes so stale workers retire.
-const SW_VERSION = "sally-v4";
+const SW_VERSION = "sally-v5";
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const SHELL_ASSETS = ["/", "/manifest.webmanifest", "/icon.svg"];
 
