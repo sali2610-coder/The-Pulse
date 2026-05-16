@@ -11,6 +11,7 @@ import { NewExpenseButton } from "@/components/dashboard/new-expense-button";
 import { UpcomingExpenses } from "@/components/dashboard/upcoming-expenses";
 import { PendingTray } from "@/components/dashboard/pending-tray";
 import { MonthlyDigestCard } from "@/components/dashboard/monthly-digest-card";
+import { HealthScoreCard } from "@/components/dashboard/health-score-card";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { HeatmapMini } from "@/components/dashboard/heatmap-mini";
 import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-card";
@@ -28,6 +29,11 @@ export function DashboardTab() {
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
+      {/* Health score — single 0-100 readout above the executive digest. */}
+      <div className="sm:col-span-6">
+        <HealthScoreCard />
+      </div>
+
       {/* Executive summary — surfaces highest-severity insight first. */}
       <div className="sm:col-span-6">
         <MonthlyDigestCard />
