@@ -12,6 +12,7 @@ import { UpcomingExpenses } from "@/components/dashboard/upcoming-expenses";
 import { PendingTray } from "@/components/dashboard/pending-tray";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { HeatmapMini } from "@/components/dashboard/heatmap-mini";
+import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-card";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 
 export function DashboardTab() {
@@ -37,6 +38,11 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-3">
         <DailyAllowance />
+      </div>
+
+      {/* Balance trajectory — full-width sparkline + overdraft warning */}
+      <div className="sm:col-span-6">
+        <BalanceForecastCard />
       </div>
 
       {/* Stats — full width grid that already uses 2 columns internally */}

@@ -414,6 +414,138 @@ export function forecastEndOfMonth(args: {
 }
 
 
+// ────────────────────────────────────────────────────────────────────────────
+// Daily balance timeline — projects how the active-bank-account balance will
+// evolve day-by-day for the remainder of the month, so the dashboard can
+// show overdraft warnings, a balance sparkline, and the day on which the
+// account would first dip below zero.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type BalancePoint = {
+  /** Day of the month (1..daysInMonth). */
+  day: number;
+  /** Running balance at end-of-day. May be negative. */
+  balance: number;
+};
+
+export type BalanceTimeline = {
+  /** Per-day projected balance from the starting day onward. */
+  points: BalancePoint[];
+  /** Day the timeline starts at — today for the current month, 1 otherwise. */
+  startDay: number;
+  /** Bank-anchor sum at the timeline's first point. */
+  startBalance: number;
+  /** Projected balance on the last day of the month. */
+  endBalance: number;
+  /** Day with the lowest projected balance (post-anchor). */
+  lowestDay: number;
+  /** Lowest projected balance value across the timeline. */
+  lowestBalance: number;
+  /** First day balance is projected to dip below zero (undefined if never). */
+  overdraftDay?: number;
+  /** True if at least one point in the timeline is < 0. */
+  goesNegative: boolean;
+};
+
+export function forecastBalanceTimeline(args: {
+  accounts: Account[];
+  loans: Loan[];
+  incomes: Income[];
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  monthKey: MonthKey;
+  now?: Date;
+}): BalanceTimeline {
+  const now = args.now ?? new Date();
+  const isCurrentMonth = monthKeyOf(now) === args.monthKey;
+  const totalDays = daysInMonth(args.monthKey);
+  const startDay = isCurrentMonth ? Math.min(now.getDate(), totalDays) : 1;
+
+  const totalAnchors = args.accounts
+    .filter((a) => a.active && a.kind === "bank" && a.anchorBalance !== undefined)
+    .reduce((sum, a) => sum + (a.anchorBalance ?? 0), 0);
+
+  // Build a per-day delta map (income positive, outflows negative).
+  const dailyDelta = new Array<number>(totalDays + 1).fill(0);
+
+  // Helper — only count obligations on `day >= startDay` to avoid double
+  // counting events the bank anchor already reflects.
+  const enqueue = (day: number, delta: number) => {
+    if (!Number.isFinite(day) || day < startDay || day > totalDays) return;
+    dailyDelta[day] += delta;
+  };
+
+  // Incomes
+  for (const inc of args.incomes) {
+    if (!inc.active) continue;
+    enqueue(inc.dayOfMonth, inc.amount);
+  }
+
+  // Loan installments
+  for (const loan of args.loans) {
+    if (!loanIsActiveInMonth(loan, args.monthKey)) continue;
+    enqueue(loan.dayOfMonth, -loan.monthlyInstallment);
+  }
+
+  // Recurring rules still unpaid this month
+  const paidIds = new Set(
+    args.statuses
+      .filter((s) => s.monthKey === args.monthKey && s.status === "paid")
+      .map((s) => s.ruleId),
+  );
+  for (const rule of args.rules) {
+    if (!rule.active) continue;
+    if (paidIds.has(rule.id)) continue;
+    enqueue(rule.dayOfMonth, -rule.estimatedAmount);
+  }
+
+  // Entry slices — future charges only
+  for (const entry of args.entries) {
+    if (entry.needsConfirmation) continue;
+    if (entry.bankPending) continue;
+    if (entry.isRefund) continue;
+    if (entry.currency && entry.currency !== "ILS") continue;
+    const slice = sliceForMonth(entry, args.monthKey);
+    if (!slice) continue;
+    enqueue(slice.chargeDate.getDate(), -slice.amount);
+  }
+
+  // Walk the days, accumulating into a running balance.
+  const points: BalancePoint[] = [];
+  let balance = totalAnchors;
+  let lowestDay = startDay;
+  let lowestBalance = balance;
+  let overdraftDay: number | undefined;
+  let goesNegative = balance < 0;
+
+  for (let day = startDay; day <= totalDays; day++) {
+    balance += dailyDelta[day];
+    points.push({ day, balance });
+    if (balance < lowestBalance) {
+      lowestBalance = balance;
+      lowestDay = day;
+    }
+    if (balance < 0 && overdraftDay === undefined) {
+      overdraftDay = day;
+    }
+    if (balance < 0) goesNegative = true;
+  }
+
+  const endBalance = points.length > 0 ? points[points.length - 1].balance : totalAnchors;
+
+  return {
+    points,
+    startDay,
+    startBalance: totalAnchors,
+    endBalance,
+    lowestDay,
+    lowestBalance,
+    overdraftDay,
+    goesNegative,
+  };
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;
