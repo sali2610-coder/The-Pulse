@@ -16,6 +16,7 @@ import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-car
 import { ActiveInstallmentsCard } from "@/components/dashboard/active-installments-card";
 import { FuturePressureCard } from "@/components/dashboard/future-pressure-card";
 import { SubscriptionRadarCard } from "@/components/dashboard/subscription-radar-card";
+import { AnomaliesCard } from "@/components/dashboard/anomalies-card";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 
 export function DashboardTab() {
@@ -51,6 +52,11 @@ export function DashboardTab() {
       {/* Stats — full width grid that already uses 2 columns internally */}
       <div className="sm:col-span-6">
         <StatsCards />
+      </div>
+
+      {/* Anomalies — surfaces this-month outliers vs per-merchant baseline */}
+      <div className="sm:col-span-6">
+        <AnomaliesCard />
       </div>
 
       {/* Subscription radar — surfaces auto-detected patterns */}
