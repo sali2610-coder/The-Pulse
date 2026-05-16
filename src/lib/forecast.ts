@@ -790,6 +790,45 @@ export function paymentMethodMonthlyTotals(args: {
   return out;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Day-of-week spend totals — reveals weekly cadence (Friday weekend spike,
+// Sunday recovery, etc.) across an N-month window.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Sunday=0..Saturday=6 (JS Date getDay convention). */
+export type DayOfWeekPoint = {
+  dayOfWeek: number;
+  total: number;
+  count: number;
+};
+
+export function dayOfWeekSpend(args: {
+  entries: ExpenseEntry[];
+  monthKey: MonthKey;
+  monthsBack?: number;
+}): DayOfWeekPoint[] {
+  const monthsBack = Math.max(1, Math.min(24, args.monthsBack ?? 3));
+  const points: DayOfWeekPoint[] = [];
+  for (let d = 0; d < 7; d++) {
+    points.push({ dayOfWeek: d, total: 0, count: 0 });
+  }
+  for (let i = 0; i < monthsBack; i++) {
+    const mk = addMonths(args.monthKey, -i);
+    for (const entry of args.entries) {
+      if (entry.needsConfirmation) continue;
+      if (entry.bankPending) continue;
+      if (entry.isRefund) continue;
+      if (entry.currency && entry.currency !== "ILS") continue;
+      const slice = sliceForMonth(entry, mk);
+      if (!slice) continue;
+      const d = slice.chargeDate.getDay();
+      points[d].total += slice.amount;
+      points[d].count += 1;
+    }
+  }
+  return points;
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;
