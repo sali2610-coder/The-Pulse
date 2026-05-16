@@ -1,11 +1,10 @@
-// Feature-flag for Clerk auth. Auth is OFF unless ALL of the following are met:
-//  1. NEXT_PUBLIC_AUTH_ENABLED=true (explicit opt-in).
-//  2. Both NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY are set.
+// Auth is intentionally disabled at the app level. Every code path that
+// previously branched on `AUTH_ENABLED` now reads `false` unconditionally
+// — Clerk imports were destabilising production in test-mode and the
+// rebuild plan is to re-introduce auth behind a separate module so a flag
+// flip doesn't change the import graph.
 //
-// This keeps the app fully usable in dev / preview without a Clerk account,
-// while making it a one-line flip to enable in production.
+// Do NOT re-derive this from `process.env.NEXT_PUBLIC_AUTH_ENABLED` until
+// the auth rewrite lands. Hard-coded `false` keeps the bundle stable.
 
-export const AUTH_ENABLED =
-  process.env.NEXT_PUBLIC_AUTH_ENABLED === "true" &&
-  typeof process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY === "string" &&
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.length > 0;
+export const AUTH_ENABLED = false as const;

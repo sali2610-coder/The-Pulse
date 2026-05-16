@@ -1,13 +1,11 @@
-// Server-side helper to derive the right Scope for a request.
+// Resolve the request's Scope.
 //
-// In multi-user mode, the user must be signed into Clerk; we use the userId
-// from the session. The `x-sally-device` header is ignored because we do not
-// trust client-supplied identifiers for data lookup.
-//
-// In legacy single-user mode, we fall back to the deviceId header.
+// Auth is disabled — always fall back to the legacy single-user device
+// scope based on the `x-sally-device` header.  No Clerk import: the
+// `@clerk/nextjs/server` module was destabilising the edge runtime when
+// `pk_test_…` keys were configured. Re-introduce a multi-user branch in
+// a separate file/module if/when Clerk is rewired.
 
-import { auth } from "@clerk/nextjs/server";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 import type { Scope } from "@/lib/scope";
 
 const MAX_DEVICE_ID_LEN = 128;
@@ -18,14 +16,6 @@ export type ScopeOk = { ok: true; scope: Scope };
 export async function resolveRequestScope(
   req: Request,
 ): Promise<ScopeOk | ScopeError> {
-  if (AUTH_ENABLED) {
-    const a = await auth();
-    if (!a.userId) {
-      return { ok: false, status: 401, code: "unauthenticated" };
-    }
-    return { ok: true, scope: { kind: "user", id: a.userId } };
-  }
-
   const deviceId = req.headers.get("x-sally-device") ?? "";
   if (
     !deviceId ||

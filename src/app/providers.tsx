@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ClerkProvider } from "@clerk/nextjs";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
-import { AUTH_ENABLED } from "@/lib/auth-config";
+
+// Clerk is intentionally NOT imported here. Auth is disabled at the app
+// level — the dashboard is a single-user public app served straight from
+// `/`. A previous version dynamically wrapped the tree in `<ClerkProvider>`
+// gated by a runtime flag, but the import alone introduced edge-runtime
+// failures with `pk_test_…` keys in production. Re-introduce by importing
+// in a separate, lazily-loaded boundary if multi-user mode comes back.
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -13,16 +18,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           mutations: { retry: 0 },
-          // SWR-style: serve cached data instantly, revalidate in background.
           queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: true },
         },
       }),
   );
 
-  const inner = (
+  return (
     <QueryClientProvider client={client}>
-      {/* `reducedMotion="user"` makes every Framer Motion animation honour
-       *  the OS `prefers-reduced-motion` setting without per-component code. */}
       <MotionConfig
         reducedMotion="user"
         transition={{ type: "spring", stiffness: 220, damping: 26 }}
@@ -31,19 +33,5 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Toaster richColors position="top-center" dir="rtl" />
       </MotionConfig>
     </QueryClientProvider>
-  );
-
-  // Only mount ClerkProvider when keys are present, otherwise it crashes
-  // the app on missing publishable key.
-  if (!AUTH_ENABLED) return inner;
-
-  return (
-    <ClerkProvider
-      appearance={{
-        variables: { colorPrimary: "#00E5FF", colorBackground: "#0A0A0A" },
-      }}
-    >
-      {inner}
-    </ClerkProvider>
   );
 }

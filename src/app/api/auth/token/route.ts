@@ -1,51 +1,26 @@
-import { auth } from "@clerk/nextjs/server";
-import {
-  getUserToken,
-  rotateUserToken,
-  revokeUserToken,
-} from "@/lib/api-token";
-import { isKvConfigured } from "@/lib/kv";
-import { AUTH_ENABLED } from "@/lib/auth-config";
+// Auth disabled. Personal API token CRUD only made sense in multi-user
+// mode where Clerk attributed each request to a user. With auth gone the
+// app uses the global WEBHOOK_SECRET for ingestion, so this endpoint
+// returns a static 503 until multi-user mode is restored.
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
-function fail(status: number, code: string) {
-  return Response.json({ ok: false, error: code }, { status });
+function disabled(): Response {
+  return Response.json(
+    { ok: false, error: "auth_disabled" },
+    { status: 503 },
+  );
 }
 
-async function requireUserId(): Promise<string | Response> {
-  if (!AUTH_ENABLED) return fail(503, "auth_disabled");
-  const a = await auth();
-  if (!a.userId) return fail(401, "unauthenticated");
-  return a.userId;
+export function GET(): Response {
+  return disabled();
 }
 
-export async function GET(): Promise<Response> {
-  const userOr = await requireUserId();
-  if (typeof userOr !== "string") return userOr;
-  if (!isKvConfigured()) return fail(503, "kv_not_configured");
-
-  const token = await getUserToken(userOr);
-  return Response.json({ ok: true, token });
+export function POST(): Response {
+  return disabled();
 }
 
-export async function POST(): Promise<Response> {
-  // POST = generate or rotate. Idempotent in the sense that the user always
-  // ends up with exactly one token after the call.
-  const userOr = await requireUserId();
-  if (typeof userOr !== "string") return userOr;
-  if (!isKvConfigured()) return fail(503, "kv_not_configured");
-
-  const token = await rotateUserToken(userOr);
-  return Response.json({ ok: true, token });
-}
-
-export async function DELETE(): Promise<Response> {
-  const userOr = await requireUserId();
-  if (typeof userOr !== "string") return userOr;
-  if (!isKvConfigured()) return fail(503, "kv_not_configured");
-
-  await revokeUserToken(userOr);
-  return Response.json({ ok: true });
+export function DELETE(): Response {
+  return disabled();
 }
