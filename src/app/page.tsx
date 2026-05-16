@@ -14,7 +14,7 @@ import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { AnalyticsTab } from "@/components/analytics/analytics-tab";
 import { HistoryTab } from "@/components/history/history-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
-import { SetupGuide } from "@/components/setup/setup-guide";
+import { SetupHub } from "@/components/setup/setup-hub";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
@@ -84,7 +84,7 @@ export default function Home() {
             <HistoryTab />
           </TabsContent>
           <TabsContent value="setup" className="mt-4">
-            <SetupGuide />
+            <SetupHub />
           </TabsContent>
           <TabsContent value="settings" className="mt-4">
             <SettingsTab />

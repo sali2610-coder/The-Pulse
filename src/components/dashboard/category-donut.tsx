@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 import { useFinanceStore } from "@/lib/store";
 import { categoryTotals, sliceForMonth } from "@/lib/projections";
 import { currentMonthKey } from "@/lib/dates";
 import { CATEGORIES, type CategoryId } from "@/lib/categories";
+import { CategoryDrilldownSheet } from "@/components/dashboard/category-drilldown-sheet";
+import { tap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -22,10 +24,11 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export function CategoryDonut() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
+  const [drilldown, setDrilldown] = useState<CategoryId | null>(null);
+  const monthKey = currentMonthKey();
 
   const data = useMemo(() => {
     if (!hydrated) return { slices: [], total: 0 };
-    const monthKey = currentMonthKey();
     // Only count entries with a slice this month, and exclude user-side pending.
     const livedEntries = entries.filter((e) => {
       if (e.needsConfirmation) return false;
@@ -45,7 +48,7 @@ export function CategoryDonut() {
       .filter((s) => s.amount > 0)
       .sort((a, b) => b.amount - a.amount);
     return { slices, total };
-  }, [hydrated, entries]);
+  }, [hydrated, entries, monthKey]);
 
   // Pre-compute the dasharray offset for each slice.
   const arcs = useMemo(() => {
@@ -132,22 +135,28 @@ export function CategoryDonut() {
           </div>
         </div>
 
-        <ul className="flex flex-1 flex-col gap-1.5">
+        <ul className="flex flex-1 flex-col gap-1">
           {data.slices.slice(0, 5).map((s) => (
-            <li
-              key={s.id}
-              className="flex items-center justify-between gap-2 text-xs"
-            >
-              <span className="flex items-center gap-2 text-foreground/85">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: s.accent }}
-                />
-                {s.label}
-              </span>
-              <span dir="ltr" className="font-mono text-foreground/70">
-                {ILS.format(s.amount)}
-              </span>
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  tap();
+                  setDrilldown(s.id);
+                }}
+                className="flex w-full items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-xs transition-colors hover:bg-white/5"
+              >
+                <span className="flex items-center gap-2 text-foreground/85">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: s.accent }}
+                  />
+                  {s.label}
+                </span>
+                <span dir="ltr" className="font-mono text-foreground/70">
+                  {ILS.format(s.amount)}
+                </span>
+              </button>
             </li>
           ))}
           {data.slices.length === 0 && (
@@ -157,6 +166,18 @@ export function CategoryDonut() {
           )}
         </ul>
       </div>
+
+      {drilldown && (
+        <CategoryDrilldownSheet
+          key={drilldown}
+          open={Boolean(drilldown)}
+          onOpenChange={(v) => {
+            if (!v) setDrilldown(null);
+          }}
+          category={drilldown}
+          monthKey={monthKey}
+        />
+      )}
     </motion.div>
   );
 }

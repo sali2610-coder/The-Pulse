@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Apple,
+  ArrowLeft,
   KeyRound,
   Smartphone,
   UserCheck,
@@ -25,7 +26,11 @@ type TokenState =
   | { kind: "none" }
   | { kind: "ready"; token: string };
 
-export function SetupGuide() {
+type SetupGuideProps = {
+  onBack?: () => void;
+};
+
+export function SetupGuide({ onBack }: SetupGuideProps = {}) {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const [tokenState, setTokenState] = useState<TokenState>(() =>
     AUTH_ENABLED ? { kind: "loading" } : { kind: "none" },
@@ -98,6 +103,17 @@ export function SetupGuide() {
 
   return (
     <div className="space-y-4">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          לבחירת מסלול
+        </button>
+      )}
+
       <Intro />
 
       {/* Step 1 — PWA */}
@@ -256,15 +272,16 @@ function Intro() {
       animate={{ opacity: 1, y: 0 }}
       className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-5 backdrop-blur-md"
     >
-      <div className="text-[11px] uppercase tracking-[0.3em] text-gold/80">
-        Welcome
+      <div className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+        SMS fallback · מסלול מתקדם
       </div>
       <h1 className="mt-2 text-2xl font-light leading-tight tracking-tight text-foreground">
-        בואו נחבר את ה־iPhone שלך ל־Pulse.
+        חבר SMS בנק ל־Pulse.
       </h1>
       <p className="mt-2 text-[12px] text-muted-foreground">
-        4 שלבים, פחות מ־5 דקות. בסוף, כל חיוב Apple Pay / כרטיס אשראי שיגיע
-        ב־SMS יקפוץ אוטומטית בדאשבורד עם התראה לבחירת קטגוריה.
+        4 שלבים. מומלץ רק כשאין גישה ל־Apple Wallet automation (לדוגמה: iOS
+        מתחת ל־18, או חיובים שלא עוברים דרך Apple Pay). בקרוב — תיהנה
+        מ־PendingTray עם אישור במגע מכל חיוב SMS שמגיע.
       </p>
     </motion.section>
   );

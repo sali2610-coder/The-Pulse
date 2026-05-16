@@ -3,8 +3,8 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 export const metadata = {
-  title: "ויזואל Shortcut · Sally",
-  description: "מדריך ויזואלי להגדרת iOS Shortcut",
+  title: "ויזואל Shortcut · Sally · מסלול מתקדם",
+  description: "מדריך ויזואלי להגדרת iOS Shortcut (מסלול SMS fallback)",
 };
 
 export default function ShortcutVisualPage() {
@@ -18,6 +18,17 @@ export default function ShortcutVisualPage() {
           <ArrowRight className="size-3 rotate-180" />
           חזרה לדאשבורד
         </Link>
+        <div className="rounded-2xl border border-white/8 bg-surface/40 px-3 py-2 text-[11px] text-muted-foreground">
+          <strong className="text-foreground/90">מסלול מתקדם · SMS fallback.</strong>{" "}
+          ל־iOS 18+ מומלץ דווקא במסלול ה־
+          <Link
+            href="/setup/wallet"
+            className="text-[color:var(--neon)] underline-offset-2 hover:underline"
+          >
+            Wallet
+          </Link>
+          .
+        </div>
         <ShortcutVisual />
       </div>
     </main>
