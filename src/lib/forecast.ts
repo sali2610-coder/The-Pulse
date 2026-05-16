@@ -635,6 +635,85 @@ export function futureMonthlyPressure(args: {
   return out;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Balance chain — projects month-by-month ending balance with carryover.
+// Answers "when, over the next N months, will my account dip below zero?"
+// without the user having to update their anchor every 30 days.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type ChainMonth = {
+  monthKey: MonthKey;
+  startBalance: number;
+  endBalance: number;
+  overdraftDay?: number;
+  lowestBalance: number;
+  goesNegative: boolean;
+};
+
+export function forecastBalanceChain(args: {
+  accounts: Account[];
+  loans: Loan[];
+  incomes: Income[];
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  fromMonthKey: MonthKey;
+  /** How many months to chain forward, including the start month. Capped 1-12. */
+  months?: number;
+  now?: Date;
+}): ChainMonth[] {
+  const months = Math.max(1, Math.min(12, args.months ?? 6));
+  const now = args.now ?? new Date();
+  const chain: ChainMonth[] = [];
+
+  // Snapshot the bank-anchor sum from the active accounts. Each subsequent
+  // month starts from the previous month's projected close — we don't
+  // re-fetch the anchor mid-chain.
+  let runningStart = args.accounts
+    .filter((a) => a.active && a.kind === "bank" && a.anchorBalance !== undefined)
+    .reduce((sum, a) => sum + (a.anchorBalance ?? 0), 0);
+
+  for (let i = 0; i < months; i++) {
+    const monthKey = addMonths(args.fromMonthKey, i);
+
+    // Synthesise a single-account view so the timeline forecaster uses our
+    // running start instead of the real anchor sum.
+    const syntheticAccount: Account = {
+      id: "__chain__",
+      kind: "bank",
+      label: "carryover",
+      anchorBalance: runningStart,
+      anchorUpdatedAt: now.toISOString(),
+      active: true,
+      createdAt: now.toISOString(),
+    };
+
+    const timeline = forecastBalanceTimeline({
+      accounts: [syntheticAccount],
+      loans: args.loans,
+      incomes: args.incomes,
+      entries: args.entries,
+      rules: args.rules,
+      statuses: args.statuses,
+      monthKey,
+      now,
+    });
+
+    chain.push({
+      monthKey,
+      startBalance: runningStart,
+      endBalance: timeline.endBalance,
+      overdraftDay: timeline.overdraftDay,
+      lowestBalance: timeline.lowestBalance,
+      goesNegative: timeline.goesNegative,
+    });
+
+    runningStart = timeline.endBalance;
+  }
+
+  return chain;
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;

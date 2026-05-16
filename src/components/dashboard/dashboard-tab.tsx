@@ -13,6 +13,7 @@ import { PendingTray } from "@/components/dashboard/pending-tray";
 import { CategoryDonut } from "@/components/dashboard/category-donut";
 import { HeatmapMini } from "@/components/dashboard/heatmap-mini";
 import { BalanceForecastCard } from "@/components/dashboard/balance-forecast-card";
+import { BalanceHorizonCard } from "@/components/dashboard/balance-horizon-card";
 import { ActiveInstallmentsCard } from "@/components/dashboard/active-installments-card";
 import { FuturePressureCard } from "@/components/dashboard/future-pressure-card";
 import { SubscriptionRadarCard } from "@/components/dashboard/subscription-radar-card";
@@ -47,6 +48,11 @@ export function DashboardTab() {
       {/* Balance trajectory — full-width sparkline + overdraft warning */}
       <div className="sm:col-span-6">
         <BalanceForecastCard />
+      </div>
+
+      {/* Multi-month horizon (carryover) — full-width sparkline 6 months out */}
+      <div className="sm:col-span-6">
+        <BalanceHorizonCard />
       </div>
 
       {/* Stats — full width grid that already uses 2 columns internally */}
