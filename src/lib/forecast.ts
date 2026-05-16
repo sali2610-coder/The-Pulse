@@ -754,6 +754,42 @@ export function categoryMonthlySeries(args: {
   return out;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Cash vs credit monthly totals — feeds the analytics trend chart.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type PaymentMethodMonthlyPoint = {
+  monthKey: MonthKey;
+  cash: number;
+  credit: number;
+};
+
+export function paymentMethodMonthlyTotals(args: {
+  entries: ExpenseEntry[];
+  monthKey: MonthKey;
+  monthsBack?: number;
+}): PaymentMethodMonthlyPoint[] {
+  const monthsBack = Math.max(1, Math.min(24, args.monthsBack ?? 6));
+  const out: PaymentMethodMonthlyPoint[] = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const mk = addMonths(args.monthKey, -i);
+    let cash = 0;
+    let credit = 0;
+    for (const entry of args.entries) {
+      if (entry.needsConfirmation) continue;
+      if (entry.bankPending) continue;
+      if (entry.isRefund) continue;
+      if (entry.currency && entry.currency !== "ILS") continue;
+      const slice = sliceForMonth(entry, mk);
+      if (!slice) continue;
+      if (entry.paymentMethod === "cash") cash += slice.amount;
+      else credit += slice.amount;
+    }
+    out.push({ monthKey: mk, cash, credit });
+  }
+  return out;
+}
+
 export function monthOverMonthTotals(args: {
   entries: ExpenseEntry[];
   monthKey: MonthKey;
