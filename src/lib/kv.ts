@@ -38,6 +38,8 @@ function scopePrefix(scope: Scope): string {
 }
 
 const TX_KEY = (scope: Scope) => `${scopePrefix(scope)}:tx`;
+const TX_SEEN_KEY = (scope: Scope, externalId: string) =>
+  `${scopePrefix(scope)}:tx:seen:${externalId}`;
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
 const CAT_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:cat:${externalId}`;
@@ -82,21 +84,32 @@ export type PushSubscriptionRecord = {
 
 /**
  * Push a parsed transaction onto the scope's queue. Idempotent on
- * `externalId`: ZADD NX returns 0 for replays, which we propagate as
- * `added: false` so the caller skips downstream side-effects (push, etc.).
+ * `externalId`.
+ *
+ * Earlier implementations relied on `ZADD NX` keyed by the serialized member,
+ * but every call assigns `receivedAt = Date.now()` so a replay produced a
+ * *different* member and ZADD-NX let it through twice. We now use a
+ * dedicated `SET NX EX` flag per externalId as the actual guard, then ZADD
+ * (without NX) once we know it's the first arrival. Worst case on a race,
+ * a single replay wins the SET and the other no-ops — never duplicated.
  */
 export async function pushTransaction(
   scope: Scope,
   tx: StoredTransaction,
 ): Promise<{ added: boolean }> {
+  const seenKey = TX_SEEN_KEY(scope, tx.externalId);
+  const wasFirst = await kv().set(seenKey, "1", {
+    nx: true,
+    ex: TX_TTL_SECONDS,
+  });
+  if (wasFirst !== "OK") return { added: false };
   const key = TX_KEY(scope);
-  const added = await kv().zadd(
+  await kv().zadd(
     key,
-    { nx: true },
     { score: tx.receivedAt, member: JSON.stringify(tx) },
   );
   await kv().expire(key, TX_TTL_SECONDS);
-  return { added: added === 1 };
+  return { added: true };
 }
 
 /**

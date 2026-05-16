@@ -28,28 +28,58 @@ export type ParseSuccess = { ok: true; result: ParsedSms };
 
 export function categorize(merchant: string): CategoryId {
   const m = merchant.toLowerCase();
+
+  // Supermarkets / groceries (Hebrew + English variants — Wallet payloads
+  // often arrive in English).
   if (
-    /(שופר|רמי לוי|ויקטורי|אושר|טיב טעם|יוחננוף|מגה|grocer|supermarket)/i.test(
+    /(שופר|רמי לוי|ויקטורי|אושר|טיב טעם|יוחננוף|מגה|shufersal|rami\s*levy|victory|tiv\s*ta|yochananof|mega|grocer|supermarket)/i.test(
       m,
     )
   ) {
     return "food";
   }
-  if (/(מסעדה|בורגר|פיצה|cafe|coffee|מק\s*דונל|קפה|בית קפה)/i.test(m)) {
+  // Coffee shops + restaurants
+  if (
+    /(מסעדה|בורגר|פיצה|מק\s*דונל|קפה|בית קפה|קופיקס|cofix|aroma|ארומה|cafe|coffee|starbucks|burger|pizza|mcdonald)/i.test(
+      m,
+    )
+  ) {
     return "food";
   }
-  if (/(דלק|paz|פז|sonol|סונול|delek|מנטה|תחנת)/i.test(m)) return "transport";
-  if (/(rav\s*kav|רב.?קב|cab|taxi|מונית|gett|uber)/i.test(m)) return "transport";
-  if (/(zara|h&m|next|fox|castro|מסטר|amazon|aliexpress|shein|shop)/i.test(m)) {
+  if (/(דלק|paz|פז|sonol|סונול|delek|מנטה|תחנת|gas\s*station)/i.test(m)) {
+    return "transport";
+  }
+  if (
+    /(rav\s*kav|רב.?קב|cab|taxi|מונית|gett|uber|moovit|hertz)/i.test(m)
+  ) {
+    return "transport";
+  }
+  if (
+    /(zara|h&m|next|fox|castro|מסטר|amazon|aliexpress|shein|shop|ikea|איקאה|terminal\s*x|נקסט)/i.test(
+      m,
+    )
+  ) {
     return "shopping";
   }
-  if (/(cinema|yes\s*planet|netflix|spotify|hot|partner|cellcom|פרטנר|סלקום)/i.test(m)) {
+  if (
+    /(cinema|yes\s*planet|netflix|spotify|disney|youtube|apple\s*tv|paramount|hbo|פרטנר|סלקום|הוט)/i.test(
+      m,
+    )
+  ) {
     return "entertainment";
   }
-  if (/(electric|חברת חשמל|water|פלאפון|בזק|hot|partner|cellcom|הוט)/i.test(m)) {
+  if (
+    /(electric|חברת חשמל|water|פלאפון|בזק|hot|partner|cellcom|מים|ועד בית|arnona|ארנונה)/i.test(
+      m,
+    )
+  ) {
     return "bills";
   }
-  if (/(super\s*pharm|פארם|clalit|מכבי|לאומית|kupat|רוקח)/i.test(m)) {
+  if (
+    /(super\s*pharm|פארם|clalit|מכבי|לאומית|kupat|רוקח|pharmacy|dentist|רופא)/i.test(
+      m,
+    )
+  ) {
     return "health";
   }
   return "other";
