@@ -338,6 +338,9 @@ export async function POST(req: Request): Promise<Response> {
         amount: tx.amount,
         merchant: tx.merchant,
         cardLast4: tx.cardLast4,
+        categoryHint: tx.category !== "other" ? tx.category : undefined,
+        installments: tx.installments > 1 ? tx.installments : undefined,
+        occurredAt: tx.occurredAt,
       });
       pushed = result.gone ? "gone" : result.ok ? "sent" : "skipped";
       if (result.gone) await deletePushSubscription(scope);

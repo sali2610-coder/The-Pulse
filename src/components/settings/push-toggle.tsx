@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, BellOff, ShieldAlert } from "lucide-react";
+import { Bell, BellOff, Send, ShieldAlert } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
-import { tap } from "@/lib/haptics";
+import { soft, tap } from "@/lib/haptics";
 import { toast } from "sonner";
 import { AUTH_ENABLED } from "@/lib/auth-config";
 
@@ -145,6 +145,39 @@ export function PushToggle() {
     }
   };
 
+  const sendTest = async () => {
+    if (busy) return;
+    setBusy(true);
+    soft();
+    try {
+      const res = await fetch("/api/push/test", {
+        method: "POST",
+        headers: scopeHeaders(),
+        credentials: "same-origin",
+      });
+      if (res.status === 503) {
+        toast.error("VAPID לא מוגדר בשרת");
+        return;
+      }
+      if (res.status === 404) {
+        toast.warning("אין רישום פעיל. נסה להפעיל שוב את ההתראות.");
+        return;
+      }
+      if (res.status === 410) {
+        toast.warning("הרישום פג. אנא הפעל שוב.");
+        setStatus("idle");
+        return;
+      }
+      if (!res.ok) {
+        toast.error("שליחת התראת בדיקה נכשלה");
+        return;
+      }
+      toast.success("נשלחה התראת בדיקה — בדוק את ה־iPhone");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const isOn = status === "subscribed";
 
   return (
@@ -190,25 +223,39 @@ export function PushToggle() {
           </span>
         </div>
       ) : (
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          onClick={isOn ? disable : enable}
-          disabled={busy}
-          className={`relative flex h-9 w-16 items-center rounded-full border transition-colors ${
-            isOn ? "border-neon/50 bg-neon/15" : "border-border/60 bg-background/40"
-          }`}
-          aria-pressed={isOn}
-          aria-label={isOn ? "כבה התראות" : "הפעל התראות"}
-        >
-          <motion.span
-            layout
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className={`block h-7 w-7 rounded-full ${
-              isOn ? "ms-auto me-1 bg-neon" : "ms-1 bg-muted"
+        <div className="flex items-center gap-3">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.96 }}
+            onClick={isOn ? disable : enable}
+            disabled={busy}
+            className={`relative flex h-9 w-16 items-center rounded-full border transition-colors ${
+              isOn ? "border-neon/50 bg-neon/15" : "border-border/60 bg-background/40"
             }`}
-          />
-        </motion.button>
+            aria-pressed={isOn}
+            aria-label={isOn ? "כבה התראות" : "הפעל התראות"}
+          >
+            <motion.span
+              layout
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              className={`block h-7 w-7 rounded-full ${
+                isOn ? "ms-auto me-1 bg-neon" : "ms-1 bg-muted"
+              }`}
+            />
+          </motion.button>
+          {isOn && (
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.95 }}
+              onClick={sendTest}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-full border border-neon/40 bg-neon/10 px-3 py-1.5 text-[11px] font-medium text-neon transition-colors hover:bg-neon/15 disabled:opacity-50"
+            >
+              <Send className="size-3" strokeWidth={2} />
+              שלח התראת בדיקה
+            </motion.button>
+          )}
+        </div>
       )}
     </section>
   );

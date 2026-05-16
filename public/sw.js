@@ -1,6 +1,6 @@
 // Sally PWA service worker — shell cache + Web Push categorize prompt.
 // Bump SW_VERSION whenever cache shape changes so stale workers retire.
-const SW_VERSION = "sally-v3";
+const SW_VERSION = "sally-v4";
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const SHELL_ASSETS = ["/", "/manifest.webmanifest", "/icon.svg"];
 
@@ -72,6 +72,33 @@ const ILS = (n) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+// Small emoji map keeps the SW self-contained — can't import from
+// src/lib/categories.ts inside a service worker.
+const CATEGORY_META = {
+  food: { emoji: "🍔", label: "אוכל" },
+  transport: { emoji: "🚗", label: "תחבורה" },
+  shopping: { emoji: "🛍️", label: "קניות" },
+  entertainment: { emoji: "🎬", label: "בילויים" },
+  bills: { emoji: "🧾", label: "חשבונות" },
+  health: { emoji: "❤️", label: "בריאות" },
+  education: { emoji: "🎓", label: "חינוך" },
+  gifts: { emoji: "🎁", label: "מתנות" },
+  other: { emoji: "✨", label: "אחר" },
+};
+
+function shortTime(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("he-IL", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
+
 self.addEventListener("push", (event) => {
   let payload;
   try {
@@ -83,10 +110,39 @@ self.addEventListener("push", (event) => {
 
   const merchant = payload.merchant ?? "חיוב חדש";
   const amount = typeof payload.amount === "number" ? ILS(payload.amount) : "";
-  const cardSuffix = payload.cardLast4 ? ` ····${payload.cardLast4}` : "";
+  const hint = payload.categoryHint ? CATEGORY_META[payload.categoryHint] : null;
+  const emoji = hint ? `${hint.emoji} ` : "";
 
-  const title = `${merchant} · ${amount}`;
-  const body = `Sally — בחר קטגוריה${cardSuffix}`;
+  // Title: "🍔 שופרסל · ₪42"
+  const title = `${emoji}${merchant}${amount ? " · " + amount : ""}`;
+
+  // Body segments — joined by " · " so each one is optional:
+  //   • cardLast4 → "····1234"
+  //   • installments → "12× תשלומים"
+  //   • occurredAt → "14:32"
+  const bodyParts = [];
+  if (payload.cardLast4) bodyParts.push(`····${payload.cardLast4}`);
+  if (payload.installments && payload.installments > 1) {
+    bodyParts.push(`${payload.installments}× תשלומים`);
+  }
+  const t = payload.occurredAt ? shortTime(payload.occurredAt) : "";
+  if (t) bodyParts.push(t);
+  const body = bodyParts.length > 0
+    ? bodyParts.join(" · ")
+    : "Sally — בחר קטגוריה";
+
+  // Actions:
+  //   - With a heuristic hint: "אישור — {label}" + "ערוך"
+  //   - Without: quick "אוכל" + "תחבורה" picks
+  const actions = hint
+    ? [
+        { action: `confirm:${payload.categoryHint}`, title: `אישור — ${hint.label}` },
+        { action: "edit", title: "ערוך" },
+      ]
+    : [
+        { action: "food", title: "אוכל" },
+        { action: "transport", title: "תחבורה" },
+      ];
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -99,11 +155,9 @@ self.addEventListener("push", (event) => {
       data: {
         externalId: payload.externalId,
         deviceId: payload.deviceId,
+        categoryHint: payload.categoryHint || null,
       },
-      actions: [
-        { action: "food", title: "אוכל" },
-        { action: "transport", title: "תחבורה" },
-      ],
+      actions,
     }),
   );
 });
@@ -117,12 +171,16 @@ self.addEventListener("notificationclick", (event) => {
 
   if (!externalId) return;
 
-  // Quick-action buttons → fast categorize, no nav.
-  const QUICK_ACTION_TO_CATEGORY = {
-    food: "food",
-    transport: "transport",
-  };
-  const quickCategory = QUICK_ACTION_TO_CATEGORY[action];
+  // Quick-action buttons resolve to a category id:
+  //   - "food" / "transport" → that category directly
+  //   - "confirm:<cat>" → approve the heuristic from the server payload
+  // "edit" (and body tap) skip the fetch and deep-link to /confirm.
+  let quickCategory = null;
+  if (action === "food") quickCategory = "food";
+  else if (action === "transport") quickCategory = "transport";
+  else if (action && action.startsWith("confirm:")) {
+    quickCategory = action.slice("confirm:".length);
+  }
 
   if (quickCategory) {
     event.waitUntil(
@@ -141,8 +199,8 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
 
-  // Body tap (no action) → deep-link into the confirmation sheet so the
-  // user can review merchant, category, amount, installments.
+  // "edit" or body tap → deep-link into the confirmation sheet so the user
+  // can review merchant, category, amount, installments.
   event.waitUntil(focusOrOpen(`/confirm/${encodeURIComponent(externalId)}`));
 });
 

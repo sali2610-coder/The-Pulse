@@ -41,6 +41,15 @@ export type CategorizePushPayload = {
   amount: number;
   merchant?: string;
   cardLast4?: string;
+  /** Heuristic from `categorize(merchant)` — surfaces in the SW so the quick
+   *  "אישור" action can apply it without making the user choose. Omitted
+   *  when the parser fell back to "other". */
+  categoryHint?: string;
+  /** When set + > 1, the body adds a "{installments}× תשלומים" hint. */
+  installments?: number;
+  /** ISO timestamp the underlying SMS / wallet event arrived. The SW formats
+   *  this as a short HH:mm fragment in the body. */
+  occurredAt?: string;
 };
 
 export async function sendCategorizePush(
@@ -52,7 +61,9 @@ export async function sendCategorizePush(
     await webpush.sendNotification(
       sub as unknown as PushSubscription,
       JSON.stringify(payload),
-      { TTL: 120 },
+      // 5 min — covers a brief offline phone without keeping stale charges
+      // queued forever on the FCM/APNS bridge.
+      { TTL: 300 },
     );
     return { ok: true, gone: false };
   } catch (err) {
