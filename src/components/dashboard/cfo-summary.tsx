@@ -15,20 +15,20 @@ import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { forecastEndOfMonth } from "@/lib/forecast";
 
-const formatILSSign = (value: number) =>
-  new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-    signDisplay: "always",
-  }).format(value);
-
-const formatILS = (value: number) =>
-  new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-    maximumFractionDigits: 0,
-  }).format(value);
+// Manual sign-prepending instead of `signDisplay: "always"` — the latter
+// throws RangeError on iOS Safari < 15.4 when Intl.NumberFormat is
+// constructed at module load, taking the whole card with it.
+const _ils = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+  maximumFractionDigits: 0,
+});
+const formatILS = (value: number) => _ils.format(value);
+const formatILSSign = (value: number) => {
+  if (value === 0) return _ils.format(0);
+  const sign = value > 0 ? "+" : "−";
+  return `${sign}${_ils.format(Math.abs(value))}`;
+};
 
 export function CfoSummary() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);

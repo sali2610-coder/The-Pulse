@@ -18,10 +18,19 @@ import { SetupHub } from "@/components/setup/setup-hub";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
+import { ErrorBoundary, PageFallback } from "@/components/error-boundary";
 
 const isDev = process.env.NODE_ENV !== "production";
 
 export default function Home() {
+  return (
+    <ErrorBoundary name="Home" fallback={<PageFallback />}>
+      <HomeContent />
+    </ErrorBoundary>
+  );
+}
+
+function HomeContent() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
@@ -75,19 +84,19 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="dashboard" className="mt-4">
-            <DashboardTab />
+            <ErrorBoundary name="DashboardTab"><DashboardTab /></ErrorBoundary>
           </TabsContent>
           <TabsContent value="analytics" className="mt-4">
-            <AnalyticsTab />
+            <ErrorBoundary name="AnalyticsTab"><AnalyticsTab /></ErrorBoundary>
           </TabsContent>
           <TabsContent value="history" className="mt-4">
-            <HistoryTab />
+            <ErrorBoundary name="HistoryTab"><HistoryTab /></ErrorBoundary>
           </TabsContent>
           <TabsContent value="setup" className="mt-4">
-            <SetupHub />
+            <ErrorBoundary name="SetupHub"><SetupHub /></ErrorBoundary>
           </TabsContent>
           <TabsContent value="settings" className="mt-4">
-            <SettingsTab />
+            <ErrorBoundary name="SettingsTab"><SettingsTab /></ErrorBoundary>
           </TabsContent>
         </Tabs>
       </div>

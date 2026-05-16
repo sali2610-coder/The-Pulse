@@ -17,12 +17,15 @@ const ILS = new Intl.NumberFormat("he-IL", {
   currency: "ILS",
   maximumFractionDigits: 0,
 });
-const ILS_SIGNED = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-  signDisplay: "always",
-});
+// Manual sign prepending — `signDisplay: "always"` throws on iOS < 15.4
+// and was crashing the entire card at module construction.
+const ILS_SIGNED = {
+  format(value: number): string {
+    if (value === 0) return ILS.format(0);
+    const sign = value > 0 ? "+" : "−";
+    return `${sign}${ILS.format(Math.abs(value))}`;
+  },
+};
 
 const WIDTH = 320;
 const HEIGHT = 88;
