@@ -4,6 +4,7 @@ import { CashVsCredit } from "./cash-vs-credit";
 import { CashCreditTrend } from "./cash-credit-trend";
 import { CategoryBreakdown } from "./category-breakdown";
 import { DayOfWeekHeatmap } from "./day-of-week-heatmap";
+import { TopMerchantsCard } from "./top-merchants-card";
 
 export function AnalyticsTab() {
   return (
@@ -11,6 +12,7 @@ export function AnalyticsTab() {
       <CashVsCredit />
       <CashCreditTrend />
       <DayOfWeekHeatmap />
+      <TopMerchantsCard />
       <CategoryBreakdown />
     </div>
   );
