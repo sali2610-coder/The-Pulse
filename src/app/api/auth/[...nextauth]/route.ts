@@ -5,6 +5,7 @@
 // without Google credentials returns a friendly 503 instead of throwing
 // a 500 from `/api/auth/signin` and `/api/auth/session`.
 
+import type { NextRequest } from "next/server";
 import { handlers, isAuthEnabled } from "@/lib/auth/config";
 
 function disabled(): Response {
@@ -19,12 +20,12 @@ function disabled(): Response {
   );
 }
 
-export async function GET(req: Request): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   if (!isAuthEnabled()) return disabled();
   return handlers.GET(req);
 }
 
-export async function POST(req: Request): Promise<Response> {
+export async function POST(req: NextRequest): Promise<Response> {
   if (!isAuthEnabled()) return disabled();
   return handlers.POST(req);
 }
