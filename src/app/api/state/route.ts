@@ -2,8 +2,9 @@
 // user's financial setup follows them across browsers, devices, PWA
 // reinstalls, and Vercel deploys.
 //
-// Auth: same `x-sally-device` header the webhook already uses (server-side
-// gated when AUTH_ENABLED → falls back to userId). No Bearer required.
+// Auth: delegates to resolveRequestScope which picks the strongest signal
+// available — NextAuth session → device-claim → bare device id.
+// No Bearer required.
 
 import {
   getUserState,

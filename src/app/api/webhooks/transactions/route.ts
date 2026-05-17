@@ -15,6 +15,7 @@ import {
   type WebhookLogEntry,
 } from "@/lib/kv";
 import { isPushConfigured, sendCategorizePush } from "@/lib/push-server";
+import { getDeviceClaimUserId } from "@/lib/scope-resolver";
 import type { Scope } from "@/lib/scope";
 
 // Node runtime so we can use the web-push library (depends on `node:crypto`).
@@ -116,6 +117,17 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
     // doesn't match — reject. Sending no Bearer at all is allowed.
     return { errorResponse: fail(401, "invalid_token") };
   }
+
+  // Device-claim resolution. When the user has signed in with Google and
+  // claimed this deviceId from their PWA, route the write under the user's
+  // KV namespace. The PWA's sync route resolves the same way (NextAuth
+  // session → user scope), so transactions never get stranded under a
+  // device key that the signed-in dashboard no longer reads.
+  const claimedUserId = await getDeviceClaimUserId(deviceId);
+  if (claimedUserId) {
+    return { scope: { kind: "user", id: claimedUserId } };
+  }
+
   return { scope: { kind: "device", id: deviceId } };
 }
 
