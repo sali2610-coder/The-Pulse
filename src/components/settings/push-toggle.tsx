@@ -66,8 +66,16 @@ export function PushToggle() {
         if (!cancelled) setStatus("denied");
         return;
       }
+      // `serviceWorker.ready` hangs forever when no SW is registered. Use
+      // `getRegistration()` which resolves to undefined fast. If no SW is
+      // active yet, we still allow the user to toggle on — `enable()` will
+      // register one on demand.
       try {
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+          if (!cancelled) setStatus("idle");
+          return;
+        }
         const sub = await reg.pushManager.getSubscription();
         if (!cancelled) setStatus(sub ? "subscribed" : "idle");
       } catch {
@@ -85,7 +93,16 @@ export function PushToggle() {
     if (busy) return;
     setBusy(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      // Make sure a Service Worker is registered before we try to subscribe.
+      // RegisterSW intentionally never auto-registers — push opt-in is the
+      // ONE place where we want it. Register on demand.
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+        });
+      }
+      await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
         setStatus("denied");

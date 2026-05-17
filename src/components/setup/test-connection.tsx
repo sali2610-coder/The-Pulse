@@ -13,7 +13,16 @@ type Result =
   | { kind: "ok"; externalId: string }
   | { kind: "fail"; reason: string; issues?: ZodIssue[] };
 
-const SAMPLE_SMS = String.raw`לקוח יקר, בוצעה עסקה בכרטיסך המסתיימת ב-1234 בבית עסק 'בדיקת חיבור Sally' בסכום 1.00 ש"ח בתאריך 05/05/26.`;
+/** Match what the iPhone Shortcut actually sends. NO `receivedAt` — the
+ *  server fills the timestamp from `Date.now()` when omitted, which is the
+ *  exact contract used by real Wallet automations. */
+const SAMPLE_PAYLOAD = {
+  issuer: "wallet" as const,
+  notification: {
+    title: "Apple Pay",
+    body: "Test ₪1",
+  },
+};
 
 type Props = {
   webhookUrl: string;
@@ -41,7 +50,7 @@ export function TestConnection({ webhookUrl, deviceId }: Props) {
           "Content-Type": "application/json",
           "x-sally-device": deviceId,
         },
-        body: JSON.stringify({ issuer: "cal", smsBody: SAMPLE_SMS }),
+        body: JSON.stringify(SAMPLE_PAYLOAD),
       });
       const json = (await res.json().catch(() => null)) as {
         ok?: boolean;

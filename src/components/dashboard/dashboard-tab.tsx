@@ -106,6 +106,11 @@ const HealthScoreCard = lazy(() =>
     default: m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const CashflowSummaryCard = lazy(() =>
+  import("@/components/dashboard/cashflow-summary-card").then((m) => ({
+    default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
@@ -119,6 +124,9 @@ export function DashboardTab() {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
       <div className="sm:col-span-6">
         <Safe name="HealthScoreCard"><HealthScoreCard /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
