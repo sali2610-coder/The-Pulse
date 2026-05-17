@@ -1,31 +1,44 @@
-import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { SignInClient } from "@/components/auth/sign-in-client";
+import { isAuthEnabled } from "@/lib/auth/config";
 
-// Auth disabled. Stub page — never reached via redirect because middleware
-// is now a pass-through. If a user lands here via bookmark/old PWA cache,
-// route them back to the dashboard.
+// Custom NextAuth sign-in page. NextAuth's `pages.signIn` points here so
+// middleware-protected routes redirect users to this page instead of the
+// default NextAuth boilerplate. When Google creds are not present this
+// renders a passive message; the dashboard itself still works in device-id
+// mode.
 
 export const metadata = {
-  title: "Sally",
+  title: "התחברות · Sally",
 };
 
-export default function SignInPage() {
+export default function SignInPage({
+  searchParams,
+}: {
+  searchParams?: { callbackUrl?: string; error?: string };
+}) {
+  const authEnabled = isAuthEnabled();
+  const callbackUrl =
+    typeof searchParams?.callbackUrl === "string"
+      ? searchParams.callbackUrl
+      : "/";
+  const error =
+    typeof searchParams?.error === "string" ? searchParams.error : undefined;
+
   return (
     <AuthShell
-      title="התחברות לא נדרשת"
-      subtitle="האפליקציה רצה כרגע במצב פתוח."
+      title={authEnabled ? "התחברות ל-Sally" : "האפליקציה פתוחה"}
+      subtitle={
+        authEnabled
+          ? "התחבר עם Google כדי לסנכרן בין מכשירים."
+          : "כל המידע נשמר מקומית במכשיר הזה."
+      }
     >
-      <div className="flex flex-col gap-3 text-right text-sm">
-        <p className="text-foreground/85">
-          כל המידע נשמר מקומית במכשיר. אפשר להמשיך ישר לדאשבורד.
-        </p>
-        <Link
-          href="/"
-          className="btn-confirm flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold transition-transform active:scale-[0.99]"
-        >
-          המשך אל הדאשבורד
-        </Link>
-      </div>
+      <SignInClient
+        authEnabled={authEnabled}
+        callbackUrl={callbackUrl}
+        initialError={error}
+      />
     </AuthShell>
   );
 }
