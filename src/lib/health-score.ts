@@ -24,7 +24,7 @@ import type {
   RecurringRule,
   RecurringStatus,
 } from "@/types/finance";
-import { forecastEndOfMonth } from "@/lib/forecast";
+import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { projectMonth, daysInMonth } from "@/lib/projections";
 import { detectAnomalies } from "@/lib/anomalies";
 import { addMonths, monthKeyOf } from "@/lib/dates";
@@ -87,23 +87,25 @@ export function buildHealthScore(args: {
     (a) => a.active && a.kind === "bank" && a.anchorBalance !== undefined,
   );
   if (hasBank) {
-    const eom = forecastEndOfMonth({
+    const snap = buildFinancialSnapshot({
       accounts: args.accounts,
       loans: args.loans,
       incomes: args.incomes,
       entries: args.entries,
       rules: args.rules,
       statuses: args.statuses,
+      monthlyBudget: args.monthlyBudget,
       monthKey: args.monthKey,
       now,
     });
-    if (eom.totalAnchors > 0) {
+    const forecast = snap.projectedBalanceWithoutDiscretionary;
+    if (snap.currentBalance > 0) {
       // 0 → 50 score; 50% of anchor remaining → 100.
-      const ratio = eom.forecast / eom.totalAnchors;
+      const ratio = forecast / snap.currentBalance;
       forecastScore = clamp01(50 + ratio * 100);
     } else {
       // Already negative anchor — heavily penalize.
-      forecastScore = eom.forecast >= 0 ? 60 : 20;
+      forecastScore = forecast >= 0 ? 60 : 20;
     }
   }
 

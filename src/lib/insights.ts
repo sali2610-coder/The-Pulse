@@ -18,9 +18,9 @@ import type {
 
 import {
   forecastBalanceChain,
-  forecastEndOfMonth,
   futureMonthlyPressure,
 } from "@/lib/forecast";
+import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { projectMonth, daysInMonth } from "@/lib/projections";
 import { detectAnomalies } from "@/lib/anomalies";
 import { detectSubscriptionCandidates } from "@/lib/subscriptions";
@@ -74,27 +74,29 @@ export function buildMonthlyDigest(args: {
 
   // 1. End-of-month forecast — only when a bank anchor exists.
   if (hasBank) {
-    const eom = forecastEndOfMonth({
+    const snap = buildFinancialSnapshot({
       accounts: args.accounts,
       loans: args.loans,
       incomes: args.incomes,
       entries: args.entries,
       rules: args.rules,
       statuses: args.statuses,
+      monthlyBudget: args.monthlyBudget,
       monthKey: args.monthKey,
       now,
     });
-    const tone: InsightTone = eom.forecast < 0 ? "danger" : "positive";
+    const forecast = snap.projectedBalanceWithoutDiscretionary;
+    const tone: InsightTone = forecast < 0 ? "danger" : "positive";
     out.push({
       id: "eom",
       tone,
       label: "צפי סוף חודש",
-      headline: ILS.format(eom.forecast),
+      headline: ILS.format(forecast),
       detail:
-        eom.forecast < 0
+        forecast < 0
           ? "סיום חודש בחריגה — שקול לדחות הוצאות."
           : "סיום חודש בעודף.",
-      value: eom.forecast,
+      value: forecast,
     });
   }
 
