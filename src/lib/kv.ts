@@ -41,6 +41,10 @@ const TX_KEY = (scope: Scope) => `${scopePrefix(scope)}:tx`;
 const TX_SEEN_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:tx:seen:${externalId}`;
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
+const STATE_KEY = (scope: Scope) => `${scopePrefix(scope)}:state`;
+// Long TTL so a user who reinstalls the PWA after 90 days still gets their
+// state back. Touched on every write — effectively permanent for active users.
+const STATE_TTL_SECONDS = 365 * 24 * 60 * 60;
 const CAT_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:cat:${externalId}`;
 const WH_LOG_KEY = (scope: Scope) => `${scopePrefix(scope)}:wh`;
@@ -168,6 +172,49 @@ export async function findTransactionByExternalId(
     if (tx && tx.externalId === externalId) return tx;
   }
   return null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Per-scope state blob.
+//
+// Persists the full Zustand store (accounts, loans, incomes, rules,
+// statuses, entries, monthlyBudget, etc.) in KV under a single JSON blob
+// keyed by scope. This lets a user's financial setup follow them across
+// devices, browsers, PWA reinstalls, and Vercel deploys — no relational
+// schema yet, but a real durable backing store instead of localStorage.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type StateBlob = {
+  /** Schema version of the persisted Zustand store. */
+  version: number;
+  /** Server epoch ms when the blob was last written. Used by the client
+   *  to decide between local vs. remote "last writer wins". */
+  updatedAt: number;
+  /** Opaque JSON-serialisable payload — the Zustand store snapshot. */
+  state: unknown;
+};
+
+export async function getUserState(scope: Scope): Promise<StateBlob | null> {
+  const raw = await kv().get(STATE_KEY(scope));
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as StateBlob;
+    } catch {
+      return null;
+    }
+  }
+  return raw as StateBlob;
+}
+
+export async function saveUserState(
+  scope: Scope,
+  blob: StateBlob,
+): Promise<void> {
+  // SET with explicit TTL so the blob lives a year from the latest write.
+  await kv().set(STATE_KEY(scope), JSON.stringify(blob), {
+    ex: STATE_TTL_SECONDS,
+  });
 }
 
 export async function savePushSubscription(
