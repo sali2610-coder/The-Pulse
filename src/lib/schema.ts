@@ -36,6 +36,17 @@ export const recurringRuleFormSchema = z.object({
     .min(1, { message: "1 עד 31" })
     .max(31, { message: "1 עד 31" }),
   keywords: z.string().max(120).optional(),
+  /** Installment plan fields — optional. When all three are set, the rule
+   *  fires for exactly `installmentTotal` months starting at
+   *  `startMonth`/`startYear`. */
+  installmentTotal: z
+    .number({ message: "מספר תשלומים לא תקין" })
+    .int()
+    .min(1, { message: "מינימום תשלום אחד" })
+    .max(120, { message: "עד 120 תשלומים" })
+    .optional(),
+  startMonth: z.number().int().min(1).max(12).optional(),
+  startYear: z.number().int().min(2000).max(2100).optional(),
 });
 
 export type RecurringRuleFormValues = z.infer<typeof recurringRuleFormSchema>;

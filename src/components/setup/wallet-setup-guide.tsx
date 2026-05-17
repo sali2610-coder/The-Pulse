@@ -13,6 +13,8 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { isStandalonePWA, isIOS } from "@/lib/pwa-detect";
 import { AUTH_ENABLED } from "@/lib/auth-config";
+import { PROD_WEBHOOK_URL } from "@/lib/prod-config";
+import { getOrCreateDeviceId } from "@/lib/device-id";
 
 import { StepCard, type StepState } from "./step-card";
 import { WalletCheatsheet } from "./wallet-cheatsheet";
@@ -89,9 +91,10 @@ export function WalletSetupGuide({ onBack }: Props) {
 
   const standalone = isStandalonePWA();
   const appleHints = isIOS();
-  const origin = window.location.origin;
   const token = tokenState.kind === "ready" ? tokenState.token : null;
-  const webhookUrl = `${origin}/api/webhooks/transactions`;
+  // Always show the stable production URL, never the current preview hash.
+  const webhookUrl = PROD_WEBHOOK_URL;
+  const deviceId = getOrCreateDeviceId();
 
   const pwaState: StepState = standalone ? "done" : "current";
   const tokenStepState: StepState =
@@ -100,8 +103,15 @@ export function WalletSetupGuide({ onBack }: Props) {
       : pwaState === "done"
         ? "current"
         : "pending";
-  const walletState: StepState =
-    tokenStepState === "done" ? "current" : "pending";
+  // When auth is disabled (the normal mode now) the wallet step unlocks as
+  // soon as the PWA is installed — no token gate.
+  const walletState: StepState = AUTH_ENABLED
+    ? tokenStepState === "done"
+      ? "current"
+      : "pending"
+    : pwaState === "done"
+      ? "current"
+      : "pending";
 
   return (
     <div className="space-y-4">
@@ -201,8 +211,8 @@ export function WalletSetupGuide({ onBack }: Props) {
         icon={<Wallet className="size-5" />}
       >
         <WalletSteps />
-        <WalletCheatsheet webhookUrl={webhookUrl} token={token} />
-        <TestConnection webhookUrl={webhookUrl} token={token} />
+        <WalletCheatsheet webhookUrl={webhookUrl} deviceId={deviceId} />
+        <TestConnection webhookUrl={webhookUrl} deviceId={deviceId} />
       </StepCard>
 
       <WebhookDiagnostics />

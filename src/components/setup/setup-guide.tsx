@@ -13,6 +13,8 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { isStandalonePWA, isIOS } from "@/lib/pwa-detect";
 import { AUTH_ENABLED } from "@/lib/auth-config";
+import { PROD_WEBHOOK_URL } from "@/lib/prod-config";
+import { getOrCreateDeviceId } from "@/lib/device-id";
 
 import { StepCard, type StepState } from "./step-card";
 import { ShortcutCheatsheet } from "./shortcut-cheatsheet";
@@ -85,9 +87,10 @@ export function SetupGuide({ onBack }: SetupGuideProps = {}) {
   // Hydrated + on the client — derive client-only values directly.
   const standalone = isStandalonePWA();
   const appleHints = isIOS();
-  const origin = window.location.origin;
   const token = tokenState.kind === "ready" ? tokenState.token : null;
-  const webhookUrl = `${origin}/api/webhooks/transactions`;
+  // Stable production webhook URL — never preview hash deployments.
+  const webhookUrl = PROD_WEBHOOK_URL;
+  const deviceId = getOrCreateDeviceId();
 
   // Step states.
   const pwaState: StepState = standalone ? "done" : "current";
@@ -255,8 +258,8 @@ export function SetupGuide({ onBack }: SetupGuideProps = {}) {
           </div>
         </a>
         <ShortcutSteps />
-        <ShortcutCheatsheet webhookUrl={webhookUrl} token={token} />
-        <TestConnection webhookUrl={webhookUrl} token={token} />
+        <ShortcutCheatsheet webhookUrl={webhookUrl} deviceId={deviceId} />
+        <TestConnection webhookUrl={webhookUrl} deviceId={deviceId} />
       </StepCard>
 
       {/* Live diagnostics — last webhook calls + anon ring buffer */}

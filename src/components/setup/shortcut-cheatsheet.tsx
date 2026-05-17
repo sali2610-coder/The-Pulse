@@ -1,10 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Check, Copy } from "lucide-react";
+
 import { CopyChip } from "./copy-chip";
+import { tap } from "@/lib/haptics";
 
 type Props = {
   webhookUrl: string;
-  token: string | null;
+  deviceId: string;
 };
 
 const EXAMPLE_BODY = `{
@@ -12,13 +17,11 @@ const EXAMPLE_BODY = `{
   "smsBody": "<<תוכן ההודעה מהבנק>>"
 }`;
 
-/**
- * The iOS Shortcut "Get Contents of URL" recipe rendered as 4 stacked cards
- * matching the field labels in the Shortcuts app, so a user can fill in
- * each field with one tap-copy → tap-paste cycle.
- */
-export function ShortcutCheatsheet({ webhookUrl, token }: Props) {
-  const authValue = token ? `Bearer ${token}` : "Bearer <יוצר טוקן בשלב 3>";
+/** iOS "Get Contents of URL" cheatsheet for SMS ingestion. Device-id only
+ *  auth — no Bearer / WEBHOOK_SECRET. Two header rows + a single
+ *  "Copy Headers" button so non-technical users get them with one tap. */
+export function ShortcutCheatsheet({ webhookUrl, deviceId }: Props) {
+  const headerBlock = `Content-Type: application/json\nx-sally-device: ${deviceId}`;
 
   return (
     <div className="space-y-3">
@@ -46,26 +49,73 @@ export function ShortcutCheatsheet({ webhookUrl, token }: Props) {
       <CopyChip label="URL" value={webhookUrl} />
 
       <div className="space-y-2 rounded-2xl border border-white/5 bg-black/20 p-3">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          Headers
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          <span>Headers (2)</span>
+          <CopyHeadersButton value={headerBlock} />
         </div>
         <div className="grid gap-1.5">
-          <CopyChip label="Authorization" value={authValue} />
           <CopyChip label="Content-Type" value="application/json" />
+          <CopyChip label="x-sally-device" value={deviceId} />
         </div>
       </div>
 
       <CopyChip label="Body (JSON)" value={EXAMPLE_BODY} block />
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        ערך{" "}
-        <code className="font-mono text-foreground/80">issuer</code> צריך להיות{" "}
-        <code className="font-mono text-foreground/80">cal</code> או{" "}
-        <code className="font-mono text-foreground/80">max</code> בהתאם לשם
-        השולח. את <code className="font-mono text-foreground/80">smsBody</code>{" "}
-        ממלאים מה־variable של ה־Shortcut (Shortcut Input → Message → Contents).
+        ערך <code className="font-mono text-foreground/80">issuer</code> חייב
+        להיות <code className="font-mono text-foreground/80">cal</code> או{" "}
+        <code className="font-mono text-foreground/80">max</code> לפי שם
+        השולח של ה־SMS. את{" "}
+        <code className="font-mono text-foreground/80">smsBody</code> ממלאים
+        מ־variable Shortcut Input → Message → Contents.
       </p>
     </div>
+  );
+}
+
+function CopyHeadersButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      tap();
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      className="flex items-center gap-1 rounded-md border border-neon/40 bg-neon/10 px-2 py-1 text-[10px] font-medium text-neon transition-colors hover:bg-neon/15"
+      aria-label="העתק את שני ה־headers"
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {copied ? (
+          <motion.span
+            key="ok"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="flex items-center gap-1"
+          >
+            <Check className="size-3" /> הועתק
+          </motion.span>
+        ) : (
+          <motion.span
+            key="copy"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-1"
+          >
+            <Copy className="size-3" /> העתק הכל
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </button>
   );
 }
 

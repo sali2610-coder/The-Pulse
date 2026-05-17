@@ -224,25 +224,32 @@ export function PushToggle() {
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          <motion.button
+          {/* iOS-style switch. Deterministic positioning via transform so the
+              knob always lands cleanly in RTL — the prior `ms-auto me-1`
+              approach didn't animate correctly inside RTL flex. */}
+          <button
             type="button"
-            whileTap={{ scale: 0.96 }}
             onClick={isOn ? disable : enable}
             disabled={busy}
-            className={`relative flex h-9 w-16 items-center rounded-full border transition-colors ${
-              isOn ? "border-neon/50 bg-neon/15" : "border-border/60 bg-background/40"
-            }`}
+            dir="ltr"
+            className={`relative flex h-8 w-14 shrink-0 items-center rounded-full border transition-colors ${
+              isOn
+                ? "border-[color:var(--neon)]/70 bg-[color:var(--neon)]/20 shadow-[inset_0_0_0_1px_var(--neon),0_0_12px_-2px_var(--neon)]"
+                : "border-border/60 bg-background/40"
+            } disabled:opacity-50`}
             aria-pressed={isOn}
             aria-label={isOn ? "כבה התראות" : "הפעל התראות"}
           >
             <motion.span
-              layout
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className={`block h-7 w-7 rounded-full ${
-                isOn ? "ms-auto me-1 bg-neon" : "ms-1 bg-muted"
-              }`}
+              initial={false}
+              animate={{
+                x: isOn ? 24 : 2,
+                backgroundColor: isOn ? "#00E5FF" : "#A1A1AA",
+              }}
+              transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              className="block h-6 w-6 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.4)]"
             />
-          </motion.button>
+          </button>
           {isOn && (
             <motion.button
               type="button"

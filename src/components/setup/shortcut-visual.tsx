@@ -13,6 +13,8 @@ import {
 import { CopyChip } from "./copy-chip";
 import { useFinanceStore } from "@/lib/store";
 import { AUTH_ENABLED } from "@/lib/auth-config";
+import { PROD_WEBHOOK_URL } from "@/lib/prod-config";
+import { getOrCreateDeviceId } from "@/lib/device-id";
 
 const SAMPLE_BANK_SMS = `לקוח יקר, בוצעה עסקה בכרטיסך המסתיימת ב-1234 בבית עסק 'שופרסל' בסכום 150.50 ש"ח בתאריך 06/05/26.`;
 
@@ -52,12 +54,11 @@ export function ShortcutVisual() {
   // Derive origin synchronously from window. Safe because this is a "use
   // client" component — the SSR pass falls back to the production URL,
   // which is correct anyway.
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
-  const webhookUrl = origin
-    ? `${origin}/api/webhooks/transactions`
-    : "https://the-pulse-sooty.vercel.app/api/webhooks/transactions";
-  const bearer = token ? `Bearer ${token}` : "Bearer stk_<צור טוקן בהגדרות>";
+  // Always pin to the stable production URL — preview hashes would
+  // silently rot iOS Shortcuts that users wired up earlier.
+  const webhookUrl = PROD_WEBHOOK_URL;
+  const deviceId = getOrCreateDeviceId();
+  void token;
 
   return (
     <div className="space-y-5">
@@ -84,7 +85,7 @@ export function ShortcutVisual() {
         icon={<ArrowDownToLine className="size-5" />}
       />
 
-      <ActionMockup webhookUrl={webhookUrl} bearer={bearer} />
+      <ActionMockup webhookUrl={webhookUrl} deviceId={deviceId} />
 
       <BodyMockup />
 
@@ -156,10 +157,10 @@ function Step({
 
 function ActionMockup({
   webhookUrl,
-  bearer,
+  deviceId,
 }: {
   webhookUrl: string;
-  bearer: string;
+  deviceId: string;
 }) {
   return (
     <motion.section
@@ -192,8 +193,8 @@ function ActionMockup({
             כותרות (Headers)
           </div>
           <div className="space-y-1.5 rounded-xl border border-white/5 bg-black/30 p-2">
-            <HeaderRow keyName="Authorization" value={bearer} />
             <HeaderRow keyName="Content-Type" value="application/json" />
+            <HeaderRow keyName="x-sally-device" value={deviceId} />
           </div>
         </div>
       </div>

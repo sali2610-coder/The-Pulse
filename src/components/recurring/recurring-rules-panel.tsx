@@ -8,6 +8,7 @@ import { useFinanceStore } from "@/lib/store";
 import { getCategory } from "@/lib/categories";
 import { currentMonthKey } from "@/lib/dates";
 import { buildStatusMap } from "@/lib/projections";
+import { ruleSchedule } from "@/lib/installment-schedule";
 import { tap } from "@/lib/haptics";
 
 import { RuleForm } from "./rule-form";
@@ -73,6 +74,11 @@ export function RecurringRulesPanel() {
                 const Icon = cat.icon;
                 const status = statusMap.get(`${rule.id}__${monthKey}`);
                 const paid = status?.status === "paid";
+                const sched = ruleSchedule(rule, monthKey);
+                const isInstallment = Boolean(rule.installmentTotal);
+                const pct = isInstallment && sched.paymentNumber && rule.installmentTotal
+                  ? Math.min(100, (sched.paymentNumber / rule.installmentTotal) * 100)
+                  : 0;
                 return (
                   <motion.li
                     key={rule.id}
@@ -106,10 +112,25 @@ export function RecurringRulesPanel() {
                             {formatILS(rule.estimatedAmount)}
                           </span>
                         </div>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                           <span>{cat.label}</span>
                           <span>·</span>
                           <span>ב־{rule.dayOfMonth} בחודש</span>
+                          {isInstallment && sched.paymentNumber ? (
+                            <>
+                              <span>·</span>
+                              <span data-mono="true">
+                                תשלום {sched.paymentNumber}/
+                                {rule.installmentTotal}
+                              </span>
+                              {sched.remaining !== undefined ? (
+                                <>
+                                  <span>·</span>
+                                  <span>נותרו {sched.remaining}</span>
+                                </>
+                              ) : null}
+                            </>
+                          ) : null}
                           <span>·</span>
                           <span
                             className={
@@ -123,6 +144,19 @@ export function RecurringRulesPanel() {
                                 : "כבוי"}
                           </span>
                         </div>
+                        {isInstallment && rule.installmentTotal ? (
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${pct}%` }}
+                              transition={{ duration: 0.6, ease: "easeOut" }}
+                              className="h-full rounded-full"
+                              style={{
+                                background: `linear-gradient(90deg, ${cat.accent}, ${cat.accent}66)`,
+                              }}
+                            />
+                          </div>
+                        ) : null}
                         <div className="mt-2 flex items-center gap-1">
                           <button
                             type="button"

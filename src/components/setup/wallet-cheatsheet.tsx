@@ -1,10 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Check, Copy } from "lucide-react";
+
 import { CopyChip } from "./copy-chip";
+import { tap } from "@/lib/haptics";
 
 type Props = {
   webhookUrl: string;
-  token: string | null;
+  deviceId: string;
 };
 
 const EXAMPLE_BODY = `{
@@ -16,13 +21,12 @@ const EXAMPLE_BODY = `{
   }
 }`;
 
-/**
- * Wallet-flavored cheatsheet: same 4-field "Get Contents of URL" shape, but
- * the body uses the new wallet payload schema. The placeholders in `body`
- * point users at the variables they'll wire in inside Shortcuts.
- */
-export function WalletCheatsheet({ webhookUrl, token }: Props) {
-  const authValue = token ? `Bearer ${token}` : "Bearer <יוצר טוקן בשלב 2>";
+/** "Get Contents of URL" cheatsheet for the iOS Wallet automation.
+ *  Auth is by `x-sally-device` header alone — no Bearer token, no
+ *  WEBHOOK_SECRET. The single "Copy Headers" button copies both lines
+ *  at once so the user can paste them into Shortcuts in one step. */
+export function WalletCheatsheet({ webhookUrl, deviceId }: Props) {
+  const headerBlock = `Content-Type: application/json\nx-sally-device: ${deviceId}`;
 
   return (
     <div className="space-y-3">
@@ -50,12 +54,13 @@ export function WalletCheatsheet({ webhookUrl, token }: Props) {
       <CopyChip label="URL" value={webhookUrl} />
 
       <div className="space-y-2 rounded-2xl border border-white/5 bg-black/20 p-3">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          Headers
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+          <span>Headers (2)</span>
+          <CopyHeadersButton value={headerBlock} />
         </div>
         <div className="grid gap-1.5">
-          <CopyChip label="Authorization" value={authValue} />
           <CopyChip label="Content-Type" value="application/json" />
+          <CopyChip label="x-sally-device" value={deviceId} />
         </div>
       </div>
 
@@ -71,11 +76,57 @@ export function WalletCheatsheet({ webhookUrl, token }: Props) {
           {"{{Current Date in ms}}"}
         </code>{" "}
         ב־<strong>Get Current Date</strong> + <strong>Get Time Between</strong>{" "}
-        בין 1970 לתאריך הזה (Milliseconds). אם נראה לך מסובך — אפשר פשוט להסיר
-        את ה־<code className="font-mono text-foreground/80">receivedAt</code>{" "}
-        מה־body, השרת ימלא לבד.
+        בין 1970 לתאריך הזה (Milliseconds). אם זה נראה מסובך — אפשר להסיר את{" "}
+        <code className="font-mono text-foreground/80">receivedAt</code>{" "}
+        מה־body והשרת ימלא לבד.
       </p>
     </div>
+  );
+}
+
+function CopyHeadersButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      tap();
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      className="flex items-center gap-1 rounded-md border border-neon/40 bg-neon/10 px-2 py-1 text-[10px] font-medium text-neon transition-colors hover:bg-neon/15"
+      aria-label="העתק את שני ה־headers"
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {copied ? (
+          <motion.span
+            key="ok"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="flex items-center gap-1"
+          >
+            <Check className="size-3" /> הועתק
+          </motion.span>
+        ) : (
+          <motion.span
+            key="copy"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-1"
+          >
+            <Copy className="size-3" /> העתק הכל
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </button>
   );
 }
 

@@ -9,6 +9,7 @@ import type {
 import type { MonthKey } from "@/types/finance";
 import { daysInMonth, projectMonth, sliceForMonth } from "@/lib/projections";
 import { addMonths, dayWithinMonth, monthKeyOf } from "@/lib/dates";
+import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
 
 export type ForecastConfidence = "low" | "medium" | "high";
 
@@ -320,9 +321,15 @@ export type EndOfMonthForecast = {
 
 function loanIsActiveInMonth(loan: Loan, monthKey: MonthKey): boolean {
   if (!loan.active) return false;
-  if (loan.remainingBalance <= 0) return false;
+  if (loan.remainingBalance !== undefined && loan.remainingBalance <= 0) {
+    return false;
+  }
+  // New shape: derive active state from start + totalPayments.
+  if (loan.startMonth && loan.startYear && loan.totalPayments) {
+    return loanSchedule(loan, monthKey).active;
+  }
+  // Legacy v6 shape: rely on endDate.
   if (!loan.endDate) return true;
-  // The loan still bills this month if endDate >= the 1st of the month.
   const endTime = new Date(loan.endDate).getTime();
   if (Number.isNaN(endTime)) return true;
   const [y, m] = monthKey.split("-").map(Number);
@@ -367,7 +374,12 @@ export function forecastEndOfMonth(args: {
       .map((s) => statusKey(s.ruleId)),
   );
   const pendingFixed = args.rules
-    .filter((r) => r.active && !paidThisMonth.has(statusKey(r.id)))
+    .filter(
+      (r) =>
+        r.active &&
+        !paidThisMonth.has(statusKey(r.id)) &&
+        ruleSchedule(r, args.monthKey).active,
+    )
     .reduce((sum, r) => sum + r.estimatedAmount, 0);
 
   // 4. Pending loan installments still due this month.
@@ -497,6 +509,7 @@ export function forecastBalanceTimeline(args: {
   for (const rule of args.rules) {
     if (!rule.active) continue;
     if (paidIds.has(rule.id)) continue;
+    if (!ruleSchedule(rule, args.monthKey).active) continue;
     enqueue(rule.dayOfMonth, -rule.estimatedAmount);
   }
 
@@ -610,7 +623,12 @@ export function futureMonthlyPressure(args: {
         .map((s) => s.ruleId),
     );
     const recurring = args.rules
-      .filter((r) => r.active && (!isCurrent || !paidIds.has(r.id)))
+      .filter(
+        (r) =>
+          r.active &&
+          (!isCurrent || !paidIds.has(r.id)) &&
+          ruleSchedule(r, monthKey).active,
+      )
       .reduce((sum, r) => sum + r.estimatedAmount, 0);
 
     // Loans — must still be active in this monthKey AND, for the current
@@ -921,6 +939,7 @@ export function forecastByAccount(args: {
   for (const rule of args.rules) {
     if (!rule.active) continue;
     if (paidIds.has(rule.id)) continue;
+    if (!ruleSchedule(rule, args.monthKey).active) continue;
     sharedRules += rule.estimatedAmount;
   }
 

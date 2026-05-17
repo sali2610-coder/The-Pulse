@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, CreditCard, Plus, Power, Trash2 } from "lucide-react";
+import {
+  Banknote,
+  CreditCard,
+  Minus,
+  Plus,
+  Power,
+  Trash2,
+} from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -18,7 +25,9 @@ type FormState = {
   label: string;
   issuer: Issuer;
   cardLast4: string;
-  anchorBalance: string;
+  /** Magnitude only (always positive). Sign is `anchorSign`. */
+  anchorMag: string;
+  anchorSign: 1 | -1;
 };
 
 const EMPTY_FORM: FormState = {
@@ -26,7 +35,8 @@ const EMPTY_FORM: FormState = {
   label: "",
   issuer: "cal",
   cardLast4: "",
-  anchorBalance: "",
+  anchorMag: "",
+  anchorSign: 1,
 };
 
 export function AccountsPanel() {
@@ -49,8 +59,8 @@ export function AccountsPanel() {
       issuer: form.kind === "card" ? form.issuer : undefined,
       cardLast4: form.kind === "card" ? form.cardLast4 : undefined,
       anchorBalance:
-        form.kind === "bank" && form.anchorBalance.trim()
-          ? Number(form.anchorBalance.replace(/,/g, ""))
+        form.kind === "bank" && form.anchorMag.trim()
+          ? Number(form.anchorMag.replace(/[^\d.]/g, "")) * form.anchorSign
           : undefined,
     });
     tap();
@@ -173,23 +183,61 @@ export function AccountsPanel() {
               </div>
             ) : (
               <div>
-                <Label htmlFor="acc-anchor" className="mb-1.5 text-xs">
-                  יתרה נוכחית (₪) — אפשר שלילי
+                <Label className="mb-1.5 text-xs">
+                  יתרה נוכחית (₪) — לחץ על +/− לחשבון בחריגה
                 </Label>
-                <Input
-                  id="acc-anchor"
-                  type="text"
-                  inputMode="numeric"
+                <div
                   dir="ltr"
-                  placeholder="-1000"
-                  value={form.anchorBalance}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      anchorBalance: e.target.value.replace(/[^\d.\-]/g, ""),
-                    }))
-                  }
-                />
+                  className={`flex items-stretch overflow-hidden rounded-2xl border bg-background/60 transition-colors ${
+                    form.anchorSign === -1
+                      ? "border-[#F87171]/40"
+                      : "border-border/60"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        anchorSign: f.anchorSign === 1 ? -1 : 1,
+                      }))
+                    }
+                    className={`flex w-12 shrink-0 items-center justify-center text-base font-bold transition-colors ${
+                      form.anchorSign === -1
+                        ? "bg-[#F87171]/15 text-[#F87171]"
+                        : "bg-white/5 text-foreground/70 hover:bg-white/8"
+                    }`}
+                    aria-label={
+                      form.anchorSign === -1 ? "שלילי" : "חיובי"
+                    }
+                  >
+                    {form.anchorSign === -1 ? (
+                      <Minus className="size-4" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                  </button>
+                  <span className="flex items-center pl-3 text-sm text-muted-foreground">
+                    ₪
+                  </span>
+                  <input
+                    id="acc-anchor"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9.]*"
+                    dir="ltr"
+                    placeholder="0"
+                    value={form.anchorMag}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        anchorMag: e.target.value.replace(/[^\d.]/g, ""),
+                      }))
+                    }
+                    data-mono="true"
+                    className="h-12 flex-1 bg-transparent px-3 text-base text-foreground outline-none placeholder:text-muted-foreground/40"
+                  />
+                </div>
               </div>
             )}
 

@@ -4,6 +4,7 @@ import type {
   RecurringRule,
   RecurringStatus,
 } from "@/types/finance";
+import { ruleSchedule } from "@/lib/installment-schedule";
 import { monthKeyOf, monthIndex, dayWithinMonth } from "@/lib/dates";
 import type { MonthKey } from "@/types/finance";
 import type { CategoryId } from "@/lib/categories";
@@ -165,6 +166,7 @@ export function projectMonth(args: {
     if (!rule.active) continue;
     const status = statusMap.get(statusKey(rule.id, args.monthKey));
     if (status?.status === "paid") continue;
+    if (!ruleSchedule(rule, args.monthKey).active) continue;
     upcoming += rule.estimatedAmount;
   }
 
@@ -241,7 +243,7 @@ export function pendingRulesForMonth(args: {
 }> {
   const map = buildStatusMap(args.statuses);
   return args.rules
-    .filter((r) => r.active)
+    .filter((r) => r.active && ruleSchedule(r, args.monthKey).active)
     .map((rule) => ({
       rule,
       status: map.get(statusKey(rule.id, args.monthKey)),

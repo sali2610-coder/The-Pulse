@@ -48,6 +48,9 @@ type AddRuleInput = {
   estimatedAmount: number;
   dayOfMonth: number;
   keywords: string[];
+  installmentTotal?: number;
+  startMonth?: number;
+  startYear?: number;
 };
 
 type AddAccountInput = {
@@ -61,9 +64,13 @@ type AddAccountInput = {
 type AddLoanInput = {
   label: string;
   monthlyInstallment: number;
-  remainingBalance: number;
-  endDate: string;
+  /** Legacy/derived. Auto-set when start+total are present. */
+  remainingBalance?: number;
+  endDate?: string;
   dayOfMonth: number;
+  startMonth?: number;
+  startYear?: number;
+  totalPayments?: number;
 };
 
 type AddIncomeInput = {
@@ -388,6 +395,9 @@ export const useFinanceStore = create<State & Actions>()(
             .filter((k) => k.length > 0),
           active: true,
           createdAt: new Date().toISOString(),
+          installmentTotal: input.installmentTotal,
+          startMonth: input.startMonth,
+          startYear: input.startYear,
         };
         set((state) => ({ rules: [rule, ...state.rules] }));
         return rule;
@@ -418,6 +428,15 @@ export const useFinanceStore = create<State & Actions>()(
                           .map((k) => k.trim())
                           .filter((k) => k.length > 0),
                       }
+                    : {}),
+                  ...("installmentTotal" in patch
+                    ? { installmentTotal: patch.installmentTotal }
+                    : {}),
+                  ...("startMonth" in patch
+                    ? { startMonth: patch.startMonth }
+                    : {}),
+                  ...("startYear" in patch
+                    ? { startYear: patch.startYear }
                     : {}),
                 }
               : r,
@@ -528,13 +547,25 @@ export const useFinanceStore = create<State & Actions>()(
       },
 
       addLoan: (input) => {
+        const monthly = safeNumber(input.monthlyInstallment);
+        const total = input.totalPayments
+          ? Math.max(1, Math.floor(input.totalPayments))
+          : undefined;
         const loan: Loan = {
           id: uid(),
           label: input.label.trim(),
-          monthlyInstallment: safeNumber(input.monthlyInstallment),
-          remainingBalance: safeNumber(input.remainingBalance),
+          monthlyInstallment: monthly,
+          remainingBalance:
+            input.remainingBalance !== undefined
+              ? safeNumber(input.remainingBalance)
+              : total
+                ? monthly * total
+                : undefined,
           endDate: input.endDate,
           dayOfMonth: clampDay(input.dayOfMonth),
+          startMonth: input.startMonth,
+          startYear: input.startYear,
+          totalPayments: total,
           active: true,
           createdAt: new Date().toISOString(),
         };

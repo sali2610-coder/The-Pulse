@@ -28,11 +28,20 @@ export type Loan = {
   id: string;
   label: string;
   monthlyInstallment: number;
-  remainingBalance: number;
-  /** ISO date — when the loan completes. */
-  endDate: string;
   /** 1-31; when it auto-debits each month. */
   dayOfMonth: number;
+  /** Month (1-12) the loan started billing. v7+. */
+  startMonth?: number;
+  /** Year the loan started billing. v7+. */
+  startYear?: number;
+  /** Total number of monthly installments (e.g. 36). v7+. */
+  totalPayments?: number;
+  /** ISO date — legacy v6 field. New loans use start + totalPayments and
+   *  derive end at read time. Kept readable for migration compatibility. */
+  endDate?: string;
+  /** Legacy v6 field. New loans don't need this — the runtime computes
+   *  remaining = totalPayments − paidCount. */
+  remainingBalance?: number;
   active: boolean;
   createdAt: string;
 };
@@ -89,6 +98,16 @@ export type ExpenseEntry = {
   accountId?: string;
 };
 
+/** Recurring outflow. Two flavours share this shape:
+ *
+ *  - **Regular**: ongoing monthly bill (electricity, rent, phone). No
+ *    `installmentTotal`. Active indefinitely until the user disables it.
+ *  - **Installment**: a finite-length plan (12-month TV purchase, 36-month
+ *    appliance plan). `installmentTotal` + `startMonth` + `startYear`
+ *    drive auto-progression — the rule retires itself the month after the
+ *    last payment.
+ *
+ *  Both modes use the same `dayOfMonth` for the charge day. */
 export type RecurringRule = {
   id: string;
   label: string;
@@ -98,6 +117,13 @@ export type RecurringRule = {
   keywords: string[];
   active: boolean;
   createdAt: string;
+  /** Installment mode only — total number of monthly payments. Undefined
+   *  for regular recurring bills. */
+  installmentTotal?: number;
+  /** Installment mode only — calendar month (1-12) of the first payment. */
+  startMonth?: number;
+  /** Installment mode only — calendar year of the first payment. */
+  startYear?: number;
 };
 
 export type RecurringStatus = {

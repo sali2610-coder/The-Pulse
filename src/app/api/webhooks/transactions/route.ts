@@ -94,6 +94,7 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
     ? authHeader.slice("Bearer ".length)
     : "";
 
+  // Multi-user mode (off by default) — Bearer required.
   if (AUTH_ENABLED) {
     if (!bearer.startsWith("stk_")) {
       return { errorResponse: fail(401, "missing_personal_token") };
@@ -103,11 +104,11 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
     return { scope: { kind: "user", id: userId } };
   }
 
-  const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) return { errorResponse: fail(503, "webhook_disabled") };
-  if (!timingSafeEqual(bearer, secret)) {
-    return { errorResponse: fail(401, "invalid_token") };
-  }
+  // Single-user mode — Bearer no longer required. The iOS Shortcut sets
+  // `x-sally-device: <deviceId>` and that alone identifies the install.
+  // When the operator HAS set `WEBHOOK_SECRET` we still accept Bearer
+  // matches as a stronger optional gate, but a missing/empty Bearer no
+  // longer rejects the request as long as a valid device id is supplied.
   const deviceId = req.headers.get("x-sally-device") ?? "";
   if (
     !deviceId ||
@@ -115,6 +116,13 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
     !/^[A-Za-z0-9_\-:.]+$/.test(deviceId)
   ) {
     return { errorResponse: fail(400, "invalid_device") };
+  }
+
+  const secret = process.env.WEBHOOK_SECRET;
+  if (secret && bearer && !timingSafeEqual(bearer, secret)) {
+    // Operator provided a secret AND the request sent a Bearer header that
+    // doesn't match — reject. Sending no Bearer at all is allowed.
+    return { errorResponse: fail(401, "invalid_token") };
   }
   return { scope: { kind: "device", id: deviceId } };
 }
