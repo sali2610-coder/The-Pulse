@@ -15,8 +15,6 @@ import {
   type WebhookLogEntry,
 } from "@/lib/kv";
 import { isPushConfigured, sendCategorizePush } from "@/lib/push-server";
-import { resolveTokenToUserId } from "@/lib/api-token";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 import type { Scope } from "@/lib/scope";
 
 // Node runtime so we can use the web-push library (depends on `node:crypto`).
@@ -94,17 +92,11 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
     ? authHeader.slice("Bearer ".length)
     : "";
 
-  // Multi-user mode (off by default) — Bearer required.
-  if (AUTH_ENABLED) {
-    if (!bearer.startsWith("stk_")) {
-      return { errorResponse: fail(401, "missing_personal_token") };
-    }
-    const userId = await resolveTokenToUserId(bearer);
-    if (!userId) return { errorResponse: fail(401, "invalid_token") };
-    return { scope: { kind: "user", id: userId } };
-  }
-
-  // Single-user mode — Bearer no longer required. The iOS Shortcut sets
+  // Device-scoped ingestion. Multi-user comes via NextAuth + the
+  // device-claim mapping (see src/lib/scope-resolver.ts) — the webhook
+  // itself always writes to a device scope so the iOS Shortcut never
+  // needs an OAuth session. The PWA later resolves the same deviceId to
+  // a user blob when a Google session is active. The iOS Shortcut sets
   // `x-sally-device: <deviceId>` and that alone identifies the install.
   // When the operator HAS set `WEBHOOK_SECRET` we still accept Bearer
   // matches as a stronger optional gate, but a missing/empty Bearer no

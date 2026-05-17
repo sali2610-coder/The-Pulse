@@ -13,7 +13,7 @@ import {
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
-import { forecastEndOfMonth } from "@/lib/forecast";
+import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 
 // Manual sign-prepending instead of `signDisplay: "always"` — the latter
 // throws RangeError on iOS Safari < 15.4 when Intl.NumberFormat is
@@ -38,19 +38,33 @@ export function CfoSummary() {
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
-  const eom = useMemo(() => {
+  // Read from the single financial snapshot so every card on the dashboard
+  // agrees on the same numbers. Previously CFO ran its own
+  // forecastEndOfMonth which produced subtly different totals.
+  const snap = useMemo(() => {
     if (!hydrated) return null;
-    return forecastEndOfMonth({
+    return buildFinancialSnapshot({
       accounts,
       loans,
       incomes,
       entries,
       rules,
       statuses,
+      monthlyBudget,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, accounts, loans, incomes, entries, rules, statuses]);
+  }, [
+    hydrated,
+    accounts,
+    loans,
+    incomes,
+    entries,
+    rules,
+    statuses,
+    monthlyBudget,
+  ]);
 
   const hasAnchors = accounts.some(
     (a) => a.kind === "bank" && a.active && a.anchorBalance !== undefined,
@@ -74,9 +88,14 @@ export function CfoSummary() {
     );
   }
 
-  if (!eom) return null;
+  if (!snap) return null;
 
-  const isRed = eom.forecast < 0;
+  // Project the same line the rest of the dashboard uses — net cash on
+  // the 1st of next month BEFORE applying the discretionary spending
+  // budget. CFO has always been "where is my money if I behave?" — the
+  // dedicated CashflowSummaryCard above already applies the budget.
+  const forecast = snap.projectedBalanceWithoutDiscretionary;
+  const isRed = forecast < 0;
   const accent = isRed ? "#F87171" : "#34D399";
 
   return (
@@ -99,14 +118,14 @@ export function CfoSummary() {
             CFO Brain · End of month
           </div>
           <motion.div
-            key={Math.round(eom.forecast)}
+            key={Math.round(forecast)}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             data-mono="true"
             className="mt-2 text-3xl font-light tracking-tight"
             style={{ direction: "ltr", color: accent }}
           >
-            {formatILSSign(eom.forecast)}
+            {formatILSSign(forecast)}
           </motion.div>
           <div className="text-xs text-muted-foreground">
             {isRed ? "סיום חודש בחריגה" : "סיום חודש בעודף"}
@@ -117,39 +136,39 @@ export function CfoSummary() {
       <div className="mt-5 grid grid-cols-2 gap-2.5 text-[11px]">
         <BreakdownRow
           icon={<Wallet className="size-3.5" />}
-          label="Anchors"
-          value={formatILSSign(eom.totalAnchors)}
-          tone={eom.totalAnchors >= 0 ? "positive" : "negative"}
+          label="יתרה נוכחית"
+          value={formatILSSign(snap.currentBalance)}
+          tone={snap.currentBalance >= 0 ? "positive" : "negative"}
         />
         <BreakdownRow
           icon={<ArrowDownToLine className="size-3.5" />}
           label="הכנסות צפויות"
-          value={formatILSSign(eom.expectedIncome)}
+          value={formatILSSign(snap.expectedIncomeUntilNextMonth)}
           tone="positive"
         />
         <BreakdownRow
           icon={<Receipt className="size-3.5" />}
           label="הוצאות קבועות"
-          value={`−${formatILS(eom.pendingFixed)}`}
+          value={`−${formatILS(snap.fixedExpensesUntilNextMonth)}`}
           tone="negative"
         />
         <BreakdownRow
           icon={<Banknote className="size-3.5" />}
           label="הלוואות"
-          value={`−${formatILS(eom.pendingLoans)}`}
+          value={`−${formatILS(snap.activeLoansPaymentsUntilNextMonth)}`}
           tone="negative"
         />
         <BreakdownRow
           icon={<CreditCard className="size-3.5" />}
-          label="כרטיסים עתידי"
-          value={`−${formatILS(eom.futureCardSlices)}`}
+          label="תשלומים"
+          value={`−${formatILS(snap.installmentPaymentsUntilNextMonth)}`}
           tone="negative"
         />
         <BreakdownRow
           icon={<Layers className="size-3.5" />}
-          label="חשבונות פעילים"
-          value={`${accounts.filter((a) => a.active).length}`}
-          tone="neutral"
+          label="חיובי כרטיס עתידיים"
+          value={`−${formatILS(snap.recurringCommitmentsUntilNextMonth)}`}
+          tone="negative"
         />
       </div>
     </motion.section>

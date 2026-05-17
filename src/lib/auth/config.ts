@@ -94,5 +94,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       };
       await saveUserState({ kind: "user", id: user.id }, migrated);
     },
+    /** On sign-out, drop the device-claim KV mapping so the iPhone
+     *  Shortcut stops writing under the user's namespace. The next webhook
+     *  POST falls back to the device-scoped path until the user signs in
+     *  again and re-claims via /api/auth/claim-device. */
+    async signOut(message) {
+      if (!isKvConfigured()) return;
+      const userId =
+        ("session" in message && message.session?.userId) ||
+        ("token" in message && message.token?.sub) ||
+        null;
+      if (typeof userId !== "string" || !userId) return;
+      const deviceId = await kv().get(`sally:auth:user-device:${userId}`);
+      if (typeof deviceId !== "string" || !deviceId) return;
+      await kv().del(`sally:auth:device-claim:${deviceId}`);
+      await kv().del(`sally:auth:user-device:${userId}`);
+    },
   },
 });

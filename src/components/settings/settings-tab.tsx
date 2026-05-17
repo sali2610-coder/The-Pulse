@@ -5,7 +5,6 @@ import { IntegrationInfo } from "./integration-info";
 import { StatementImport } from "./statement-import";
 import { AudioToggle } from "./audio-toggle";
 import { PushToggle } from "./push-toggle";
-import { ApiTokenCard } from "./api-token-card";
 import { AuthCard } from "./auth-card";
 import { AccountsPanel } from "@/components/accounts/accounts-panel";
 import { LoansPanel } from "@/components/loans/loans-panel";
@@ -17,7 +16,6 @@ export function SettingsTab() {
     <div className="flex flex-col gap-4">
       <AuthCard />
       <BudgetInput />
-      <ApiTokenCard />
       <IntegrationInfo />
       <PushToggle />
       <AudioToggle />
