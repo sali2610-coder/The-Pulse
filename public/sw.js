@@ -6,7 +6,7 @@
 // Web Push notifications and route the user back into the app when they
 // tap one.
 
-const SW_VERSION = "sally-push-v1";
+const SW_VERSION = "sally-push-v2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -71,6 +71,13 @@ function shortTime(iso) {
   }
 }
 
+const ALERT_META = {
+  info:     { emoji: "ℹ️" },
+  positive: { emoji: "✨" },
+  warning:  { emoji: "⚠️" },
+  danger:   { emoji: "🚨" },
+};
+
 self.addEventListener("push", (event) => {
   let payload;
   try {
@@ -78,7 +85,28 @@ self.addEventListener("push", (event) => {
   } catch {
     payload = null;
   }
-  if (!payload || payload.kind !== "categorize") return;
+  if (!payload) return;
+
+  if (payload.kind === "alert") {
+    const meta = ALERT_META[payload.severity] || ALERT_META.info;
+    const title = `${meta.emoji} ${payload.title || "Sally"}`;
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body: payload.body || "",
+        icon: "/icon.svg",
+        badge: "/icon.svg",
+        tag: `sally-alert-${payload.id}`,
+        renotify: false,
+        requireInteraction: payload.severity === "danger",
+        data: {
+          href: payload.href || "/",
+        },
+      }),
+    );
+    return;
+  }
+
+  if (payload.kind !== "categorize") return;
 
   const merchant = payload.merchant ?? "חיוב חדש";
   const amount = typeof payload.amount === "number" ? ILS(payload.amount) : "";
@@ -127,10 +155,16 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
+  event.notification.close();
+
+  // Alert push — just deep-link to the supplied href.
+  if (data.href && !data.externalId) {
+    event.waitUntil(focusOrOpen(data.href));
+    return;
+  }
+
   const externalId = data.externalId;
   const action = event.action;
-
-  event.notification.close();
   if (!externalId) return;
 
   let quickCategory = null;

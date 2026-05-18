@@ -73,3 +73,38 @@ export async function sendCategorizePush(
     return { ok: false, gone: false };
   }
 }
+
+/** Non-transaction push payloads — overdraft warnings, income credits,
+ *  loan-payment reminders, forecast alerts. The service worker formats
+ *  these with their own emoji + tone instead of the categorize chrome. */
+export type AlertPushPayload = {
+  kind: "alert";
+  /** Stable id so multiple identical alerts collapse to one notification. */
+  id: string;
+  severity: "info" | "positive" | "warning" | "danger";
+  title: string;
+  body: string;
+  /** Optional deep-link target path within the PWA. Defaults to "/". */
+  href?: string;
+};
+
+export async function sendAlertPush(
+  sub: StoredSubscription,
+  payload: AlertPushPayload,
+): Promise<{ ok: boolean; gone: boolean }> {
+  if (!ensureConfigured()) return { ok: false, gone: false };
+  try {
+    await webpush.sendNotification(
+      sub as unknown as PushSubscription,
+      JSON.stringify(payload),
+      // Alerts are informational — they live longer than a categorize push
+      // because the user may not have their phone in hand at the moment.
+      { TTL: 3600 },
+    );
+    return { ok: true, gone: false };
+  } catch (err) {
+    const status = (err as { statusCode?: number }).statusCode;
+    if (status === 404 || status === 410) return { ok: false, gone: true };
+    return { ok: false, gone: false };
+  }
+}

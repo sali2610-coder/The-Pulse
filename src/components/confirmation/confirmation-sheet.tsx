@@ -9,6 +9,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { CategoryPickerSheet } from "@/components/confirmation/category-picker-sheet";
 import { useFinanceStore } from "@/lib/store";
 import { getCategory, type CategoryId } from "@/lib/categories";
+import { categorize } from "@/lib/parsers";
 import { success, tap } from "@/lib/haptics";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -250,6 +251,13 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         selected={category}
+        suggested={(() => {
+          if (!merchant.trim()) return undefined;
+          const hint = categorize(merchant.trim()) as CategoryId;
+          // `categorize` falls back to "other" when nothing matched;
+          // surfacing that as a "מומלץ" chip would be noise.
+          return hint !== "other" ? hint : undefined;
+        })()}
         onSelect={(id) => setCategory(id)}
       />
     </>
