@@ -30,11 +30,26 @@ const PUSH_DEBOUNCE_MS = 1500;
 type ZustandStore = ReturnType<typeof useFinanceStore.getState>;
 
 function scopeHeaders(): Record<string, string> {
-  // Mirrors what sync.ts does — when AUTH_ENABLED is true the Clerk cookie
-  // identifies the user server-side; otherwise we send the device id.
-  return AUTH_ENABLED
-    ? {}
-    : { "x-sally-device": getOrCreateDeviceId() };
+  // Always send the device id. The server's resolveRequestScope picks the
+  // strongest signal available (NextAuth session → device-claim → bare
+  // device id), so the header is harmless when a session exists and load-
+  // bearing when it doesn't.
+  void AUTH_ENABLED;
+  return { "x-sally-device": getOrCreateDeviceId() };
+}
+
+/** Returns the current identity string: the signed-in user's email when a
+ *  NextAuth session is active, otherwise "device:<deviceId>". Used to
+ *  detect cross-account swaps on the same browser. */
+async function currentIdentity(): Promise<string> {
+  try {
+    const res = await fetch("/api/auth/session", { cache: "no-store" });
+    const json = (await res.json()) as { user?: { email?: string } } | null;
+    if (json?.user?.email) return `user:${json.user.email}`;
+  } catch {
+    /* fall through to device identity */
+  }
+  return `device:${getOrCreateDeviceId()}`;
 }
 
 /** Extract the persisted slice of the store. Mirrors the Zustand
@@ -87,11 +102,26 @@ export function useRemoteStateSync(): void {
   const remoteAppliedRef = useRef(false);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 1. Pull on first hydration.
+  // 1. Pull on first hydration. Detect identity change — if the signed-in
+  //    user (or device id) differs from the last identity that wrote to
+  //    this browser, FORCE-REPLACE the local store from the remote blob.
+  //    Without this guard, a second user signing in on the same browser
+  //    would inherit the previous user's cached Zustand state when their
+  //    remote blob is older than the previous user's lastSyncedAt.
   useEffect(() => {
     if (!hydrated || remoteAppliedRef.current) return;
     let cancelled = false;
     (async () => {
+      const identity = await currentIdentity();
+      const previous =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("sally.lastIdentity")
+          : null;
+      const identityChanged = previous !== null && previous !== identity;
+      if (typeof window !== "undefined" && identity) {
+        window.localStorage.setItem("sally.lastIdentity", identity);
+      }
+
       try {
         const res = await fetch("/api/state", {
           method: "GET",
@@ -105,9 +135,15 @@ export function useRemoteStateSync(): void {
           configured?: boolean;
           blob?: { version: number; updatedAt: number; state: unknown } | null;
         };
+
+        // Identity changed and remote is empty → blank local so we don't
+        // leak the previous user's data into this session.
+        if (identityChanged && !data?.blob) {
+          applyRemote({});
+          return;
+        }
         if (!data?.ok || !data.blob) return;
-        // Only apply if the remote blob is newer than our local
-        // lastSyncedAt OR our local store is essentially empty.
+
         const local = useFinanceStore.getState();
         const localEmpty =
           local.accounts.length === 0 &&
@@ -117,7 +153,9 @@ export function useRemoteStateSync(): void {
           local.entries.length === 0 &&
           local.monthlyBudget === 0;
         const remoteWins =
-          localEmpty || data.blob.updatedAt > (local.lastSyncedAt ?? 0);
+          identityChanged ||
+          localEmpty ||
+          data.blob.updatedAt > (local.lastSyncedAt ?? 0);
         if (remoteWins) {
           applyRemote(data.blob.state);
         }

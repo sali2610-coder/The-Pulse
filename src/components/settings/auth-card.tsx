@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, LogIn, LogOut, ShieldAlert, User } from "lucide-react";
+import {
+  CheckCircle2,
+  LogIn,
+  LogOut,
+  RefreshCw,
+  ShieldAlert,
+  User,
+} from "lucide-react";
 
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { tap } from "@/lib/haptics";
@@ -144,38 +151,48 @@ export function AuthCard() {
 
   return (
     <section className="rounded-3xl border border-[color:#34D399]/40 bg-surface/60 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {status.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={status.image}
-              alt=""
-              className="size-10 rounded-full border border-white/10"
-            />
-          ) : (
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#34D399]/15 text-[#34D399]">
-              <CheckCircle2 className="size-5" />
-            </span>
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-foreground">
-              {status.name ?? status.email}
-            </div>
-            <div className="truncate text-[11px] text-muted-foreground">
-              {status.email}
-            </div>
+      <div className="flex items-start gap-3">
+        {status.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={status.image}
+            alt=""
+            className="size-10 rounded-full border border-white/10"
+          />
+        ) : (
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#34D399]/15 text-[#34D399]">
+            <CheckCircle2 className="size-5" />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-foreground">
+            {status.name ?? status.email}
+          </div>
+          <div className="truncate text-[11px] text-muted-foreground">
+            {status.email}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <motion.a
+              whileTap={{ scale: 0.96 }}
+              href="/api/auth/signout?callbackUrl=/"
+              onClick={() => tap()}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-[color:var(--neon)]/40 hover:text-[color:var(--neon)]"
+              title="התנתק וחזור לבחור חשבון Google אחר"
+            >
+              <RefreshCw className="size-3" />
+              החלף חשבון Google
+            </motion.a>
+            <motion.a
+              whileTap={{ scale: 0.96 }}
+              href="/api/auth/signout?callbackUrl=/"
+              onClick={() => tap()}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+            >
+              <LogOut className="size-3" />
+              התנתק
+            </motion.a>
           </div>
         </div>
-        <motion.a
-          whileTap={{ scale: 0.96 }}
-          href="/api/auth/signout?callbackUrl=/"
-          onClick={() => tap()}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
-        >
-          <LogOut className="size-3" />
-          התנתק
-        </motion.a>
       </div>
     </section>
   );
