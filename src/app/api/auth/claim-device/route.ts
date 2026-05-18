@@ -3,6 +3,16 @@
 // user namespace instead of the legacy device namespace.
 //
 // Idempotent. Must be called by an authenticated client AFTER sign-in.
+//
+// Migration policy when both a device-scope blob AND a user-scope blob
+// exist for the same person:
+//
+//   userBlob is null     → copy deviceBlob over (first-ever sign-in path)
+//   deviceBlob is null   → leave userBlob alone (signed in elsewhere first)
+//   BOTH present         → keep the blob with the larger `updatedAt`.
+//                          if updatedAt is the same, keep the richer one
+//                          (more accounts/entries) so we never silently
+//                          delete the user's data.
 
 import { auth } from "@/lib/auth/config";
 import {
@@ -22,6 +32,34 @@ export const dynamic = "force-dynamic";
 
 function fail(status: number, code: string) {
   return Response.json({ ok: false, error: code }, { status });
+}
+
+type AnyBlobState = {
+  accounts?: unknown[];
+  loans?: unknown[];
+  incomes?: unknown[];
+  rules?: unknown[];
+  entries?: unknown[];
+  monthlyBudget?: number;
+} & Record<string, unknown>;
+
+function richnessScore(blob: StateBlob): number {
+  const s = (blob.state ?? {}) as AnyBlobState;
+  const count = (a?: unknown[]) => (Array.isArray(a) ? a.length : 0);
+  return (
+    count(s.accounts) +
+    count(s.loans) +
+    count(s.incomes) +
+    count(s.rules) +
+    count(s.entries) +
+    (typeof s.monthlyBudget === "number" && s.monthlyBudget > 0 ? 1 : 0)
+  );
+}
+
+function pickWinner(a: StateBlob, b: StateBlob): StateBlob {
+  if (a.updatedAt > b.updatedAt) return a;
+  if (b.updatedAt > a.updatedAt) return b;
+  return richnessScore(a) >= richnessScore(b) ? a : b;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -49,22 +87,43 @@ export async function POST(req: Request): Promise<Response> {
   //    fired yet. Idempotent — overwrites any prior value.
   await kv().set(`sally:auth:user-device:${userId}`, deviceId);
 
-  // 3. Migrate the device-scoped state blob if the user hasn't already
-  //    got one.
-  const userBlob = await getUserState({ kind: "user", id: userId });
-  if (!userBlob) {
-    const deviceBlob = await getUserState({ kind: "device", id: deviceId });
-    if (deviceBlob) {
-      const migrated: StateBlob = {
-        version: deviceBlob.version,
+  // 3. Merge state blobs safely.
+  const [userBlob, deviceBlob] = await Promise.all([
+    getUserState({ kind: "user", id: userId }),
+    getUserState({ kind: "device", id: deviceId }),
+  ]);
+
+  let migrated: "copied" | "merged" | "kept-user" | "no-op" = "no-op";
+
+  if (!userBlob && deviceBlob) {
+    const next: StateBlob = {
+      version: deviceBlob.version,
+      updatedAt: Date.now(),
+      state: deviceBlob.state,
+    };
+    await saveUserState({ kind: "user", id: userId }, next);
+    migrated = "copied";
+  } else if (userBlob && deviceBlob) {
+    const winner = pickWinner(userBlob, deviceBlob);
+    if (winner !== userBlob) {
+      const next: StateBlob = {
+        version: winner.version,
         updatedAt: Date.now(),
-        state: deviceBlob.state,
+        state: winner.state,
       };
-      await saveUserState({ kind: "user", id: userId }, migrated);
+      await saveUserState({ kind: "user", id: userId }, next);
+      migrated = "merged";
+    } else {
+      migrated = "kept-user";
     }
   }
 
-  return Response.json({ ok: true });
+  return Response.json({
+    ok: true,
+    migrated,
+    userRichness: userBlob ? richnessScore(userBlob) : 0,
+    deviceRichness: deviceBlob ? richnessScore(deviceBlob) : 0,
+  });
 }
 
 export async function DELETE(req: Request): Promise<Response> {

@@ -6,22 +6,26 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 
 // Bridges the local Zustand store to the server-side state route.
 //
-// Flow:
-//   1. On mount (once hydration completes): GET /api/state and merge the
-//      blob into the store if it's newer than what we have locally.
-//   2. Subscribe to store changes; debounce them; PUT /api/state with the
-//      whole snapshot. Last-writer-wins by `updatedAt`.
+// Identity transitions handled on mount:
 //
-// Why a single blob and not per-table writes:
-//   - Zero new schemas. The store already has all the migration logic.
-//   - One PUT per change → one KV write → cheap and predictable.
-//   - Cross-device sync works the moment the route is wired.
+//   1. First-ever load (no previous identity)
+//        → apply remote if it exists, otherwise leave local untouched
 //
-// Limits:
-//   - Two simultaneous tabs can race. We resolve by comparing the server's
-//     `updatedAt` on the GET response, but if both tabs are actively
-//     writing the last writer wins. This is acceptable for a personal
-//     finance app — concurrent editing is rare.
+//   2. device:<X>  →  user:<Y>   (FIRST GOOGLE SIGN-IN ON THIS BROWSER)
+//        → call /api/auth/claim-device first so the server merges the
+//          device blob into the user blob, preserving local data
+//        → then GET /api/state and apply the merged result
+//
+//   3. user:<A>    →  user:<B>   (SWITCHED GOOGLE ACCOUNT)
+//        → blank local immediately, then apply user B's remote
+//        → if user B has no remote yet, local stays empty
+//
+//   4. user:<A>    →  device:<X> (SIGNED OUT)
+//        → leave local alone (still the right data for this device);
+//          server's user blob keeps the cloud copy intact
+//
+//   5. Same identity as last time
+//        → standard last-writer-wins by `updatedAt`
 
 const STATE_VERSION = 1;
 const PUSH_DEBOUNCE_MS = 1500;
@@ -29,29 +33,25 @@ const PUSH_DEBOUNCE_MS = 1500;
 type ZustandStore = ReturnType<typeof useFinanceStore.getState>;
 
 function scopeHeaders(): Record<string, string> {
-  // Always send the device id. The server's resolveRequestScope picks the
-  // strongest signal available (NextAuth session → device-claim → bare
-  // device id), so the header is harmless when a session exists and load-
-  // bearing when it doesn't.
   return { "x-sally-device": getOrCreateDeviceId() };
 }
 
-/** Returns the current identity string: the signed-in user's email when a
- *  NextAuth session is active, otherwise "device:<deviceId>". Used to
- *  detect cross-account swaps on the same browser. */
-async function currentIdentity(): Promise<string> {
+type SessionShape = { user?: { id?: string; email?: string } } | null;
+
+async function fetchSession(): Promise<SessionShape> {
   try {
     const res = await fetch("/api/auth/session", { cache: "no-store" });
-    const json = (await res.json()) as { user?: { email?: string } } | null;
-    if (json?.user?.email) return `user:${json.user.email}`;
+    return (await res.json()) as SessionShape;
   } catch {
-    /* fall through to device identity */
+    return null;
   }
+}
+
+function identityFor(session: SessionShape): string {
+  if (session?.user?.email) return `user:${session.user.email}`;
   return `device:${getOrCreateDeviceId()}`;
 }
 
-/** Extract the persisted slice of the store. Mirrors the Zustand
- *  `partialize` shape — derived flags like `hasHydrated` stay local. */
 function persistedSlice(state: ZustandStore) {
   return {
     entries: state.entries,
@@ -66,8 +66,6 @@ function persistedSlice(state: ZustandStore) {
   };
 }
 
-/** Apply a remote blob to the local store, only for the fields the bridge
- *  manages. Other fields keep their current values. */
 function applyRemote(state: unknown) {
   if (!state || typeof state !== "object") return;
   const r = state as Partial<ReturnType<typeof persistedSlice>>;
@@ -90,6 +88,17 @@ function applyRemote(state: unknown) {
   });
 }
 
+function isLocalEmpty(state: ZustandStore): boolean {
+  return (
+    state.accounts.length === 0 &&
+    state.loans.length === 0 &&
+    state.incomes.length === 0 &&
+    state.rules.length === 0 &&
+    state.entries.length === 0 &&
+    state.monthlyBudget === 0
+  );
+}
+
 /**
  * Mount once at the root of the app. Hydrates from the server then pushes
  * subsequent store changes back. Failures are silent — the local Zustand
@@ -100,26 +109,46 @@ export function useRemoteStateSync(): void {
   const remoteAppliedRef = useRef(false);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 1. Pull on first hydration. Detect identity change — if the signed-in
-  //    user (or device id) differs from the last identity that wrote to
-  //    this browser, FORCE-REPLACE the local store from the remote blob.
-  //    Without this guard, a second user signing in on the same browser
-  //    would inherit the previous user's cached Zustand state when their
-  //    remote blob is older than the previous user's lastSyncedAt.
   useEffect(() => {
     if (!hydrated || remoteAppliedRef.current) return;
     let cancelled = false;
     (async () => {
-      const identity = await currentIdentity();
+      const session = await fetchSession();
+      const identity = identityFor(session);
       const previous =
         typeof window !== "undefined"
           ? window.localStorage.getItem("sally.lastIdentity")
           : null;
-      const identityChanged = previous !== null && previous !== identity;
-      if (typeof window !== "undefined" && identity) {
+
+      const isFirstEver = previous === null;
+      const isSameIdentity = previous === identity;
+      const isDeviceToUser =
+        previous?.startsWith("device:") && identity.startsWith("user:");
+      const isUserSwap =
+        previous?.startsWith("user:") &&
+        identity.startsWith("user:") &&
+        previous !== identity;
+
+      // ── Device → User: claim + migrate BEFORE we GET ────────────────
+      if (isDeviceToUser) {
+        try {
+          await fetch("/api/auth/claim-device", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deviceId: getOrCreateDeviceId() }),
+          });
+        } catch {
+          /* claim is best-effort — even if it fails the PUT loop below
+           *  will still push the local state up under the user scope. */
+        }
+      }
+
+      if (typeof window !== "undefined") {
         window.localStorage.setItem("sally.lastIdentity", identity);
       }
 
+      // ── Pull remote ─────────────────────────────────────────────────
       try {
         const res = await fetch("/api/state", {
           method: "GET",
@@ -131,32 +160,54 @@ export function useRemoteStateSync(): void {
         const data = (await res.json()) as {
           ok?: boolean;
           configured?: boolean;
-          blob?: { version: number; updatedAt: number; state: unknown } | null;
+          blob?: {
+            version: number;
+            updatedAt: number;
+            state: unknown;
+          } | null;
         };
 
-        // Identity changed and remote is empty → blank local so we don't
-        // leak the previous user's data into this session.
-        if (identityChanged && !data?.blob) {
-          applyRemote({});
+        const local = useFinanceStore.getState();
+        const localEmpty = isLocalEmpty(local);
+
+        // ── Apply / preserve policy ─────────────────────────────────
+        if (isUserSwap) {
+          // Account swap. The previous local data belongs to a DIFFERENT
+          // user — never push it under the new user's scope. Blank and
+          // apply whatever the new user has (which may be nothing).
+          if (data?.blob) {
+            applyRemote(data.blob.state);
+          } else {
+            applyRemote({});
+          }
           return;
         }
-        if (!data?.ok || !data.blob) return;
 
-        const local = useFinanceStore.getState();
-        const localEmpty =
-          local.accounts.length === 0 &&
-          local.loans.length === 0 &&
-          local.incomes.length === 0 &&
-          local.rules.length === 0 &&
-          local.entries.length === 0 &&
-          local.monthlyBudget === 0;
-        const remoteWins =
-          identityChanged ||
-          localEmpty ||
-          data.blob.updatedAt > (local.lastSyncedAt ?? 0);
-        if (remoteWins) {
-          applyRemote(data.blob.state);
+        if (isDeviceToUser) {
+          // The server-side claim above already merged our device blob
+          // into the user blob. The GET we just made will return that
+          // merged result. Apply it so local matches the canonical copy.
+          if (data?.blob) {
+            applyRemote(data.blob.state);
+          }
+          // If for some reason the GET returned no blob (claim 503'd
+          // for example), we deliberately DO NOT blank local — the
+          // local data is the user's own data on this device and the
+          // PUT loop will save it under the user scope on the next
+          // change.
+          return;
         }
+
+        if (isFirstEver || isSameIdentity) {
+          if (!data?.ok || !data.blob) return;
+          const remoteWins =
+            localEmpty || data.blob.updatedAt > (local.lastSyncedAt ?? 0);
+          if (remoteWins) applyRemote(data.blob.state);
+          return;
+        }
+
+        // Fallback: any other transition (user → device on sign-out) —
+        // leave local alone.
       } catch {
         /* offline — local store keeps app usable */
       } finally {
@@ -172,7 +223,6 @@ export function useRemoteStateSync(): void {
   useEffect(() => {
     if (!hydrated) return;
     const unsubscribe = useFinanceStore.subscribe((state, prev) => {
-      // Only react to changes in the persisted slice.
       const a = persistedSlice(state);
       const b = persistedSlice(prev);
       if (JSON.stringify(a) === JSON.stringify(b)) return;
