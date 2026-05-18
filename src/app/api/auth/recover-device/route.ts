@@ -19,6 +19,8 @@ import { auth } from "@/lib/auth/config";
 import {
   getUserState,
   isKvConfigured,
+  migrateTransactions,
+  pullTransactionsSince,
   saveUserState,
   type StateBlob,
 } from "@/lib/kv";
@@ -78,10 +80,20 @@ export async function GET(req: Request): Promise<Response> {
   if (!guard.ok) return fail(guard.status, guard.code);
 
   const { userBlob, deviceBlob } = await loadBlobs(userId, deviceId);
+  // Also report whether the device's transaction queue still holds rows
+  // — drives the recovery UI's "pending transactions found" hint even
+  // when the device state blob itself is empty.
+  const deviceTxCount = (
+    await pullTransactionsSince(
+      { kind: "device", id: deviceId },
+      0,
+    ).catch(() => [])
+  ).length;
   return Response.json({
     ok: true,
     user: summarize(userBlob),
     device: summarize(deviceBlob),
+    deviceTxCount,
   });
 }
 
@@ -115,6 +127,14 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
+  // Tx migration runs regardless of strategy — it's dedup-safe (SET-NX
+  // gate on externalId) and orphan rows in the device queue are always
+  // safe to fold into the user queue.
+  const txMigration = await migrateTransactions(
+    { kind: "device", id: deviceId },
+    { kind: "user", id: userId },
+  );
+
   if (strategy === "force-device") {
     const next: StateBlob = {
       version: deviceBlob.version,
@@ -125,6 +145,7 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({
       ok: true,
       migrated: "copied",
+      txMoved: txMigration.moved,
       user: summarize(userBlob),
       device: summarize(deviceBlob),
     });
@@ -141,6 +162,7 @@ export async function POST(req: Request): Promise<Response> {
   return Response.json({
     ok: true,
     migrated: plan.outcome,
+    txMoved: txMigration.moved,
     user: summarize(userBlob),
     device: summarize(deviceBlob),
   });

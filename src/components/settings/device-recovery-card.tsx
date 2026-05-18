@@ -17,7 +17,8 @@ type Probe =
   | {
       state: "available";
       user: Summary;
-      device: NonNullable<Summary>;
+      device: Summary;
+      deviceTxCount: number;
       deviceIsRicher: boolean;
       deviceIsNewer: boolean;
     };
@@ -82,22 +83,30 @@ export function DeviceRecoveryCard() {
         const data = (await res.json()) as {
           user: Summary;
           device: Summary;
+          deviceTxCount?: number;
         };
         if (cancelled) return;
 
-        if (!data.device || data.device.richness === 0) {
+        const deviceTxCount = data.deviceTxCount ?? 0;
+        const deviceRichness = data.device?.richness ?? 0;
+
+        // Nothing to recover when neither the state blob nor the tx
+        // queue has anything under the device prefix.
+        if (deviceRichness === 0 && deviceTxCount === 0) {
           setProbe({ state: "no-device-backup", user: data.user });
           return;
         }
 
         const userRichness = data.user?.richness ?? 0;
         const userUpdated = data.user?.updatedAt ?? 0;
+        const deviceUpdated = data.device?.updatedAt ?? 0;
         setProbe({
           state: "available",
           user: data.user,
           device: data.device,
-          deviceIsRicher: data.device.richness > userRichness,
-          deviceIsNewer: data.device.updatedAt > userUpdated,
+          deviceTxCount,
+          deviceIsRicher: deviceRichness > userRichness,
+          deviceIsNewer: deviceUpdated > userUpdated,
         });
       } catch {
         if (!cancelled) setProbe({ state: "no-device-backup", user: null });
@@ -126,12 +135,20 @@ export function DeviceRecoveryCard() {
         toast.error("שחזור נכשל");
         return;
       }
-      const data = (await res.json()) as { migrated?: string };
-      if (data.migrated === "no-op" || data.migrated === "kept-user") {
+      const data = (await res.json()) as {
+        migrated?: string;
+        txMoved?: number;
+      };
+      const stateChanged =
+        data.migrated && data.migrated !== "no-op" && data.migrated !== "kept-user";
+      const txMoved = data.txMoved ?? 0;
+      if (!stateChanged && txMoved === 0) {
         toast.info("הנתונים שלך כבר עדכניים");
       } else {
-        toast.success("הגיבוי שוחזר. טוען מחדש…");
-        // Hard reload so remote-state-sync re-pulls fresh /api/state.
+        const parts: string[] = [];
+        if (stateChanged) parts.push("נתונים שוחזרו");
+        if (txMoved > 0) parts.push(`${txMoved} חיובים הועברו`);
+        toast.success(`${parts.join(" · ")} · טוען מחדש…`);
         setTimeout(() => {
           window.location.reload();
         }, 400);
@@ -163,8 +180,20 @@ export function DeviceRecoveryCard() {
             גיבוי מקומי זמין
           </div>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            במכשיר הזה יש גיבוי מהתקופה לפני ההתחברות ל־Google. אם הדאשבורד
-            שלך לא מציג את הנתונים שאתה זוכר — אפשר לשחזר מכאן.
+            במכשיר הזה יש גיבוי מהתקופה לפני ההתחברות ל־Google.
+            {probe.deviceTxCount > 0 ? (
+              <>
+                {" "}
+                כולל{" "}
+                <strong className="text-foreground">
+                  {probe.deviceTxCount}
+                </strong>{" "}
+                חיובים שעוד לא הועברו לחשבון.
+              </>
+            ) : null}
+            {" "}
+            אם הדאשבורד שלך לא מציג את הנתונים שאתה זוכר — אפשר לשחזר
+            מכאן.
           </p>
         </div>
       </header>
@@ -180,8 +209,8 @@ export function DeviceRecoveryCard() {
         />
         <Stat
           label="גיבוי מקומי"
-          richness={probe.device.richness}
-          updatedAt={probe.device.updatedAt}
+          richness={probe.device?.richness ?? 0}
+          updatedAt={probe.device?.updatedAt ?? 0}
           highlight={probe.deviceIsRicher || probe.deviceIsNewer}
         />
       </div>
