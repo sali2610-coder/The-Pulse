@@ -24,6 +24,7 @@ import {
   getUserState,
   isKvConfigured,
   kv,
+  migrateTransactions,
   saveUserState,
 } from "@/lib/kv";
 import { planMigration, richnessScore } from "@/lib/state-merge";
@@ -82,9 +83,19 @@ export async function POST(req: Request): Promise<Response> {
     await saveUserState({ kind: "user", id: userId }, plan.blob);
   }
 
+  // 4. Migrate the transaction queue too. Without this, any wallet/SMS
+  //    rows that landed under the device prefix between sign-out and
+  //    sign-in would stay invisible to the signed-in dashboard, which
+  //    reads from the user prefix.
+  const txMigration = await migrateTransactions(
+    { kind: "device", id: deviceId },
+    { kind: "user", id: userId },
+  );
+
   return Response.json({
     ok: true,
     migrated: plan.outcome,
+    txMoved: txMigration.moved,
     userRichness: userBlob ? richnessScore(userBlob) : 0,
     deviceRichness: deviceBlob ? richnessScore(deviceBlob) : 0,
   });

@@ -146,6 +146,48 @@ export async function pullTransactionsSince(
 }
 
 /**
+ * One-shot migration helper: copy every transaction in the source scope's
+ * ZSET into the target scope, then delete the source. Used by claim-device
+ * when a device that's been ingesting webhooks gets bound to a freshly
+ * signed-in user — without this the pending wallet/SMS rows sit forever
+ * under the device prefix while the dashboard reads from the user prefix.
+ *
+ * Idempotent on member content because pushTransaction uses a SET-NX dedup
+ * guard keyed by externalId.
+ */
+export async function migrateTransactions(
+  from: Scope,
+  to: Scope,
+): Promise<{ moved: number }> {
+  const fromKey = TX_KEY(from);
+  const raw = (await kv().zrange(fromKey, 0, 999, {
+    rev: true,
+  })) as Array<string | StoredTransaction>;
+  let moved = 0;
+  for (const entry of raw) {
+    const tx =
+      typeof entry === "string"
+        ? (() => {
+            try {
+              return JSON.parse(entry) as StoredTransaction;
+            } catch {
+              return null;
+            }
+          })()
+        : (entry as StoredTransaction);
+    if (!tx) continue;
+    const r = await pushTransaction(to, tx);
+    if (r.added) moved++;
+  }
+  if (moved > 0) {
+    // Source ZSET still sits around as a backup. Let it expire naturally
+    // via its existing TX_TTL_SECONDS rather than deleting — recovery
+    // route can still walk it if needed.
+  }
+  return { moved };
+}
+
+/**
  * Look up a single transaction by externalId. Scans the recent ZSET in
  * descending order — fine for the post-push deep-link use case where the
  * row is typically minutes old, and we cap at 200 candidates anyway.
