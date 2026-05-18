@@ -1,6 +1,8 @@
 import {
   deletePushSubscription,
   getPushSubscription,
+  pushTransaction,
+  type StoredTransaction,
 } from "@/lib/kv";
 import {
   isPushConfigured,
@@ -17,9 +19,22 @@ function fail(status: number, code: string) {
 }
 
 /**
- * Fire a synthetic categorize push to the user's stored subscription so they
- * can verify the install/VAPID/Service-Worker chain end-to-end without
- * waiting for a real charge to land.
+ * Test push exercises the full Tap-to-Pulse pipeline end-to-end:
+ *
+ *   1. Persist a real pending transaction in KV under the caller's scope.
+ *      It's marked `needsConfirmation: true` so the dashboard's
+ *      PendingTray shows it and the engine excludes it from forecasts
+ *      until the user confirms.
+ *
+ *   2. Send the categorize push with that same `externalId`.
+ *      Tapping the notification deep-links into
+ *      `/confirm/<externalId>`, which loads the row via
+ *      `/api/transactions/pending/<externalId>` and opens the
+ *      ConfirmationSheet — the SAME flow real Wallet/SMS charges use.
+ *
+ *   3. Merchant is prefixed with `🧪` so the user can tell test rows
+ *      apart from real ones; the discard action in the sheet removes
+ *      them like any other entry.
  */
 export async function POST(req: Request): Promise<Response> {
   const scopeRes = await resolveRequestScope(req);
@@ -29,24 +44,47 @@ export async function POST(req: Request): Promise<Response> {
   const sub = await getPushSubscription(scopeRes.scope);
   if (!sub) return fail(404, "no_subscription");
 
-  const sample = {
-    kind: "categorize" as const,
-    externalId: `test:${Date.now()}`,
-    deviceId: scopeRes.scope.id,
-    amount: 42.9,
-    merchant: "שופרסל",
-    cardLast4: "1234",
-    categoryHint: "food",
-    occurredAt: new Date().toISOString(),
+  const now = Date.now();
+  const externalId = `test-${now.toString(36)}`;
+  const occurredAt = new Date(now).toISOString();
+  const merchant = "🧪 בדיקה";
+  const amount = 1.0;
+
+  const stored: StoredTransaction = {
+    externalId,
+    amount,
+    category: "other",
+    paymentMethod: "credit",
+    installments: 1,
+    issuer: "wallet",
+    source: "wallet",
+    merchant,
+    note: "התראת בדיקה — נוצרה מהגדרות Sally",
+    occurredAt,
+    receivedAt: now,
+    needsConfirmation: true,
+    rawNotificationBody: `Test ₪${amount} ${merchant}`,
   };
-  const result = await sendCategorizePush(sub, sample);
+
+  // Best-effort persist. If KV is down we still fire the push so the
+  // user sees the notification chain works.
+  await pushTransaction(scopeRes.scope, stored).catch(() => undefined);
+
+  const result = await sendCategorizePush(sub, {
+    kind: "categorize",
+    externalId,
+    deviceId: scopeRes.scope.id,
+    amount,
+    merchant,
+    categoryHint: "other",
+    occurredAt,
+  });
 
   if (result.gone) {
-    // Subscription is dead — clean up so next "enable" creates a fresh one.
     await deletePushSubscription(scopeRes.scope);
     return fail(410, "subscription_gone");
   }
   if (!result.ok) return fail(502, "push_failed");
 
-  return Response.json({ ok: true, externalId: sample.externalId });
+  return Response.json({ ok: true, externalId });
 }

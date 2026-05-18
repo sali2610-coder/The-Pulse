@@ -3,6 +3,7 @@ import {
   isKvConfigured,
   savePushSubscription,
   deletePushSubscription,
+  getPushSubscription,
 } from "@/lib/kv";
 import { resolveRequestScope } from "@/lib/scope-resolver";
 
@@ -19,6 +20,24 @@ const subscribeSchema = z.object({
 
 function fail(status: number, code: string) {
   return Response.json({ ok: false, error: code }, { status });
+}
+
+/** GET — does this scope have a saved push subscription? Used by the
+ *  client toggle to reconcile its UI with server state after a PWA
+ *  cold-start (iOS sometimes drops the in-browser PushSubscription
+ *  while the server still has a valid record). */
+export async function GET(req: Request): Promise<Response> {
+  const scopeRes = await resolveRequestScope(req);
+  if (!scopeRes.ok) return fail(scopeRes.status, scopeRes.code);
+  if (!isKvConfigured()) {
+    return Response.json({ ok: true, configured: false, subscribed: false });
+  }
+  const sub = await getPushSubscription(scopeRes.scope);
+  return Response.json({
+    ok: true,
+    configured: true,
+    subscribed: Boolean(sub),
+  });
 }
 
 export async function POST(req: Request): Promise<Response> {

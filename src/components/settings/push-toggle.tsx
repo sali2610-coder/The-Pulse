@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, BellOff, Send, ShieldAlert } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Loader2,
+  Send,
+  ShieldAlert,
+} from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { soft, tap } from "@/lib/haptics";
 import { toast } from "sonner";
 
 function scopeHeaders(): Record<string, string> {
-  // Always send device id. resolveRequestScope on the server picks the
-  // strongest available scope (session → claim → device), so the header is
-  // harmless when a session exists and load-bearing when it doesn't.
   return { "x-sally-device": getOrCreateDeviceId() };
 }
 
@@ -44,17 +47,87 @@ type Status =
   | "subscribed"
   | "idle";
 
+/**
+ * Persistence + reconciliation strategy:
+ *
+ * iOS Safari (especially in standalone PWA mode) can drop the in-browser
+ * PushSubscription between cold-starts even when both the SW and the
+ * server-side record are intact. Reading just `pushManager.getSubscription()`
+ * leads to false "off" — the toggle resets and the user keeps re-enabling
+ * something that's actually still active server-side.
+ *
+ * On mount we triangulate THREE signals:
+ *
+ *   1. Notification.permission                (browser)
+ *   2. pushManager.getSubscription()          (browser)
+ *   3. GET /api/push/subscribe (`subscribed`) (server / KV)
+ *
+ *   permission === "granted"
+ *     ∧ server says subscribed
+ *     ∧ local sub is missing
+ *       → silently re-subscribe (push the new endpoint to the server).
+ *
+ *   permission === "granted"
+ *     ∧ local sub exists
+ *       → "subscribed"
+ *
+ *   permission === "default"
+ *     ∧ server says subscribed
+ *       → server-record is stale; clean it up server-side and fall to
+ *         "idle" so the user can opt-in cleanly.
+ *
+ * The toggle never flips OFF unless the user explicitly disables, the
+ * browser denies permission, or VAPID/SW is misconfigured.
+ */
 export function PushToggle() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const [status, setStatus] = useState<Status>("loading");
   const [busy, setBusy] = useState(false);
+  // Once we've successfully reconciled on mount we mark this so a re-fire
+  // (e.g. visibility change) skips the silent-resubscribe attempt.
+  const reconciledRef = useRef(false);
 
+  const subscribeAndPersist = useCallback(
+    async (
+      reg: ServiceWorkerRegistration,
+    ): Promise<{ ok: boolean; reason?: string }> => {
+      try {
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+        const json = sub.toJSON() as {
+          endpoint?: string;
+          keys?: { p256dh?: string; auth?: string };
+        };
+        if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+          return { ok: false, reason: "invalid_subscription" };
+        }
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...scopeHeaders() },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+          }),
+        });
+        if (!res.ok) return { ok: false, reason: "persist_failed" };
+        return { ok: true };
+      } catch (err) {
+        return {
+          ok: false,
+          reason: err instanceof Error ? err.message : "subscribe_failed",
+        };
+      }
+    },
+    [],
+  );
+
+  // ── On-mount reconciliation ────────────────────────────────────────
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    // We do all probing in an async helper so the "set initial state" steps
-    // are mounted in a single transition rather than cascading via repeated
-    // synchronous setStates.
     (async () => {
       if (!isPushSupported()) {
         if (!cancelled) setStatus("unsupported");
@@ -64,30 +137,112 @@ export function PushToggle() {
         if (!cancelled) setStatus("no-vapid");
         return;
       }
-      if (Notification.permission === "denied") {
+      const perm = Notification.permission;
+      if (perm === "denied") {
         if (!cancelled) setStatus("denied");
         return;
       }
-      // `serviceWorker.ready` hangs forever when no SW is registered. Use
-      // `getRegistration()` which resolves to undefined fast. If no SW is
-      // active yet, we still allow the user to toggle on — `enable()` will
-      // register one on demand.
-      try {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (!reg) {
-          if (!cancelled) setStatus("idle");
+
+      // Probe server-side state in parallel with the browser-side state.
+      const [reg, serverState] = await Promise.all([
+        navigator.serviceWorker.getRegistration().catch(() => undefined),
+        fetch("/api/push/subscribe", {
+          method: "GET",
+          headers: scopeHeaders(),
+          credentials: "same-origin",
+          cache: "no-store",
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null) as Promise<{ subscribed?: boolean } | null>,
+      ]);
+
+      const serverHasSub = Boolean(serverState?.subscribed);
+      const localSub = reg ? await reg.pushManager.getSubscription() : null;
+
+      if (perm === "granted") {
+        if (localSub) {
+          if (!cancelled) {
+            setStatus("subscribed");
+            reconciledRef.current = true;
+          }
           return;
         }
-        const sub = await reg.pushManager.getSubscription();
-        if (!cancelled) setStatus(sub ? "subscribed" : "idle");
-      } catch {
+        // Permission granted but no local sub. If the server thinks we're
+        // subscribed (or even if it doesn't — we still have permission)
+        // silently re-subscribe so the toggle reflects reality.
+        if (reg && !reconciledRef.current) {
+          const result = await subscribeAndPersist(reg);
+          if (cancelled) return;
+          reconciledRef.current = true;
+          setStatus(result.ok ? "subscribed" : "idle");
+          if (!result.ok && serverHasSub) {
+            // Server record is stale and we can't refresh — purge it.
+            await fetch("/api/push/subscribe", {
+              method: "DELETE",
+              headers: scopeHeaders(),
+              credentials: "same-origin",
+            }).catch(() => undefined);
+          }
+          return;
+        }
+        // No SW registered yet — user must opt in to register one.
         if (!cancelled) setStatus("idle");
+        return;
       }
+
+      // Permission "default" (never asked). If the server somehow still has
+      // an orphan record, clear it so we don't lie to the user.
+      if (serverHasSub) {
+        await fetch("/api/push/subscribe", {
+          method: "DELETE",
+          headers: scopeHeaders(),
+          credentials: "same-origin",
+        }).catch(() => undefined);
+      }
+      if (!cancelled) setStatus("idle");
     })();
     return () => {
       cancelled = true;
     };
-  }, [hydrated]);
+  }, [hydrated, subscribeAndPersist]);
+
+  // ── Visibility recovery ────────────────────────────────────────────
+  // When the user comes back to the PWA after a long background, re-check
+  // that the subscription is still alive. iOS occasionally invalidates the
+  // endpoint silently; the server returns 410 on the next push.
+  useEffect(() => {
+    if (!hydrated) return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Notification.permission !== "granted") return;
+      navigator.serviceWorker
+        .getRegistration()
+        .then((reg) => reg?.pushManager.getSubscription())
+        .then((sub) => {
+          if (!sub) {
+            // Force a re-reconcile by toggling status; the mount effect
+            // depends on hydrated only, so we reuse the in-page handler.
+            setStatus("loading");
+            reconciledRef.current = false;
+            // Manually re-run the reconcile by reading from state — this
+            // is the cheapest path; we just trigger the same logic by
+            // bumping a key dep. Simpler: call the subscribe-and-persist
+            // helper directly.
+            navigator.serviceWorker.getRegistration().then(async (r) => {
+              if (!r) {
+                setStatus("idle");
+                return;
+              }
+              const result = await subscribeAndPersist(r);
+              setStatus(result.ok ? "subscribed" : "idle");
+            });
+          }
+        })
+        .catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [hydrated, subscribeAndPersist]);
 
   if (!hydrated) return null;
 
@@ -95,14 +250,9 @@ export function PushToggle() {
     if (busy) return;
     setBusy(true);
     try {
-      // Make sure a Service Worker is registered before we try to subscribe.
-      // RegisterSW intentionally never auto-registers — push opt-in is the
-      // ONE place where we want it. Register on demand.
       let reg = await navigator.serviceWorker.getRegistration();
       if (!reg) {
-        reg = await navigator.serviceWorker.register("/sw.js", {
-          scope: "/",
-        });
+        reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       }
       await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
@@ -111,32 +261,17 @@ export function PushToggle() {
         toast.warning("ההרשאה לא ניתנה");
         return;
       }
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
-      const json = sub.toJSON() as {
-        endpoint?: string;
-        keys?: { p256dh?: string; auth?: string };
-      };
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-        toast.error("רישום לא תקין");
-        return;
-      }
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...scopeHeaders() },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          endpoint: json.endpoint,
-          keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-        }),
-      });
-      if (!res.ok) {
-        toast.error("שמירת הרישום נכשלה");
+      const result = await subscribeAndPersist(reg);
+      if (!result.ok) {
+        toast.error(
+          result.reason === "persist_failed"
+            ? "שמירת הרישום נכשלה"
+            : "רישום ל־Web Push נכשל",
+        );
         return;
       }
       setStatus("subscribed");
+      reconciledRef.current = true;
       tap();
       toast.success("התראות הופעלו");
     } finally {
@@ -157,6 +292,7 @@ export function PushToggle() {
         credentials: "same-origin",
       });
       setStatus("idle");
+      reconciledRef.current = true;
       tap();
       toast.success("התראות בוטלו");
     } finally {
@@ -198,11 +334,14 @@ export function PushToggle() {
   };
 
   const isOn = status === "subscribed";
+  const isLoading = status === "loading";
 
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">
       <header className="mb-4 flex items-center gap-2">
-        {isOn ? (
+        {isLoading ? (
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        ) : isOn ? (
           <Bell className="size-4 text-neon" />
         ) : (
           <BellOff className="size-4 text-muted-foreground" />
@@ -217,7 +356,12 @@ export function PushToggle() {
         </div>
       </header>
 
-      {status === "unsupported" ? (
+      {status === "loading" ? (
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          בודק רישום קיים…
+        </div>
+      ) : status === "unsupported" ? (
         <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 p-2.5 text-[11px] text-muted-foreground">
           <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
           <span>
@@ -243,9 +387,6 @@ export function PushToggle() {
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          {/* iOS-style switch. Deterministic positioning via transform so the
-              knob always lands cleanly in RTL — the prior `ms-auto me-1`
-              approach didn't animate correctly inside RTL flex. */}
           <button
             type="button"
             onClick={isOn ? disable : enable}
