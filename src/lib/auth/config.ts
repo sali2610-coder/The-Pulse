@@ -57,7 +57,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     maxAge: 60 * 60 * 24 * 30, // 30 days
   },
   pages: {
-    signIn: "/sign-in",
+    // Welcome screen lives at root. Pointing NextAuth's signIn page here
+    // means middleware redirects + NextAuth's own redirects all converge
+    // on the same premium WelcomeScreen instead of bouncing through a
+    // separate /sign-in shell.
+    signIn: "/",
   },
   callbacks: {
     // Inject userId into the session so server routes can read it
