@@ -24,42 +24,14 @@ import {
   isKvConfigured,
   kv,
   saveUserState,
-  type StateBlob,
 } from "@/lib/kv";
+import { planMigration, richnessScore } from "@/lib/state-merge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function fail(status: number, code: string) {
   return Response.json({ ok: false, error: code }, { status });
-}
-
-type AnyBlobState = {
-  accounts?: unknown[];
-  loans?: unknown[];
-  incomes?: unknown[];
-  rules?: unknown[];
-  entries?: unknown[];
-  monthlyBudget?: number;
-} & Record<string, unknown>;
-
-function richnessScore(blob: StateBlob): number {
-  const s = (blob.state ?? {}) as AnyBlobState;
-  const count = (a?: unknown[]) => (Array.isArray(a) ? a.length : 0);
-  return (
-    count(s.accounts) +
-    count(s.loans) +
-    count(s.incomes) +
-    count(s.rules) +
-    count(s.entries) +
-    (typeof s.monthlyBudget === "number" && s.monthlyBudget > 0 ? 1 : 0)
-  );
-}
-
-function pickWinner(a: StateBlob, b: StateBlob): StateBlob {
-  if (a.updatedAt > b.updatedAt) return a;
-  if (b.updatedAt > a.updatedAt) return b;
-  return richnessScore(a) >= richnessScore(b) ? a : b;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -93,34 +65,18 @@ export async function POST(req: Request): Promise<Response> {
     getUserState({ kind: "device", id: deviceId }),
   ]);
 
-  let migrated: "copied" | "merged" | "kept-user" | "no-op" = "no-op";
-
-  if (!userBlob && deviceBlob) {
-    const next: StateBlob = {
-      version: deviceBlob.version,
-      updatedAt: Date.now(),
-      state: deviceBlob.state,
-    };
-    await saveUserState({ kind: "user", id: userId }, next);
-    migrated = "copied";
-  } else if (userBlob && deviceBlob) {
-    const winner = pickWinner(userBlob, deviceBlob);
-    if (winner !== userBlob) {
-      const next: StateBlob = {
-        version: winner.version,
-        updatedAt: Date.now(),
-        state: winner.state,
-      };
-      await saveUserState({ kind: "user", id: userId }, next);
-      migrated = "merged";
-    } else {
-      migrated = "kept-user";
-    }
+  const plan = planMigration({
+    userBlob,
+    deviceBlob,
+    now: Date.now(),
+  });
+  if (plan.blob) {
+    await saveUserState({ kind: "user", id: userId }, plan.blob);
   }
 
   return Response.json({
     ok: true,
-    migrated,
+    migrated: plan.outcome,
     userRichness: userBlob ? richnessScore(userBlob) : 0,
     deviceRichness: deviceBlob ? richnessScore(deviceBlob) : 0,
   });
