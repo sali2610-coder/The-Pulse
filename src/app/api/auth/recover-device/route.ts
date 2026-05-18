@@ -22,6 +22,7 @@ import {
   saveUserState,
   type StateBlob,
 } from "@/lib/kv";
+import { getDeviceClaimUserId } from "@/lib/scope-resolver";
 import { planMigration, richnessScore } from "@/lib/state-merge";
 
 export const runtime = "nodejs";
@@ -29,6 +30,22 @@ export const dynamic = "force-dynamic";
 
 function fail(status: number, code: string) {
   return Response.json({ ok: false, error: code }, { status });
+}
+
+/** Authorisation rule: the caller may read/restore a device blob only when
+ *  the device is either unclaimed (legacy / first-ever sign-in path) OR
+ *  already claimed by the caller's own user id. Anything else → 403, so
+ *  a signed-in attacker can't trawl other users' device backups by
+ *  guessing deviceIds. */
+async function assertOwnsDevice(
+  deviceId: string,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; status: number; code: string }> {
+  const claimed = await getDeviceClaimUserId(deviceId);
+  if (claimed && claimed !== userId) {
+    return { ok: false, status: 403, code: "device_claimed_by_other_user" };
+  }
+  return { ok: true };
 }
 
 async function loadBlobs(userId: string, deviceId: string) {
@@ -57,6 +74,9 @@ export async function GET(req: Request): Promise<Response> {
   const deviceId = url.searchParams.get("deviceId") ?? "";
   if (!deviceId) return fail(400, "missing_device_id");
 
+  const guard = await assertOwnsDevice(deviceId, userId);
+  if (!guard.ok) return fail(guard.status, guard.code);
+
   const { userBlob, deviceBlob } = await loadBlobs(userId, deviceId);
   return Response.json({
     ok: true,
@@ -82,6 +102,9 @@ export async function POST(req: Request): Promise<Response> {
     return fail(400, "missing_device_id");
   }
   const strategy = body?.strategy ?? "newest";
+
+  const guard = await assertOwnsDevice(deviceId, userId);
+  if (!guard.ok) return fail(guard.status, guard.code);
 
   const { userBlob, deviceBlob } = await loadBlobs(userId, deviceId);
   if (!deviceBlob) {

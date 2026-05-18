@@ -17,6 +17,7 @@
 import { auth } from "@/lib/auth/config";
 import {
   claimDeviceForUser,
+  getDeviceClaimUserId,
   releaseDeviceClaim,
 } from "@/lib/scope-resolver";
 import {
@@ -49,6 +50,13 @@ export async function POST(req: Request): Promise<Response> {
   const deviceId = (body as { deviceId?: string } | null)?.deviceId;
   if (typeof deviceId !== "string" || !deviceId) {
     return fail(400, "missing_device_id");
+  }
+
+  // 0. Refuse to steal a device that's already claimed by someone else.
+  //    Unclaimed devices fall through to the claim step below.
+  const existingClaim = await getDeviceClaimUserId(deviceId);
+  if (existingClaim && existingClaim !== userId) {
+    return fail(403, "device_claimed_by_other_user");
   }
 
   // 1. Record the claim — webhook lookups now route to this user.
