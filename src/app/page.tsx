@@ -15,11 +15,22 @@ import { WelcomeScreen } from "@/components/auth/welcome-screen";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: Promise<{ callbackUrl?: string }>;
+}) {
   if (isAuthEnabled()) {
     const session = await auth();
     if (!session?.user) {
-      return <WelcomeScreen callbackUrl="/" />;
+      const sp = (await searchParams) ?? {};
+      const raw = sp.callbackUrl;
+      // Only honor same-origin relative paths to prevent open redirects.
+      const callback =
+        typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//")
+          ? raw
+          : "/";
+      return <WelcomeScreen callbackUrl={callback} />;
     }
   }
   return <AppShell />;
