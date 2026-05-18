@@ -359,3 +359,18 @@ main[data-danger="true"] [data-tone="accent"] {
   color: #F87171 !important;
   border-color: rgba(248, 113, 113, 0.5) !important;
 }
+@keyframes shimmer-skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-skeleton {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.03) 30%,
+    rgba(0, 229, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.03) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-skeleton 1.6s ease-in-out infinite;
+}
