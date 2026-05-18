@@ -6,7 +6,6 @@ import { Loader2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 import type { CategoryId } from "@/lib/categories";
 import { categorize } from "@/lib/parsers";
 import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet";
@@ -54,10 +53,13 @@ export function ConfirmPageClient({ externalId }: { externalId: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const headers: Record<string, string> = {};
-        if (!AUTH_ENABLED) {
-          headers["x-sally-device"] = getOrCreateDeviceId();
-        }
+        // Always send device id — the server picks the strongest scope
+        // (NextAuth session → device-claim → bare device) via
+        // resolveRequestScope, so the header is harmless when a session
+        // exists and load-bearing when it doesn't.
+        const headers: Record<string, string> = {
+          "x-sally-device": getOrCreateDeviceId(),
+        };
         const res = await fetch(
           `/api/transactions/pending/${encodeURIComponent(externalId)}`,
           { method: "GET", headers, cache: "no-store" },

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowDownToLine,
@@ -12,7 +11,6 @@ import {
 } from "lucide-react";
 import { CopyChip } from "./copy-chip";
 import { useFinanceStore } from "@/lib/store";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 import { PROD_WEBHOOK_URL } from "@/lib/prod-config";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 
@@ -29,36 +27,13 @@ const SAMPLE_BANK_SMS = `לקוח יקר, בוצעה עסקה בכרטיסך ה�
  */
 export function ShortcutVisual() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!AUTH_ENABLED || !hydrated) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/token", {
-          credentials: "same-origin",
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { token: string | null };
-        if (!cancelled) setToken(data.token);
-      } catch {
-        /* swallow */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [hydrated]);
-
-  // Derive origin synchronously from window. Safe because this is a "use
-  // client" component — the SSR pass falls back to the production URL,
-  // which is correct anyway.
-  // Always pin to the stable production URL — preview hashes would
-  // silently rot iOS Shortcuts that users wired up earlier.
+  if (!hydrated) {
+    // Defer to client hydration so deviceId comes from localStorage.
+  }
+  // Pin to the stable production URL — preview hashes would silently rot
+  // iOS Shortcuts that users wired up earlier.
   const webhookUrl = PROD_WEBHOOK_URL;
   const deviceId = getOrCreateDeviceId();
-  void token;
 
   return (
     <div className="space-y-5">

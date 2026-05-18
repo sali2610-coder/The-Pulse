@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 
 // Bridges the local Zustand store to the server-side state route.
 //
@@ -34,7 +33,6 @@ function scopeHeaders(): Record<string, string> {
   // strongest signal available (NextAuth session → device-claim → bare
   // device id), so the header is harmless when a session exists and load-
   // bearing when it doesn't.
-  void AUTH_ENABLED;
   return { "x-sally-device": getOrCreateDeviceId() };
 }
 

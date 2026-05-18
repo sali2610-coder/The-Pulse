@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Apple,
   ArrowLeft,
-  KeyRound,
   Smartphone,
-  UserCheck,
   Workflow,
 } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { isStandalonePWA, isIOS } from "@/lib/pwa-detect";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 import { PROD_WEBHOOK_URL } from "@/lib/prod-config";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 
@@ -20,13 +16,6 @@ import { StepCard, type StepState } from "./step-card";
 import { ShortcutCheatsheet } from "./shortcut-cheatsheet";
 import { TestConnection } from "./test-connection";
 import { WebhookDiagnostics } from "./diagnostics";
-import { CopyChip } from "./copy-chip";
-import { Button } from "@/components/ui/button";
-
-type TokenState =
-  | { kind: "loading" }
-  | { kind: "none" }
-  | { kind: "ready"; token: string };
 
 type SetupGuideProps = {
   onBack?: () => void;
@@ -34,75 +23,17 @@ type SetupGuideProps = {
 
 export function SetupGuide({ onBack }: SetupGuideProps = {}) {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
-  const [tokenState, setTokenState] = useState<TokenState>(() =>
-    AUTH_ENABLED ? { kind: "loading" } : { kind: "none" },
-  );
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!AUTH_ENABLED) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/token", {
-          credentials: "same-origin",
-        });
-        if (!res.ok) {
-          if (!cancelled) setTokenState({ kind: "none" });
-          return;
-        }
-        const data = (await res.json()) as { token: string | null };
-        if (cancelled) return;
-        setTokenState(
-          data.token ? { kind: "ready", token: data.token } : { kind: "none" },
-        );
-      } catch {
-        if (!cancelled) setTokenState({ kind: "none" });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const generateToken = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/auth/token", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as { token: string };
-      setTokenState({ kind: "ready", token: data.token });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   if (!hydrated) return null;
   if (typeof window === "undefined") return null;
 
-  // Hydrated + on the client — derive client-only values directly.
   const standalone = isStandalonePWA();
   const appleHints = isIOS();
-  const token = tokenState.kind === "ready" ? tokenState.token : null;
-  // Stable production webhook URL — never preview hash deployments.
   const webhookUrl = PROD_WEBHOOK_URL;
   const deviceId = getOrCreateDeviceId();
 
-  // Step states.
   const pwaState: StepState = standalone ? "done" : "current";
-  const authState: StepState = AUTH_ENABLED ? "done" : "pending";
-  const tokenStepState: StepState =
-    tokenState.kind === "ready"
-      ? "done"
-      : pwaState === "done" && authState === "done"
-        ? "current"
-        : "pending";
-  const shortcutState: StepState =
-    tokenStepState === "done" ? "current" : "pending";
+  const shortcutState: StepState = standalone ? "current" : "pending";
 
   return (
     <div className="space-y-4">
@@ -159,73 +90,9 @@ export function SetupGuide({ onBack }: SetupGuideProps = {}) {
         )}
       </StepCard>
 
-      {/* Step 2 — Auth */}
+      {/* Step 2 — Shortcut */}
       <StepCard
         number={2}
-        title="התחברות"
-        subtitle="כל משתמש רואה רק את הנתונים שלו"
-        state={authState}
-        accent="#00E5FF"
-        icon={<UserCheck className="size-5" />}
-      >
-        {AUTH_ENABLED ? (
-          <p className="text-[12px] text-muted-foreground">
-            אתה מחובר. ההגדרות, הטוקן, וההיסטוריה שמורים תחת חשבון Clerk שלך
-            ולא נגישים למשתמשים אחרים. לסיום הסשן: כפתור הפרופיל למעלה →{" "}
-            <strong className="text-foreground">Sign out</strong>.
-          </p>
-        ) : (
-          <p className="text-[12px] text-muted-foreground">
-            האתר רץ במצב single-user. כדי להפעיל מצב רב־משתמשים צריך להגדיר את
-            Clerk envs ולקבוע{" "}
-            <code className="font-mono">NEXT_PUBLIC_AUTH_ENABLED=true</code>.
-          </p>
-        )}
-      </StepCard>
-
-      {/* Step 3 — Personal API Token */}
-      <StepCard
-        number={3}
-        title="Personal API Token"
-        subtitle="המפתח האישי שמכניס חיובים ל־Pulse שלך"
-        state={tokenStepState}
-        accent="#D4AF37"
-        icon={<KeyRound className="size-5" />}
-      >
-        {!AUTH_ENABLED ? (
-          <p className="text-[12px] text-muted-foreground">
-            דרוש מצב רב־משתמשים (שלב 2). במצב single-user ה־Shortcut משתמש ב־
-            <code className="font-mono">WEBHOOK_SECRET</code> הגלובלי במקום
-            בטוקן אישי.
-          </p>
-        ) : token ? (
-          <div className="space-y-2">
-            <CopyChip label="Bearer Token" value={token} />
-            <p className="text-[11px] text-muted-foreground">
-              זה הסוד היחיד שמגן על הנתונים שלך. שמור אותו ב־iCloud Keychain
-              או ב־Notes מאובטח. רענון יבטל את הישן מיידית.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-[12px] text-muted-foreground">
-              עוד לא יצרת טוקן. צור עכשיו והעתק לשלב 4.
-            </p>
-            <Button
-              type="button"
-              onClick={generateToken}
-              disabled={busy}
-              className="h-9 bg-gold/90 text-[#0a0a0a] hover:bg-gold"
-            >
-              צור טוקן
-            </Button>
-          </div>
-        )}
-      </StepCard>
-
-      {/* Step 4 — Shortcut */}
-      <StepCard
-        number={4}
         title="iOS Shortcut"
         subtitle="כל SMS חיוב שמגיע יעבור דרך ההגדרה הזו"
         state={shortcutState}
@@ -282,9 +149,10 @@ function Intro() {
         חבר SMS בנק ל־Pulse.
       </h1>
       <p className="mt-2 text-[12px] text-muted-foreground">
-        4 שלבים. מומלץ רק כשאין גישה ל־Apple Wallet automation (לדוגמה: iOS
-        מתחת ל־18, או חיובים שלא עוברים דרך Apple Pay). בקרוב — תיהנה
-        מ־PendingTray עם אישור במגע מכל חיוב SMS שמגיע.
+        2 שלבים בלבד. מומלץ רק כשאין גישה ל־Apple Wallet automation (לדוגמה:
+        iOS מתחת ל־18, או חיובים שלא עוברים דרך Apple Pay). ה־Shortcut מזהה
+        את ה־PWA דרך מזהה המכשיר ושומר את החיובים תחת החשבון שלך — בלי טוקנים
+        ידניים.
       </p>
     </motion.section>
   );

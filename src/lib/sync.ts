@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { playSyncChime } from "@/lib/chime";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 import type { CategoryId } from "@/lib/categories";
 import type { Issuer, PaymentMethod } from "@/types/finance";
 type FinanceStoreApi = typeof useFinanceStore;
@@ -47,10 +46,11 @@ const POLL_INTERVAL_MS = 60_000; // background poll every minute when visible
 async function fetchSync(since: number): Promise<FetchOutcome> {
   try {
     const url = `/api/transactions/sync?since=${since}`;
-    // In multi-user mode the Clerk session cookie carries identity. In legacy
-    // single-user mode the server expects an x-sally-device header.
-    const headers: Record<string, string> = {};
-    if (!AUTH_ENABLED) headers["x-sally-device"] = getOrCreateDeviceId();
+    // Always send device id — server's resolveRequestScope picks the
+    // strongest signal (NextAuth session → device-claim → bare device id).
+    const headers: Record<string, string> = {
+      "x-sally-device": getOrCreateDeviceId(),
+    };
     const res = await fetch(url, {
       method: "GET",
       headers,

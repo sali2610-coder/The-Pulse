@@ -7,10 +7,12 @@ import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { soft, tap } from "@/lib/haptics";
 import { toast } from "sonner";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 
 function scopeHeaders(): Record<string, string> {
-  return AUTH_ENABLED ? {} : { "x-sally-device": getOrCreateDeviceId() };
+  // Always send device id. resolveRequestScope on the server picks the
+  // strongest available scope (session → claim → device), so the header is
+  // harmless when a session exists and load-bearing when it doesn't.
+  return { "x-sally-device": getOrCreateDeviceId() };
 }
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";

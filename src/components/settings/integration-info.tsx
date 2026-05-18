@@ -11,7 +11,6 @@ import {
   DEVICE_ID_ROTATION_DAYS,
 } from "@/lib/device-id";
 import { tap } from "@/lib/haptics";
-import { AUTH_ENABLED } from "@/lib/auth-config";
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -126,7 +125,7 @@ export function IntegrationInfo() {
         </div>
       </header>
 
-      {!AUTH_ENABLED && dueRotation ? (
+      {dueRotation ? (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -140,7 +139,7 @@ export function IntegrationInfo() {
       ) : null}
 
       <div className="space-y-2">
-        {!AUTH_ENABLED ? <CopyRow label="Device ID" value={deviceId} /> : null}
+        <CopyRow label="Device ID" value={deviceId} />
         <CopyRow label="Webhook URL" value={webhookUrl} />
       </div>
 
@@ -151,22 +150,14 @@ export function IntegrationInfo() {
         </span>
       </div>
 
-      {!AUTH_ENABLED ? (
-        <button
-          type="button"
-          onClick={handleRotate}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-gold/50 hover:text-foreground"
-        >
-          <RotateCcw className="size-3" />
-          רענן Device ID
-        </button>
-      ) : (
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          במצב רב־משתמשים: ה־Shortcut מאומת דרך{" "}
-          <strong className="text-foreground">Personal API Token</strong>{" "}
-          (כרטיס למעלה) — לא Device ID.
-        </p>
-      )}
+      <button
+        type="button"
+        onClick={handleRotate}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-gold/50 hover:text-foreground"
+      >
+        <RotateCcw className="size-3" />
+        רענן Device ID
+      </button>
     </section>
   );
 }
