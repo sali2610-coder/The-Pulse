@@ -3,6 +3,7 @@ import {
   getPushSubscription,
   pushTransaction,
   recordPushAttempt,
+  removeTransaction,
   type StoredTransaction,
 } from "@/lib/kv";
 import {
@@ -15,6 +16,13 @@ import { resolveRequestScope } from "@/lib/scope-resolver";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Stable externalId for the synthetic test transaction. Reused across
+ * every "שלח התראת בדיקה" click so we don't accumulate one duplicate
+ * pending row per click.
+ */
+const TEST_EXTERNAL_ID = "sally-test-push";
+
 function fail(status: number, code: string, extra?: Record<string, unknown>) {
   return Response.json(
     { ok: false, error: code, ...(extra ?? {}) },
@@ -22,17 +30,6 @@ function fail(status: number, code: string, extra?: Record<string, unknown>) {
   );
 }
 
-/**
- * Test push exercises the full Tap-to-Pulse pipeline end-to-end:
- *
- *   1. Persist a real pending transaction in KV under the caller's scope.
- *   2. Send the categorize push with that same `externalId`. Tapping the
- *      notification deep-links to /confirm/<externalId>, which loads the
- *      row via /api/transactions/pending/<id> and opens ConfirmationSheet.
- *   3. Echo back the full push-service response shape so the caller can
- *      surface diagnostic info (endpoint host, push-service status,
- *      reason tag) when the notification doesn't appear on the device.
- */
 export async function POST(req: Request): Promise<Response> {
   const scopeRes = await resolveRequestScope(req);
   if (!scopeRes.ok) return fail(scopeRes.status, scopeRes.code);
@@ -44,18 +41,17 @@ export async function POST(req: Request): Promise<Response> {
     return fail(404, "no_subscription");
   }
 
-  console.info(
-    `[push-test] scope=${scopeRes.scope.kind}:${scopeRes.scope.id.slice(0, 8)}… endpoint=${sub.endpoint.slice(0, 80)}…`,
-  );
+  // Drop any prior test row so we don't keep stacking duplicates in
+  // either the tx ZSET or the webhook log diagnostics.
+  await removeTransaction(scopeRes.scope, TEST_EXTERNAL_ID).catch(() => undefined);
 
   const now = Date.now();
-  const externalId = `test-${now.toString(36)}`;
   const occurredAt = new Date(now).toISOString();
   const merchant = "🧪 בדיקה";
   const amount = 1.0;
 
   const stored: StoredTransaction = {
-    externalId,
+    externalId: TEST_EXTERNAL_ID,
     amount,
     category: "other",
     paymentMethod: "credit",
@@ -63,12 +59,16 @@ export async function POST(req: Request): Promise<Response> {
     issuer: "wallet",
     source: "wallet",
     merchant,
-    note: "התראת בדיקה — נוצרה מהגדרות Sally",
+    note: "התראת בדיקה — לחיצה תפתח את מסך האישור",
     occurredAt,
     receivedAt: now,
     needsConfirmation: true,
     rawNotificationBody: `Test ₪${amount} ${merchant}`,
   };
+
+  console.info(
+    `[push-test] scope=${scopeRes.scope.kind}:${scopeRes.scope.id.slice(0, 8)}… endpoint=${sub.endpoint.slice(0, 80)}…`,
+  );
 
   await pushTransaction(scopeRes.scope, stored).catch((err) => {
     console.error("[push-test] pushTransaction failed", err);
@@ -76,11 +76,12 @@ export async function POST(req: Request): Promise<Response> {
 
   const result = await sendCategorizePush(sub, {
     kind: "categorize",
-    externalId,
+    externalId: TEST_EXTERNAL_ID,
     deviceId: scopeRes.scope.id,
     amount,
     merchant,
-    categoryHint: "other",
+    // No categoryHint — keeps SW from rendering quick-confirm actions
+    // that would short-circuit the body tap on small notification UIs.
     occurredAt,
   });
 
@@ -91,7 +92,7 @@ export async function POST(req: Request): Promise<Response> {
     status: result.status,
     reason: result.reason,
     endpointHost: result.endpointHost,
-    externalId,
+    externalId: TEST_EXTERNAL_ID,
   }).catch(() => undefined);
 
   if (result.gone) {
@@ -110,7 +111,7 @@ export async function POST(req: Request): Promise<Response> {
 
   return Response.json({
     ok: true,
-    externalId,
+    externalId: TEST_EXTERNAL_ID,
     pushStatus: result.status,
     endpointHost: result.endpointHost,
   });

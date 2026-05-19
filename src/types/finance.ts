@@ -96,6 +96,11 @@ export type ExpenseEntry = {
   /** Multi-account: which Account this entry is bound to. Optional for
    *  legacy entries; resolution falls back to (issuer + cardLast4). */
   accountId?: string;
+  /** User opt-out: when true the entry is preserved in history but
+   *  excluded from monthly budget totals + actualSpentThisMonth. Used
+   *  for one-off reimbursable items or test rows the user wants to
+   *  track but not count. */
+  excludeFromBudget?: boolean;
 };
 
 /** Recurring outflow. Two flavours share this shape:

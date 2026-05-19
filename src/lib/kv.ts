@@ -221,6 +221,41 @@ export async function migrateTransactions(
 }
 
 /**
+ * Remove every ZSET member with the given externalId AND drop the
+ * SET-NX seen flag, so a fresh `pushTransaction` with the same id can
+ * replace it. Used by the test-push endpoint to keep a single "🧪
+ * בדיקה" row instead of accumulating one per click.
+ */
+export async function removeTransaction(
+  scope: Scope,
+  externalId: string,
+): Promise<{ removed: number }> {
+  const key = TX_KEY(scope);
+  const raw = (await kv().zrange(key, 0, 999, {
+    rev: true,
+  })) as Array<string | StoredTransaction>;
+  let removed = 0;
+  for (const entry of raw) {
+    const tx =
+      typeof entry === "string"
+        ? (() => {
+            try {
+              return JSON.parse(entry) as StoredTransaction;
+            } catch {
+              return null;
+            }
+          })()
+        : (entry as StoredTransaction);
+    if (!tx || tx.externalId !== externalId) continue;
+    const member = typeof entry === "string" ? entry : JSON.stringify(entry);
+    await kv().zrem(key, member);
+    removed++;
+  }
+  await kv().del(TX_SEEN_KEY(scope, externalId));
+  return { removed };
+}
+
+/**
  * Look up a single transaction by externalId. Scans the recent ZSET in
  * descending order — fine for the post-push deep-link use case where the
  * row is typically minutes old, and we cap at 200 candidates anyway.

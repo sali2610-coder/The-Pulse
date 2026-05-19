@@ -116,6 +116,7 @@ type Actions = {
       installments: number;
       accountId: string;
       paymentMethod: PaymentMethod;
+      excludeFromBudget: boolean;
     }>,
   ) => ExpenseEntry | undefined;
   /** Drop a Wallet-pending entry the user declined ("not mine"). */
@@ -350,6 +351,9 @@ export const useFinanceStore = create<State & Actions>()(
               ...(patch?.accountId ? { accountId: patch.accountId } : {}),
               ...(patch?.paymentMethod
                 ? { paymentMethod: patch.paymentMethod }
+                : {}),
+              ...(patch?.excludeFromBudget !== undefined
+                ? { excludeFromBudget: patch.excludeFromBudget || undefined }
                 : {}),
               needsConfirmation: undefined,
               confirmedAt: new Date().toISOString(),

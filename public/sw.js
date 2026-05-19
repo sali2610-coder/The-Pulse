@@ -6,7 +6,7 @@
 // Web Push notifications and route the user back into the app when they
 // tap one.
 
-const SW_VERSION = "sally-push-v3";
+const SW_VERSION = "sally-push-v4";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -138,16 +138,10 @@ self.addEventListener("push", (event) => {
     ? bodyParts.join(" · ")
     : "Sally — בחר קטגוריה";
 
-  const actions = hint
-    ? [
-        { action: `confirm:${payload.categoryHint}`, title: `אישור — ${hint.label}` },
-        { action: "edit", title: "ערוך" },
-      ]
-    : [
-        { action: "food", title: "אוכל" },
-        { action: "transport", title: "תחבורה" },
-      ];
-
+  // No action buttons. Tapping anywhere on the notification (body OR
+  // action area) must open the confirmation sheet — quick-confirm
+  // shortcuts were hijacking taps on iOS where the body region is
+  // narrow and easy to mis-tap.
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
@@ -161,7 +155,6 @@ self.addEventListener("push", (event) => {
         deviceId: payload.deviceId,
         categoryHint: payload.categoryHint || null,
       },
-      actions,
     }),
   );
 });
@@ -170,60 +163,80 @@ self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
   event.notification.close();
 
-  // Alert push — just deep-link to the supplied href.
+  // Alert push — deep-link to the supplied href.
   if (data.href && !data.externalId) {
-    event.waitUntil(focusOrOpen(data.href));
+    event.waitUntil(openClient(data.href));
     return;
   }
 
   const externalId = data.externalId;
-  const action = event.action;
   if (!externalId) return;
 
-  let quickCategory = null;
-  if (action === "food") quickCategory = "food";
-  else if (action === "transport") quickCategory = "transport";
-  else if (action && action.startsWith("confirm:")) {
-    quickCategory = action.slice("confirm:".length);
-  }
-
-  if (quickCategory) {
-    event.waitUntil(
-      fetch("/api/push/categorize", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-sally-device": data.deviceId || "",
-        },
-        body: JSON.stringify({ externalId, category: quickCategory }),
-        keepalive: true,
-      })
-        .catch(() => undefined)
-        .then(() => focusOrOpen("/")),
-    );
-    return;
-  }
-
-  event.waitUntil(focusOrOpen(`/confirm/${encodeURIComponent(externalId)}`));
+  const target = `/confirm/${encodeURIComponent(externalId)}`;
+  console.info("[sw] notificationclick → ", target);
+  event.waitUntil(openClient(target, { externalId }));
 });
 
-async function focusOrOpen(path) {
+/**
+ * Open the PWA at `path` and tell every controlled client where to go.
+ *
+ * iOS Safari PWA has two known quirks that conspire against the
+ * notification → deep-link flow:
+ *
+ *   1. `WindowClient.navigate()` succeeds but sometimes doesn't actually
+ *      change the URL in a standalone PWA — the focus call wins and the
+ *      tab stays on whatever it was showing.
+ *   2. `clients.openWindow()` returns null when the PWA is already open
+ *      in standalone mode, leaving the user staring at the previous
+ *      screen.
+ *
+ * Mitigation: always postMessage every controlled client BEFORE the
+ * navigate/openWindow attempt. The app listens for the message and
+ * performs the navigation client-side via the Next router, which works
+ * regardless of which iOS quirk hits.
+ */
+async function openClient(path, meta) {
   const target = path || "/";
+  const externalId = meta && meta.externalId ? meta.externalId : null;
   const list = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
   });
+
+  // 1. postMessage every client first.
   for (const client of list) {
-    if ("focus" in client && "navigate" in client) {
+    try {
+      client.postMessage({
+        type: "sally:pending-confirm",
+        externalId,
+        path: target,
+        ts: Date.now(),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2. Try to focus + navigate an existing client.
+  for (const client of list) {
+    if ("focus" in client) {
       try {
         await client.focus();
-        await client.navigate(target);
+        if ("navigate" in client && client.url !== target) {
+          try {
+            await client.navigate(target);
+          } catch {
+            /* navigate may fail on iOS standalone — postMessage covers it */
+          }
+        }
         return;
       } catch {
         /* fall through */
       }
     }
   }
+
+  // 3. No existing client → open a fresh window.
   if (self.clients.openWindow) {
     await self.clients.openWindow(target);
   }

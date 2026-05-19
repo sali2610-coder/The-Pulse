@@ -35,6 +35,9 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
   const [installments, setInstallments] = useState(entry.installments);
   const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [includeInBudget, setIncludeInBudget] = useState(
+    !entry.excludeFromBudget,
+  );
   // Re-syncing on `entry.id` change is handled by the parent passing a
   // `key={entry.id}` so this component remounts with fresh local state.
 
@@ -55,6 +58,7 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
       merchant: merchant.trim(),
       category,
       installments,
+      excludeFromBudget: !includeInBudget,
     });
     success();
     toast.success("החיוב אושר", {
@@ -200,6 +204,49 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
           </div>
         )}
 
+        {/* Budget inclusion toggle */}
+        <motion.label
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.14, duration: 0.32 }}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-surface/40 px-4 py-3"
+        >
+          <div className="flex flex-col gap-0.5 text-right">
+            <span className="text-sm font-medium text-foreground">
+              כלול בתקציב החודשי
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {includeInBudget
+                ? "החיוב נספר ב־actualSpentThisMonth"
+                : "נשמר בהיסטוריה, לא נספר בתקציב"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              tap();
+              setIncludeInBudget((v) => !v);
+            }}
+            dir="ltr"
+            aria-pressed={includeInBudget}
+            className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors ${
+              includeInBudget
+                ? "border-[color:var(--neon)]/70 bg-[color:var(--neon)]/20"
+                : "border-white/20 bg-background/40"
+            }`}
+          >
+            <motion.span
+              initial={false}
+              animate={{
+                left: includeInBudget ? "22px" : "2px",
+                backgroundColor: includeInBudget ? "#00E5FF" : "#A1A1AA",
+              }}
+              transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              className="absolute top-1/2 block size-5 -translate-y-1/2 rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.4)]"
+            />
+          </button>
+        </motion.label>
+
         {/* Action buttons — large, green/red, premium feel */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -213,7 +260,7 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
             className="btn-confirm flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-transform active:scale-[0.99]"
           >
             <Check className="h-5 w-5" strokeWidth={2.2} />
-            אשר חיוב
+            אשר והוסף
           </button>
 
           <div className="flex gap-2">

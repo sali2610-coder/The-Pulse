@@ -192,6 +192,7 @@ export function buildFinancialSnapshot(args: {
     if (entry.needsConfirmation) continue;
     if (entry.bankPending) continue;
     if (entry.isRefund) continue;
+    if (entry.excludeFromBudget) continue;
     if (entry.currency && entry.currency !== "ILS") continue;
     const slice = sliceForMonth(entry, monthKey);
     if (!slice) continue;

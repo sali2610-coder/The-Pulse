@@ -19,6 +19,7 @@ import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
 import { ErrorBoundary, PageFallback } from "@/components/error-boundary";
+import { PendingConfirmListener } from "@/components/app/pending-confirm-listener";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -115,6 +116,7 @@ function AppShellContent() {
       </div>
 
       <AutoSync />
+      <PendingConfirmListener />
       {isDev ? <SeedPanel /> : null}
     </main>
   );
