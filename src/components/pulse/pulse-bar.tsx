@@ -115,10 +115,17 @@ export function PulseBar({ budget }: Props) {
 
   const noBudget = !budget || budget <= 0;
 
-  const fillPct = noBudget ? 0 : Math.min(100, (actual / scaleMax) * 100);
-  const projectedPct = noBudget
+  // Floor non-zero progress to 1.5% so 1₪ over an 8000₪ budget still
+  // shows a visible sliver — otherwise the bar looks empty and the user
+  // thinks small expenses didn't register.
+  const rawFillPct = noBudget ? 0 : Math.min(100, (actual / scaleMax) * 100);
+  const fillPct =
+    actual > 0 && rawFillPct < 1.5 ? 1.5 : rawFillPct;
+  const rawProjectedPct = noBudget
     ? 0
     : Math.min(100, (projected / scaleMax) * 100);
+  const projectedPct =
+    projected > 0 && rawProjectedPct < 1.5 ? 1.5 : rawProjectedPct;
   const budgetPct = noBudget ? 0 : Math.min(100, (budget / scaleMax) * 100);
   const benchmarkPct = noBudget
     ? 0

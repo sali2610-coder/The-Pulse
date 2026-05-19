@@ -134,9 +134,12 @@ export function ConfirmPageClient({ externalId }: { externalId: string }) {
     }
   }
 
+  // Render a full-bleed dark backdrop the moment we mount so the user
+  // never sees a flash of dashboard chrome between notification tap and
+  // confirmation sheet appearing.
   if (loading) {
     return (
-      <main className="flex min-h-[80dvh] items-center justify-center">
+      <main className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md">
         <Loader2
           className="h-6 w-6 animate-spin text-muted-foreground"
           strokeWidth={1.6}
@@ -147,7 +150,7 @@ export function ConfirmPageClient({ externalId }: { externalId: string }) {
 
   if (error || !seededEntry) {
     return (
-      <main className="flex min-h-[80dvh] flex-col items-center justify-center gap-3 px-6 text-center">
+      <main className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center backdrop-blur-md">
         <h1 className="text-xl font-semibold text-foreground">
           לא מצאנו את החיוב
         </h1>
@@ -165,8 +168,11 @@ export function ConfirmPageClient({ externalId }: { externalId: string }) {
     );
   }
 
+  // Full-bleed dark backdrop — confirmation sheet feels like a popup,
+  // never a "page". After handleClose's router.replace("/") the dashboard
+  // takes over.
   return (
-    <main className="min-h-[80dvh]">
+    <main className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md">
       <ConfirmationSheet
         open={open}
         onOpenChange={handleClose}
