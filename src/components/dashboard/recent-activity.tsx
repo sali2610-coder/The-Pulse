@@ -21,6 +21,9 @@ import { currentMonthKey } from "@/lib/dates";
 import { sliceForMonth } from "@/lib/projections";
 import { Pill } from "@/components/ui/pill";
 import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
+import { ExpenseEditSheet } from "@/components/dashboard/expense-edit-sheet";
+import { tap } from "@/lib/haptics";
+import type { ExpenseEntry } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -45,6 +48,10 @@ function timeAgo(date: Date, now: Date = new Date()): string {
 type Direction = "in" | "out";
 type ActivityItem = {
   id: string;
+  /** Linked store entry — undefined for income events (they live in
+   *  the incomes table, not entries). Editable activity rows must have
+   *  this populated. */
+  entryId?: string;
   direction: Direction;
   amount: number;
   ts: Date;
@@ -89,6 +96,7 @@ export function RecentActivity() {
   const entries = useFinanceStore((s) => s.entries);
   const incomes = useFinanceStore((s) => s.incomes);
   const [drilldownOpen, setDrilldownOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<ExpenseEntry | null>(null);
 
   const items = useMemo<ActivityItem[]>(() => {
     if (!hydrated) return [];
@@ -101,6 +109,7 @@ export function RecentActivity() {
       if (!slice) continue;
       out.push({
         id: `${e.id}:${slice.chargeDate.toISOString()}`,
+        entryId: e.id,
         direction: e.isRefund ? "in" : "out",
         amount: slice.amount,
         ts: slice.chargeDate,
@@ -174,7 +183,18 @@ export function RecentActivity() {
         <ul className="flex flex-col gap-1.5">
           <AnimatePresence initial={false}>
             {items.map((item, idx) => (
-              <ActivityRow key={item.id} item={item} delay={idx * 0.04} />
+              <ActivityRow
+                key={item.id}
+                item={item}
+                delay={idx * 0.04}
+                onTap={() => {
+                  if (!item.entryId) return;
+                  const e = entries.find((x) => x.id === item.entryId);
+                  if (!e) return;
+                  tap();
+                  setEditEntry(e);
+                }}
+              />
             ))}
           </AnimatePresence>
         </ul>
@@ -187,6 +207,15 @@ export function RecentActivity() {
         subtitle="כל החיובים — עבר ועתיד"
         filter="all-this-month"
       />
+
+      <ExpenseEditSheet
+        key={editEntry?.id ?? "none"}
+        open={editEntry !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditEntry(null);
+        }}
+        entry={editEntry}
+      />
     </>
   );
 }
@@ -194,10 +223,13 @@ export function RecentActivity() {
 function ActivityRow({
   item,
   delay,
+  onTap,
 }: {
   item: ActivityItem;
   delay: number;
+  onTap?: () => void;
 }) {
+  const tappable = Boolean(item.entryId && onTap);
   const cat = item.category ? getCategory(item.category) : null;
   const isIn = item.direction === "in";
   const accent = isIn ? "#34D399" : cat?.accent ?? "#F87171";
@@ -216,7 +248,25 @@ function ActivityRow({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
       transition={{ delay, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      className="flex items-center gap-2.5 rounded-2xl border border-white/6 bg-black/30 p-2.5"
+      whileTap={tappable ? { scale: 0.985 } : undefined}
+      onClick={tappable ? onTap : undefined}
+      role={tappable ? "button" : undefined}
+      tabIndex={tappable ? 0 : undefined}
+      onKeyDown={
+        tappable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onTap?.();
+              }
+            }
+          : undefined
+      }
+      className={`flex items-center gap-2.5 rounded-2xl border border-white/6 bg-black/30 p-2.5 ${
+        tappable
+          ? "cursor-pointer outline-none transition-colors hover:border-white/14 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+          : ""
+      }`}
     >
       {/* Direction badge */}
       <span
