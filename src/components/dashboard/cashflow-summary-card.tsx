@@ -22,6 +22,7 @@ import {
   type RiskLevel,
 } from "@/lib/financial-snapshot";
 import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { tap } from "@/lib/haptics";
 
 // One Intl formatter, plain — never `signDisplay`, which crashes iOS < 15.4
@@ -136,7 +137,11 @@ export function CashflowSummaryCard() {
             className="text-3xl font-light leading-tight tracking-tight"
             style={{ color: tone.accent }}
           >
-            {signedILS(snapshot.projectedBalanceOnFirstOfNextMonth)}
+            <AnimatedCounter
+              value={snapshot.projectedBalanceOnFirstOfNextMonth}
+              format={signedILS}
+              duration={650}
+            />
           </span>
           <span
             className="flex items-center gap-1.5 text-[11px]"

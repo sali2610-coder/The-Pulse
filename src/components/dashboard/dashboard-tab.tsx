@@ -106,6 +106,12 @@ const HealthScoreCard = lazy(() =>
     default: m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const RecentActivity = lazy(() =>
+  import("@/components/dashboard/recent-activity").then((m) => ({
+    default: m.RecentActivity as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -133,6 +139,9 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-6">
         <Safe name="PendingTray"><PendingTray /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="RecentActivity"><RecentActivity /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>

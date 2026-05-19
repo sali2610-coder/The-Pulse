@@ -70,7 +70,7 @@ export function GlassPopup({
                   }}
                   className={cn(
                     // Position: top-anchored, horizontally centered.
-                    "fixed inset-x-0 z-50 mx-auto flex w-full max-w-[360px] flex-col",
+                    "fixed inset-x-0 z-50 mx-auto flex w-full max-w-[320px] flex-col",
                     // Safe-area aware top offset.
                     "px-3",
                     className,
@@ -100,7 +100,7 @@ export function GlassPopup({
                     {title}
                   </DialogPrimitive.Title>
                 )}
-                <div className="flex flex-col gap-3 px-4 pb-4 pt-2">
+                <div className="flex flex-col gap-2.5 px-4 pb-4 pt-1">
                   {children}
                 </div>
               </div>
