@@ -344,10 +344,18 @@ export async function POST(req: Request): Promise<Response> {
     if (!sub) {
       pushed = "no_sub";
     } else {
+      // Pass through the REAL browser-side deviceId from the
+      // x-sally-device header. The SW uses this as the key for its
+      // /api/push/click beacon. Falls back to scope.id when missing.
+      const rawHeaderDevice = req.headers.get("x-sally-device") ?? "";
+      const beaconDeviceId =
+        rawHeaderDevice && /^[A-Za-z0-9_\-:.]+$/.test(rawHeaderDevice)
+          ? rawHeaderDevice
+          : scope.id;
       const result = await sendCategorizePush(sub, {
         kind: "categorize",
         externalId,
-        deviceId: scope.id,
+        deviceId: beaconDeviceId,
         amount: tx.amount,
         merchant: tx.merchant,
         cardLast4: tx.cardLast4,

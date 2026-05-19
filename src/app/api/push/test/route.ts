@@ -35,6 +35,17 @@ export async function POST(req: Request): Promise<Response> {
   if (!scopeRes.ok) return fail(scopeRes.status, scopeRes.code);
   if (!isPushConfigured()) return fail(503, "push_not_configured");
 
+  // Real browser-side device id — needed in the push payload so the
+  // SW's click-beacon writes under the SAME deviceId the PWA reads
+  // back on mount. Falls back to scope.id only when the header is
+  // missing (e.g. signed-in flows that hit /api/push/test from a
+  // non-iPhone context).
+  const headerDeviceId = req.headers.get("x-sally-device") ?? "";
+  const beaconDeviceId =
+    headerDeviceId && /^[A-Za-z0-9_\-:.]+$/.test(headerDeviceId)
+      ? headerDeviceId
+      : scopeRes.scope.id;
+
   const sub = await getPushSubscription(scopeRes.scope);
   if (!sub) {
     console.warn("[push-test] no subscription for scope", scopeRes.scope);
@@ -77,7 +88,7 @@ export async function POST(req: Request): Promise<Response> {
   const result = await sendCategorizePush(sub, {
     kind: "categorize",
     externalId: TEST_EXTERNAL_ID,
-    deviceId: scopeRes.scope.id,
+    deviceId: beaconDeviceId,
     amount,
     merchant,
     // No categoryHint — keeps SW from rendering quick-confirm actions
