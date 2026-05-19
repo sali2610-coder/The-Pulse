@@ -52,25 +52,70 @@ export type CategorizePushPayload = {
   occurredAt?: string;
 };
 
+export type PushSendResult = {
+  ok: boolean;
+  gone: boolean;
+  /** Underlying HTTP status from the push service (web.push.apple.com,
+   *  fcm.googleapis.com, etc.) when available. */
+  status?: number;
+  /** Short error tag the route can echo back to the client for diagnosis. */
+  reason?: string;
+  /** Endpoint host (no path) the push was attempted against. Helps the
+   *  client tell whether the server is firing to apple/fcm/mozilla. */
+  endpointHost?: string;
+};
+
+function endpointHost(endpoint: string): string | undefined {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function sendCategorizePush(
   sub: StoredSubscription,
   payload: CategorizePushPayload,
-): Promise<{ ok: boolean; gone: boolean }> {
-  if (!ensureConfigured()) return { ok: false, gone: false };
+): Promise<PushSendResult> {
+  const host = endpointHost(sub.endpoint);
+  if (!ensureConfigured()) {
+    return { ok: false, gone: false, reason: "vapid_unconfigured", endpointHost: host };
+  }
   try {
-    await webpush.sendNotification(
+    const res = await webpush.sendNotification(
       sub as unknown as PushSubscription,
       JSON.stringify(payload),
       // 5 min — covers a brief offline phone without keeping stale charges
       // queued forever on the FCM/APNS bridge.
       { TTL: 300 },
     );
-    return { ok: true, gone: false };
+    const status = (res as { statusCode?: number }).statusCode;
+    console.info(
+      `[push] sent categorize externalId=${payload.externalId} host=${host} status=${status}`,
+    );
+    return { ok: true, gone: false, status, endpointHost: host };
   } catch (err) {
-    const status = (err as { statusCode?: number }).statusCode;
-    // 404 / 410 = subscription gone; caller should drop it from storage.
-    if (status === 404 || status === 410) return { ok: false, gone: true };
-    return { ok: false, gone: false };
+    const e = err as { statusCode?: number; body?: string; message?: string };
+    const status = e.statusCode;
+    const reason =
+      status === 404 || status === 410
+        ? "subscription_gone"
+        : status === 403
+          ? "vapid_mismatch"
+          : status === 413
+            ? "payload_too_large"
+            : status === 429
+              ? "rate_limited"
+              : status
+                ? `push_${status}`
+                : "push_error";
+    console.error(
+      `[push] failed categorize externalId=${payload.externalId} host=${host} status=${status} reason=${reason} body=${e.body ?? e.message ?? ""}`,
+    );
+    if (status === 404 || status === 410) {
+      return { ok: false, gone: true, status, reason, endpointHost: host };
+    }
+    return { ok: false, gone: false, status, reason, endpointHost: host };
   }
 }
 
@@ -91,20 +136,27 @@ export type AlertPushPayload = {
 export async function sendAlertPush(
   sub: StoredSubscription,
   payload: AlertPushPayload,
-): Promise<{ ok: boolean; gone: boolean }> {
-  if (!ensureConfigured()) return { ok: false, gone: false };
+): Promise<PushSendResult> {
+  const host = endpointHost(sub.endpoint);
+  if (!ensureConfigured()) {
+    return { ok: false, gone: false, reason: "vapid_unconfigured", endpointHost: host };
+  }
   try {
-    await webpush.sendNotification(
+    const res = await webpush.sendNotification(
       sub as unknown as PushSubscription,
       JSON.stringify(payload),
       // Alerts are informational — they live longer than a categorize push
       // because the user may not have their phone in hand at the moment.
       { TTL: 3600 },
     );
-    return { ok: true, gone: false };
+    const status = (res as { statusCode?: number }).statusCode;
+    return { ok: true, gone: false, status, endpointHost: host };
   } catch (err) {
-    const status = (err as { statusCode?: number }).statusCode;
-    if (status === 404 || status === 410) return { ok: false, gone: true };
-    return { ok: false, gone: false };
+    const e = err as { statusCode?: number; body?: string; message?: string };
+    const status = e.statusCode;
+    if (status === 404 || status === 410) {
+      return { ok: false, gone: true, status, reason: "subscription_gone", endpointHost: host };
+    }
+    return { ok: false, gone: false, status, reason: status ? `push_${status}` : "push_error", endpointHost: host };
   }
 }

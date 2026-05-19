@@ -14,27 +14,23 @@ import { resolveRequestScope } from "@/lib/scope-resolver";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function fail(status: number, code: string) {
-  return Response.json({ ok: false, error: code }, { status });
+function fail(status: number, code: string, extra?: Record<string, unknown>) {
+  return Response.json(
+    { ok: false, error: code, ...(extra ?? {}) },
+    { status },
+  );
 }
 
 /**
  * Test push exercises the full Tap-to-Pulse pipeline end-to-end:
  *
  *   1. Persist a real pending transaction in KV under the caller's scope.
- *      It's marked `needsConfirmation: true` so the dashboard's
- *      PendingTray shows it and the engine excludes it from forecasts
- *      until the user confirms.
- *
- *   2. Send the categorize push with that same `externalId`.
- *      Tapping the notification deep-links into
- *      `/confirm/<externalId>`, which loads the row via
- *      `/api/transactions/pending/<externalId>` and opens the
- *      ConfirmationSheet — the SAME flow real Wallet/SMS charges use.
- *
- *   3. Merchant is prefixed with `🧪` so the user can tell test rows
- *      apart from real ones; the discard action in the sheet removes
- *      them like any other entry.
+ *   2. Send the categorize push with that same `externalId`. Tapping the
+ *      notification deep-links to /confirm/<externalId>, which loads the
+ *      row via /api/transactions/pending/<id> and opens ConfirmationSheet.
+ *   3. Echo back the full push-service response shape so the caller can
+ *      surface diagnostic info (endpoint host, push-service status,
+ *      reason tag) when the notification doesn't appear on the device.
  */
 export async function POST(req: Request): Promise<Response> {
   const scopeRes = await resolveRequestScope(req);
@@ -42,7 +38,14 @@ export async function POST(req: Request): Promise<Response> {
   if (!isPushConfigured()) return fail(503, "push_not_configured");
 
   const sub = await getPushSubscription(scopeRes.scope);
-  if (!sub) return fail(404, "no_subscription");
+  if (!sub) {
+    console.warn("[push-test] no subscription for scope", scopeRes.scope);
+    return fail(404, "no_subscription");
+  }
+
+  console.info(
+    `[push-test] scope=${scopeRes.scope.kind}:${scopeRes.scope.id.slice(0, 8)}… endpoint=${sub.endpoint.slice(0, 80)}…`,
+  );
 
   const now = Date.now();
   const externalId = `test-${now.toString(36)}`;
@@ -66,9 +69,9 @@ export async function POST(req: Request): Promise<Response> {
     rawNotificationBody: `Test ₪${amount} ${merchant}`,
   };
 
-  // Best-effort persist. If KV is down we still fire the push so the
-  // user sees the notification chain works.
-  await pushTransaction(scopeRes.scope, stored).catch(() => undefined);
+  await pushTransaction(scopeRes.scope, stored).catch((err) => {
+    console.error("[push-test] pushTransaction failed", err);
+  });
 
   const result = await sendCategorizePush(sub, {
     kind: "categorize",
@@ -82,9 +85,22 @@ export async function POST(req: Request): Promise<Response> {
 
   if (result.gone) {
     await deletePushSubscription(scopeRes.scope);
-    return fail(410, "subscription_gone");
+    return fail(410, "subscription_gone", {
+      pushStatus: result.status,
+      endpointHost: result.endpointHost,
+    });
   }
-  if (!result.ok) return fail(502, "push_failed");
+  if (!result.ok) {
+    return fail(502, result.reason ?? "push_failed", {
+      pushStatus: result.status,
+      endpointHost: result.endpointHost,
+    });
+  }
 
-  return Response.json({ ok: true, externalId });
+  return Response.json({
+    ok: true,
+    externalId,
+    pushStatus: result.status,
+    endpointHost: result.endpointHost,
+  });
 }

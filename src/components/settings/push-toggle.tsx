@@ -123,35 +123,55 @@ export function PushToggle() {
         return;
       }
 
-      // Probe server-side first — it's the authoritative state.
-      const serverState = (await fetch("/api/push/subscribe", {
-        method: "GET",
-        headers: scopeHeaders(),
-        credentials: "same-origin",
-        cache: "no-store",
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)) as { subscribed?: boolean } | null;
+      // Probe server + browser in parallel.
+      const [serverStateRaw, reg] = await Promise.all([
+        fetch("/api/push/subscribe", {
+          method: "GET",
+          headers: scopeHeaders(),
+          credentials: "same-origin",
+          cache: "no-store",
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        navigator.serviceWorker.getRegistration().catch(() => undefined),
+      ]);
+      const serverState = serverStateRaw as
+        | { subscribed?: boolean; endpoint?: string }
+        | null;
       const serverHasSub = Boolean(serverState?.subscribed);
+      const serverEndpoint = serverState?.endpoint;
 
-      // Browser-side check (informational; iOS may return null even when
-      // the endpoint is alive server-side).
-      const reg = await navigator.serviceWorker
-        .getRegistration()
-        .catch(() => undefined);
       const localSub = reg
         ? await reg.pushManager.getSubscription().catch(() => null)
         : null;
+      const localEndpoint = localSub?.endpoint;
 
       const dbg = `perm=${perm} reg=${reg ? "yes" : "no"} localSub=${
         localSub ? "yes" : "no"
-      } serverSub=${serverHasSub ? "yes" : "no"}`;
+      } serverSub=${serverHasSub ? "yes" : "no"}${
+        localEndpoint && serverEndpoint && localEndpoint !== serverEndpoint
+          ? " ENDPOINT_DRIFT"
+          : ""
+      }`;
       if (IS_DEV && !cancelled) setDebug(dbg);
-      if (typeof window !== "undefined") {
-        console.info("[PushToggle reconcile]", dbg);
+      console.info("[PushToggle reconcile]", dbg);
+
+      // Endpoint drift handling: if the browser's PushSubscription has a
+      // DIFFERENT endpoint than what we have stored server-side, the
+      // server's record is stale (iOS rotated the endpoint silently).
+      // Push the new endpoint up so future sends actually reach the
+      // device.
+      if (localSub && serverHasSub && localEndpoint !== serverEndpoint) {
+        console.info("[PushToggle] endpoint drift detected — refreshing server record");
+        const ok = await persistSub(localSub);
+        if (!cancelled) {
+          setStatus(ok ? "subscribed" : "idle");
+          reconciledRef.current = true;
+        }
+        return;
       }
 
-      // 1) Server is source of truth. If it has a record, toggle is ON.
+      // Server has a record (and either matches local or local is null).
       if (serverHasSub) {
         if (!cancelled) {
           setStatus("subscribed");
@@ -160,8 +180,7 @@ export function PushToggle() {
         return;
       }
 
-      // 2) Server empty but browser has a sub → save it server-side
-      //    (no user gesture needed for a fetch).
+      // Server empty but browser has a sub → save it.
       if (localSub) {
         const ok = await persistSub(localSub);
         if (!cancelled) {
@@ -171,8 +190,7 @@ export function PushToggle() {
         return;
       }
 
-      // 3) Nothing on either side — user must tap to enable (iOS requires
-      //    the user gesture for pushManager.subscribe()).
+      // Nothing anywhere — user must tap to enable (iOS requires gesture).
       if (!cancelled) {
         setStatus("idle");
         reconciledRef.current = true;
@@ -265,24 +283,44 @@ export function PushToggle() {
         headers: scopeHeaders(),
         credentials: "same-origin",
       });
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        externalId?: string;
+        pushStatus?: number;
+        endpointHost?: string;
+      };
+      const detail =
+        body.pushStatus || body.endpointHost
+          ? ` (${[body.pushStatus, body.endpointHost].filter(Boolean).join(" · ")})`
+          : "";
+      console.info("[push-test]", res.status, body);
+      if (IS_DEV) {
+        setDebug(
+          `test: status=${res.status} push=${body.pushStatus ?? "?"} host=${body.endpointHost ?? "?"} err=${body.error ?? "-"}`,
+        );
+      }
       if (res.status === 503) {
         toast.error("VAPID לא מוגדר בשרת");
         return;
       }
       if (res.status === 404) {
         toast.warning("אין רישום פעיל. נסה להפעיל שוב את ההתראות.");
+        setStatus("idle");
         return;
       }
       if (res.status === 410) {
-        toast.warning("הרישום פג. אנא הפעל שוב.");
+        toast.warning("הרישום פג. הפעל שוב את ההתראות.");
         setStatus("idle");
         return;
       }
       if (!res.ok) {
-        toast.error("שליחת התראת בדיקה נכשלה");
+        toast.error(`שליחה נכשלה: ${body.error ?? "push_failed"}${detail}`);
         return;
       }
-      toast.success("נשלחה התראת בדיקה — בדוק את ה־iPhone");
+      toast.success(
+        `נשלחה התראת בדיקה${detail} — אם לא הופיעה, בדוק Settings → Notifications → Sally`,
+      );
     } finally {
       setBusy(false);
     }
@@ -343,12 +381,15 @@ export function PushToggle() {
       ) : (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
+            {/* Toggle anchored absolutely so the knob position is independent
+                of the page's RTL flow. ON → knob on the right + neon glow.
+                OFF → knob on the left. */}
             <button
               type="button"
               onClick={isOn ? disable : enable}
               disabled={busy}
               dir="ltr"
-              className={`relative flex h-8 w-14 shrink-0 items-center rounded-full border transition-colors ${
+              className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full border transition-colors ${
                 isOn
                   ? "border-[color:var(--neon)]/70 bg-[color:var(--neon)]/20 shadow-[inset_0_0_0_1px_var(--neon),0_0_12px_-2px_var(--neon)]"
                   : "border-border/60 bg-background/40"
@@ -359,11 +400,11 @@ export function PushToggle() {
               <motion.span
                 initial={false}
                 animate={{
-                  x: isOn ? 24 : 2,
+                  left: isOn ? "24px" : "2px",
                   backgroundColor: isOn ? "#00E5FF" : "#A1A1AA",
                 }}
                 transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                className="block h-6 w-6 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.4)]"
+                className="absolute top-1/2 block h-6 w-6 -translate-y-1/2 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.4)]"
               />
             </button>
             {isOn && (

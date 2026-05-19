@@ -37,6 +37,9 @@ export async function GET(req: Request): Promise<Response> {
     ok: true,
     configured: true,
     subscribed: Boolean(sub),
+    // Returning the full endpoint enables the client to detect
+    // silent endpoint rotation (iOS) and re-save the new value.
+    endpoint: sub?.endpoint ?? null,
   });
 }
 
