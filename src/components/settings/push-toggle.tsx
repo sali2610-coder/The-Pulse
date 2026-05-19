@@ -47,6 +47,7 @@ type Status =
   | "no-vapid"
   | "denied"
   | "subscribed"
+  | "needs-repair"
   | "idle";
 
 /**
@@ -157,23 +158,20 @@ export function PushToggle() {
       if (IS_DEV && !cancelled) setDebug(dbg);
       console.info("[PushToggle reconcile]", dbg);
 
-      // Endpoint drift handling: if the browser's PushSubscription has a
-      // DIFFERENT endpoint than what we have stored server-side, the
-      // server's record is stale (iOS rotated the endpoint silently).
-      // Push the new endpoint up so future sends actually reach the
-      // device.
+      // Endpoint drift: browser has a sub but it doesn't match what
+      // the server has stored — push the live endpoint up.
       if (localSub && serverHasSub && localEndpoint !== serverEndpoint) {
-        console.info("[PushToggle] endpoint drift detected — refreshing server record");
+        console.info("[PushToggle] endpoint drift — refreshing server record");
         const ok = await persistSub(localSub);
         if (!cancelled) {
-          setStatus(ok ? "subscribed" : "idle");
+          setStatus(ok ? "subscribed" : "needs-repair");
           reconciledRef.current = true;
         }
         return;
       }
 
-      // Server has a record (and either matches local or local is null).
-      if (serverHasSub) {
+      // Server has a record + local sub matches → fully synced.
+      if (serverHasSub && localSub) {
         if (!cancelled) {
           setStatus("subscribed");
           reconciledRef.current = true;
@@ -181,7 +179,20 @@ export function PushToggle() {
         return;
       }
 
-      // Server empty but browser has a sub → save it.
+      // SERVER-ONLY state: server thinks we're subscribed but this
+      // browser has no SW / no PushSubscription. Happens when the user
+      // reinstalls the PWA, clears Safari data, or the previous SW was
+      // unregistered. Toggle MUST NOT show ON — surface a repair CTA so
+      // the user knows their iPhone isn't actually listening.
+      if (serverHasSub && !localSub) {
+        if (!cancelled) {
+          setStatus("needs-repair");
+          reconciledRef.current = true;
+        }
+        return;
+      }
+
+      // Server empty + browser has a sub → save it.
       if (localSub) {
         const ok = await persistSub(localSub);
         if (!cancelled) {
@@ -191,7 +202,7 @@ export function PushToggle() {
         return;
       }
 
-      // Nothing anywhere — user must tap to enable (iOS requires gesture).
+      // Nothing anywhere — user must tap to enable.
       if (!cancelled) {
         setStatus("idle");
         reconciledRef.current = true;
@@ -248,6 +259,69 @@ export function PushToggle() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "subscribe_failed";
       toast.error(`רישום נכשל: ${msg}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Full repair flow — called from the "Repair notifications" CTA when
+   * the server has a record but the browser doesn't. Walks every step
+   * a fresh PWA install would do, all inside a single user gesture so
+   * iOS Safari accepts the subscribe() call.
+   */
+  const repair = async () => {
+    if (busy) return;
+    setBusy(true);
+    setDebug("repair: starting");
+    try {
+      // 1. Service worker (overwrite stale registrations to be safe).
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      }
+      await navigator.serviceWorker.ready;
+      setDebug("repair: sw active");
+
+      // 2. Permission. Always re-prompt — iOS may have reset it.
+      const perm =
+        Notification.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+      if (perm !== "granted") {
+        setStatus("denied");
+        toast.warning("ההרשאה לא ניתנה");
+        return;
+      }
+
+      // 3. Clear any half-broken local sub before subscribing.
+      const stale = await reg.pushManager.getSubscription().catch(() => null);
+      if (stale) {
+        await stale.unsubscribe().catch(() => undefined);
+      }
+
+      // 4. Fresh subscription bound to current VAPID key.
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      setDebug(`repair: subscribed host=${new URL(sub.endpoint).host}`);
+
+      // 5. Tell the server about it.
+      const ok = await persistSub(sub);
+      if (!ok) {
+        toast.error("שמירת הרישום נכשלה");
+        return;
+      }
+
+      setStatus("subscribed");
+      reconciledRef.current = true;
+      tap();
+      toast.success("ההתראות תוקנו ומחוברות עכשיו");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "repair_failed";
+      setDebug(`repair: failed ${msg}`);
+      toast.error(`תיקון נכשל: ${msg}`);
     } finally {
       setBusy(false);
     }
@@ -378,6 +452,33 @@ export function PushToggle() {
           <span>
             ההרשאה נדחתה. לאפשר ידנית: Settings → Notifications → Sally → Allow.
           </span>
+        </div>
+      ) : status === "needs-repair" ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-gold/40 bg-gold/8 p-3 text-[11px] text-foreground/90">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-gold" />
+            <div className="flex flex-col gap-1">
+              <strong className="text-foreground">חיבור התראות לא מסונכרן</strong>
+              <span className="text-muted-foreground">
+                בשרת יש רישום קיים אבל ה־iPhone הזה לא רשום כרגע (התקנה
+                מחדש או ניקוי דפדפן). יש לחדש את החיבור.
+              </span>
+            </div>
+          </div>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.97 }}
+            onClick={repair}
+            disabled={busy}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-gold/50 bg-gold/15 px-3 py-2.5 text-[12px] font-semibold text-gold transition-colors hover:bg-gold/20 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Bell className="size-3.5" />
+            )}
+            תקן התראות עכשיו
+          </motion.button>
         </div>
       ) : (
         <div className="flex flex-col gap-2">

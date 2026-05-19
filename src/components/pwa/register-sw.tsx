@@ -2,33 +2,51 @@
 
 import { useEffect } from "react";
 
-// Service Worker registration is FULLY DISABLED.
+// Service Worker registration.
 //
-// Production was experiencing Safari "This page couldn't load" failures
-// that survived `?reset=1` runs, suggesting either WebKit + SW
-// incompatibility on the user's macOS build or a stale SW that no
-// `?reset=1` query could reach. To rule SW out completely, this
-// component now ONLY unregisters every prior registration and never
-// registers a new one.
+// Earlier deploys ran with this component unregistering every prior SW
+// on mount to debug a Safari shell-cache crash (Phase 35). That fix
+// turned into the root cause of "push notifications never appear on
+// iPhone" — the SW was being torn down every time the PWA mounted, so
+// pushManager.getSubscription() always returned null and the push
+// pipeline had nothing to deliver to.
 //
-// Re-enable later by restoring the `navigator.serviceWorker.register`
-// branch — but only after confirming the SW isn't the failure cause.
+// The original Safari crash was actually resolved by a separate change
+// (lazy-loading dashboard cards). We can register the SW again. This
+// time the SW (public/sw.js) does NOT intercept fetches — it only
+// handles `push` and `notificationclick` events — so it cannot
+// resurrect the original shell-cache bug.
+
+const SW_PATH = "/sw.js";
 
 export function RegisterSW() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
-
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-      .catch(() => undefined);
-    if ("caches" in window) {
-      caches
-        .keys()
-        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-        .catch(() => undefined);
-    }
+    // Avoid double-registration: getRegistration() returns the existing
+    // one if present, register() is a no-op for the same URL+scope.
+    let cancelled = false;
+    (async () => {
+      try {
+        const existing = await navigator.serviceWorker.getRegistration();
+        if (cancelled) return;
+        if (
+          existing &&
+          existing.active &&
+          existing.active.scriptURL.endsWith(SW_PATH)
+        ) {
+          // Push for an update so a new SW_VERSION rolls forward.
+          existing.update().catch(() => undefined);
+          return;
+        }
+        await navigator.serviceWorker.register(SW_PATH, { scope: "/" });
+      } catch (err) {
+        console.error("[RegisterSW] failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return null;
