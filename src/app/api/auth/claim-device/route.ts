@@ -21,6 +21,7 @@ import {
   releaseDeviceClaim,
 } from "@/lib/scope-resolver";
 import {
+  captureStateSnapshot,
   getUserState,
   isKvConfigured,
   kv,
@@ -80,6 +81,13 @@ export async function POST(req: Request): Promise<Response> {
     now: Date.now(),
   });
   if (plan.blob) {
+    // Snapshot the current user state BEFORE we overwrite it, so the
+    // user can roll back from the Settings recovery UI if the
+    // migration looks wrong.
+    await captureStateSnapshot(
+      { kind: "user", id: userId },
+      "pre-claim-device",
+    ).catch(() => undefined);
     await saveUserState({ kind: "user", id: userId }, plan.blob);
   }
 

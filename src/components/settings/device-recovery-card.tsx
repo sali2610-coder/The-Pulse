@@ -66,6 +66,18 @@ export function DeviceRecoveryCard() {
   const [orphansLoading, setOrphansLoading] = useState(false);
   const [orphans, setOrphans] = useState<OrphanRow[] | null>(null);
 
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+  const [snapshots, setSnapshots] = useState<
+    Array<{
+      capturedAt: number;
+      reason: string;
+      richness: number;
+      updatedAt: number;
+    }>
+    | null
+  >(null);
+
   const currentDeviceId =
     typeof window !== "undefined" ? getOrCreateDeviceId() : "";
 
@@ -204,6 +216,66 @@ export function DeviceRecoveryCard() {
       void loadOrphans();
     }
     setOrphansOpen((v) => !v);
+  };
+
+  const loadSnapshots = useCallback(async () => {
+    setSnapshotsLoading(true);
+    try {
+      const res = await fetch("/api/auth/snapshots", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setSnapshots([]);
+        return;
+      }
+      const data = (await res.json()) as {
+        snapshots: typeof snapshots;
+      };
+      setSnapshots(data.snapshots ?? []);
+    } catch {
+      setSnapshots([]);
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  }, []);
+
+  const toggleSnapshots = () => {
+    if (!snapshotsOpen && snapshots === null) {
+      void loadSnapshots();
+    }
+    setSnapshotsOpen((v) => !v);
+  };
+
+  const restoreSnapshot = async (capturedAt: number) => {
+    if (busy) return;
+    setBusy(true);
+    tap();
+    try {
+      const res = await fetch("/api/auth/snapshots", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ capturedAt }),
+      });
+      if (!res.ok) {
+        toast.error("שחזור נכשל");
+        return;
+      }
+      toast.success("הגיבוי שוחזר. טוען מחדש…");
+      setTimeout(() => window.location.reload(), 400);
+    } catch {
+      toast.error("שחזור נכשל");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reasonLabel = (r: string) => {
+    if (r === "pre-claim-device") return "לפני התחברות Google";
+    if (r === "pre-recover-device") return "לפני שחזור קודם";
+    if (r === "pre-restore") return "לפני rollback";
+    return r;
   };
 
   if (probe.state === "loading") return null;
@@ -379,6 +451,78 @@ export function DeviceRecoveryCard() {
             ) : (
               <div className="text-[11px] text-muted-foreground">
                 לא נמצאו גיבויים נוספים שייכים לחשבון שלך.
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Auto-snapshots — rollback */}
+      <div className="mt-3 border-t border-white/8 pt-3">
+        <button
+          type="button"
+          onClick={toggleSnapshots}
+          className="flex w-full items-center justify-between text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <span className="flex items-center gap-1.5">
+            <RefreshCw className="size-3" />
+            גלגול לאחור — גיבויים שנשמרו אוטומטית
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.18em]">
+            {snapshotsOpen ? "סגור" : "פתח"}
+          </span>
+        </button>
+
+        {snapshotsOpen ? (
+          <div className="mt-3 flex flex-col gap-2">
+            {snapshotsLoading ? (
+              <div className="text-[11px] text-muted-foreground">סורק…</div>
+            ) : snapshots && snapshots.length > 0 ? (
+              snapshots.map((s, idx) => {
+                const isRecommended = idx === 0 && s.richness > 0;
+                return (
+                  <div
+                    key={s.capturedAt}
+                    className={`flex items-center gap-2 rounded-2xl border p-3 ${
+                      isRecommended
+                        ? "border-[#34D399]/40 bg-[#34D399]/8"
+                        : "border-white/8 bg-background/30"
+                    }`}
+                  >
+                    <div className="flex-1 text-right">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-foreground">
+                          {reasonLabel(s.reason)}
+                        </span>
+                        {isRecommended ? (
+                          <span className="rounded-full bg-[#34D399]/15 px-1.5 py-0.5 text-[9px] font-medium text-[#34D399]">
+                            מומלץ
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {s.richness} פריטים · {fmtTime(s.capturedAt)}
+                      </div>
+                    </div>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => restoreSnapshot(s.capturedAt)}
+                      disabled={busy}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                        isRecommended
+                          ? "border-[#34D399]/50 bg-[#34D399]/15 text-[#34D399]"
+                          : "border-white/12 bg-background/40 text-foreground/80"
+                      }`}
+                    >
+                      שחזר
+                    </motion.button>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-[11px] text-muted-foreground">
+                אין עדיין גיבויים אוטומטיים. הם נוצרים לפני התחברות / שחזור.
               </div>
             )}
           </div>

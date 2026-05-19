@@ -17,6 +17,7 @@
 
 import { auth } from "@/lib/auth/config";
 import {
+  captureStateSnapshot,
   getUserState,
   isKvConfigured,
   kv,
@@ -164,6 +165,10 @@ export async function POST(req: Request): Promise<Response> {
   );
 
   if (strategy === "force-device" || strategy === "takeover") {
+    await captureStateSnapshot(
+      { kind: "user", id: userId },
+      "pre-recover-device",
+    ).catch(() => undefined);
     const next: StateBlob = {
       version: deviceBlob.version,
       updatedAt: Date.now(),
@@ -185,6 +190,10 @@ export async function POST(req: Request): Promise<Response> {
     now: Date.now(),
   });
   if (plan.blob) {
+    await captureStateSnapshot(
+      { kind: "user", id: userId },
+      "pre-recover-device",
+    ).catch(() => undefined);
     await saveUserState({ kind: "user", id: userId }, plan.blob);
   }
   return Response.json({

@@ -220,13 +220,39 @@ export function useRemoteStateSync(): void {
   }, [hydrated]);
 
   // 2. Push on changes, debounced.
+  //    DATA SAFETY (Phase 71): never PUT an empty slice once the user
+  //    has had real data on this device. An accidental empty PUT
+  //    (e.g. a transient store reset, a hydration race) used to wipe
+  //    months of real data on the server side. The check:
+  //      - if current local is empty AND we ever saw non-empty state
+  //        since this listener mounted → suppress the PUT
+  //      - this is the conservative direction — we'd rather miss one
+  //        legitimate "user deleted everything" write than overwrite
+  //        a valid cloud blob with an empty one
   useEffect(() => {
     if (!hydrated) return;
+    let sawNonEmptyOnce = false;
     const unsubscribe = useFinanceStore.subscribe((state, prev) => {
       const a = persistedSlice(state);
       const b = persistedSlice(prev);
       if (JSON.stringify(a) === JSON.stringify(b)) return;
       if (!remoteAppliedRef.current) return; // wait for first GET
+
+      const localRichness =
+        a.accounts.length +
+        a.loans.length +
+        a.incomes.length +
+        a.rules.length +
+        a.entries.length +
+        (a.monthlyBudget > 0 ? 1 : 0);
+      if (localRichness > 0) sawNonEmptyOnce = true;
+      if (localRichness === 0 && sawNonEmptyOnce) {
+        console.warn(
+          "[remote-state-sync] suppressing empty PUT — prior state had content",
+        );
+        return;
+      }
+
       if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
       pendingTimerRef.current = setTimeout(() => {
         void fetch("/api/state", {

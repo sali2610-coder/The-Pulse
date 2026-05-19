@@ -2,6 +2,14 @@
 //
 // Extracted from /api/auth/claim-device so the policy can be unit-tested
 // without a KV mock and reused by the recovery route.
+//
+// HARD RULE (Phase 71): never let an EMPTY blob beat a non-empty one,
+// regardless of `updatedAt`. A previous deploy could have PUT an empty
+// state to the user blob (debounced PUT firing before remote-state-sync
+// applied the device's data), giving us an "emptier but newer" user
+// blob that would silently wipe months of real data on the next
+// migration. The richness check now short-circuits the timestamp tie-
+// break.
 
 import type { StateBlob } from "@/lib/kv";
 
@@ -14,9 +22,7 @@ type AnyBlobState = {
   monthlyBudget?: number;
 } & Record<string, unknown>;
 
-/** Count of meaningful items in the blob. Used to break ties when two
- *  blobs share `updatedAt` — we always prefer the richer one so we don't
- *  silently delete user data. */
+/** Count of meaningful items in the blob. */
 export function richnessScore(blob: StateBlob): number {
   const s = (blob.state ?? {}) as AnyBlobState;
   const count = (a?: unknown[]) => (Array.isArray(a) ? a.length : 0);
@@ -30,12 +36,27 @@ export function richnessScore(blob: StateBlob): number {
   );
 }
 
-/** Pick the winning blob between two non-null candidates.
- *  Larger `updatedAt` wins; ties go to the richer blob. */
+/** True when the blob has no user-meaningful content. */
+export function isEmptyBlob(blob: StateBlob): boolean {
+  return richnessScore(blob) === 0;
+}
+
+/**
+ * Pick the winning blob between two non-null candidates.
+ *
+ * Priority order:
+ *   1. NON-EMPTY beats empty unconditionally (data safety).
+ *   2. Larger `updatedAt` wins.
+ *   3. Tie on `updatedAt` → richer blob wins.
+ */
 export function pickWinner(a: StateBlob, b: StateBlob): StateBlob {
+  const ra = richnessScore(a);
+  const rb = richnessScore(b);
+  if (ra === 0 && rb > 0) return b;
+  if (rb === 0 && ra > 0) return a;
   if (a.updatedAt > b.updatedAt) return a;
   if (b.updatedAt > a.updatedAt) return b;
-  return richnessScore(a) >= richnessScore(b) ? a : b;
+  return ra >= rb ? a : b;
 }
 
 export type MigrationOutcome = "copied" | "merged" | "kept-user" | "no-op";
@@ -61,6 +82,19 @@ export function planMigration(args: {
     };
   }
   if (userBlob && deviceBlob) {
+    // Special case: empty user blob + non-empty device blob → adopt
+    // device. Phase 71 — used to incorrectly fall through to kept-user
+    // when user.updatedAt > device.updatedAt.
+    if (isEmptyBlob(userBlob) && !isEmptyBlob(deviceBlob)) {
+      return {
+        blob: {
+          version: deviceBlob.version,
+          updatedAt: now,
+          state: deviceBlob.state,
+        },
+        outcome: "copied",
+      };
+    }
     const winner = pickWinner(userBlob, deviceBlob);
     if (winner !== userBlob) {
       return {

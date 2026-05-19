@@ -64,6 +64,13 @@ describe("pickWinner", () => {
     const b = blob(500, RICH_STATE);
     expect(pickWinner(a, b)).toBe(a);
   });
+
+  it("non-empty beats empty regardless of timestamp", () => {
+    const emptyNewer = blob(2000, EMPTY_STATE);
+    const richOlder = blob(1000, RICH_STATE);
+    expect(pickWinner(emptyNewer, richOlder)).toBe(richOlder);
+    expect(pickWinner(richOlder, emptyNewer)).toBe(richOlder);
+  });
 });
 
 describe("planMigration", () => {
@@ -97,21 +104,34 @@ describe("planMigration", () => {
     expect(plan.blob).toBeNull();
   });
 
-  it("merges (device wins) when device is newer", () => {
+  it("device blob wins when user blob is empty regardless of timestamp", () => {
     const usr = blob(500, EMPTY_STATE);
     const dev = blob(1000, RICH_STATE);
     const plan = planMigration({ userBlob: usr, deviceBlob: dev, now: 999 });
-    expect(plan.outcome).toBe("merged");
+    expect(plan.outcome).toBe("copied");
     expect(plan.blob).not.toBeNull();
     expect(plan.blob!.state).toEqual(RICH_STATE);
     expect(plan.blob!.updatedAt).toBe(999);
   });
 
-  it("never silently drops a richer device blob on tie", () => {
+  it("device blob wins on tie when user is empty", () => {
     const usr = blob(500, EMPTY_STATE);
     const dev = blob(500, RICH_STATE);
     const plan = planMigration({ userBlob: usr, deviceBlob: dev, now: 999 });
-    expect(plan.outcome).toBe("merged");
+    expect(plan.outcome).toBe("copied");
+    expect(plan.blob!.state).toEqual(RICH_STATE);
+  });
+
+  it("DATA SAFETY: empty newer user blob does NOT overwrite rich device", () => {
+    // The exact bug Phase 71 fixes: user blob got accidentally PUT
+    // empty (stale debounced write) so it has a newer updatedAt than
+    // the device blob. Pre-fix this returned "kept-user" and the
+    // device data was silently abandoned. Now device wins via the
+    // empty-blob short-circuit.
+    const usr = blob(2000, EMPTY_STATE);
+    const dev = blob(1000, RICH_STATE);
+    const plan = planMigration({ userBlob: usr, deviceBlob: dev, now: 9999 });
+    expect(plan.outcome).toBe("copied");
     expect(plan.blob!.state).toEqual(RICH_STATE);
   });
 

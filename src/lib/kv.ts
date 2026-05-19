@@ -43,6 +43,7 @@ const TX_SEEN_KEY = (scope: Scope, externalId: string) =>
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
 const PUSH_LAST_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:last`;
 const PUSH_CLICK_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:click`;
+const SNAPSHOTS_KEY = (scope: Scope) => `${scopePrefix(scope)}:state:snapshots`;
 const STATE_KEY = (scope: Scope) => `${scopePrefix(scope)}:state`;
 // Long TTL so a user who reinstalls the PWA after 90 days still gets their
 // state back. Touched on every write — effectively permanent for active users.
@@ -326,6 +327,88 @@ export async function saveUserState(
   await kv().set(STATE_KEY(scope), JSON.stringify(blob), {
     ex: STATE_TTL_SECONDS,
   });
+}
+
+export type StateSnapshot = {
+  /** Reason the snapshot was taken — surfaced in the recovery UI. */
+  reason:
+    | "pre-claim-device"
+    | "pre-recover-device"
+    | "pre-restore"
+    | "manual";
+  capturedAt: number;
+  blob: StateBlob;
+};
+
+const MAX_SNAPSHOTS_KEEP = 10;
+
+/**
+ * Capture the CURRENT user/device state as a rollback snapshot before
+ * any destructive write. List trimmed to the last MAX_SNAPSHOTS_KEEP
+ * entries to avoid unbounded growth. No-op when the current state is
+ * empty — empty snapshots have no recovery value.
+ */
+export async function captureStateSnapshot(
+  scope: Scope,
+  reason: StateSnapshot["reason"],
+): Promise<{ captured: boolean }> {
+  const blob = await getUserState(scope);
+  if (!blob) return { captured: false };
+  const entry: StateSnapshot = {
+    reason,
+    capturedAt: Date.now(),
+    blob,
+  };
+  // Use a sorted set scored by capturedAt; latest first.
+  const key = SNAPSHOTS_KEY(scope);
+  await kv().zadd(key, {
+    score: entry.capturedAt,
+    member: JSON.stringify(entry),
+  });
+  // Trim — keep the newest MAX_SNAPSHOTS_KEEP. zremrangebyrank with
+  // negative end-index keeps the top-N by rank.
+  await kv().zremrangebyrank(key, 0, -MAX_SNAPSHOTS_KEEP - 1);
+  await kv().expire(key, STATE_TTL_SECONDS);
+  return { captured: true };
+}
+
+/** List captured snapshots, newest first. */
+export async function listStateSnapshots(
+  scope: Scope,
+): Promise<StateSnapshot[]> {
+  const key = SNAPSHOTS_KEY(scope);
+  const raw = (await kv().zrange(key, 0, -1, {
+    rev: true,
+  })) as Array<string | StateSnapshot>;
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") {
+        try {
+          return JSON.parse(entry) as StateSnapshot;
+        } catch {
+          return null;
+        }
+      }
+      return entry;
+    })
+    .filter((v): v is StateSnapshot => v !== null);
+}
+
+/** Save a snapshot's blob back into the live state slot. Used by the
+ *  rollback / undo-restore flow. */
+export async function restoreFromSnapshot(
+  scope: Scope,
+  capturedAt: number,
+): Promise<{ restored: boolean }> {
+  const snapshots = await listStateSnapshots(scope);
+  const target = snapshots.find((s) => s.capturedAt === capturedAt);
+  if (!target) return { restored: false };
+  await saveUserState(scope, {
+    version: target.blob.version,
+    updatedAt: Date.now(),
+    state: target.blob.state,
+  });
+  return { restored: true };
 }
 
 export async function savePushSubscription(
