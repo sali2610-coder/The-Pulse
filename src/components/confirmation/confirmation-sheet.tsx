@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { GlassPopup } from "@/components/ui/glass-popup";
 import { CategoryPickerSheet } from "@/components/confirmation/category-picker-sheet";
 import { useFinanceStore } from "@/lib/store";
 import { getCategory, type CategoryId } from "@/lib/categories";
@@ -32,20 +32,14 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
   const [amount, setAmount] = useState(String(entry.amount));
   const [merchant, setMerchant] = useState(entry.merchant ?? "");
   const [category, setCategory] = useState<CategoryId>(entry.category);
-  const [installments, setInstallments] = useState(entry.installments);
-  const [editing, setEditing] = useState(false);
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [editingMerchant, setEditingMerchant] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [includeInBudget, setIncludeInBudget] = useState(
     !entry.excludeFromBudget,
   );
-  // Re-syncing on `entry.id` change is handled by the parent passing a
-  // `key={entry.id}` so this component remounts with fresh local state.
 
   const parsedAmount = Number(amount);
-  const slice =
-    installments > 1 && Number.isFinite(parsedAmount)
-      ? parsedAmount / installments
-      : null;
   const categoryMeta = getCategory(category);
 
   function handleConfirm() {
@@ -57,7 +51,7 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
       amount: parsedAmount,
       merchant: merchant.trim(),
       category,
-      installments,
+      installments: entry.installments,
       excludeFromBudget: !includeInBudget,
     });
     success();
@@ -76,149 +70,130 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
 
   return (
     <>
-      <BottomSheet
+      <GlassPopup
         open={open}
         onOpenChange={onOpenChange}
         title="אישור חיוב חדש"
       >
-        {/* Hero block — amount + merchant */}
+        {/* Hero — amount + merchant. Tap either to edit inline. */}
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.35 }}
-          className="flex flex-col items-center gap-2 pt-2"
+          transition={{ delay: 0.05, duration: 0.3 }}
+          className="flex flex-col items-center gap-1.5 pt-1"
         >
-          <span className="text-xs uppercase tracking-[0.28em] text-muted-foreground/80">
+          <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground/80">
             חיוב חדש
           </span>
 
-          {editing ? (
-            <input
-              autoFocus
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
-              className="w-full bg-transparent text-center font-mono text-6xl font-light tracking-tight text-foreground outline-none ring-0"
-              dir="ltr"
-            />
-          ) : (
+          {editingAmount ? (
             <div
+              className="flex items-baseline gap-1 font-mono text-4xl font-light tracking-tight text-foreground"
               dir="ltr"
-              className="font-mono text-6xl font-light tracking-tight text-foreground"
+            >
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) =>
+                  setAmount(e.target.value.replace(/[^\d.]/g, ""))
+                }
+                onBlur={() => setEditingAmount(false)}
+                className="w-32 bg-transparent text-center outline-none ring-0"
+              />
+              <span className="text-2xl text-muted-foreground">₪</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                setEditingAmount(true);
+              }}
+              className="font-mono text-4xl font-light tracking-tight text-foreground"
+              dir="ltr"
             >
               {ILS.format(Number.isFinite(parsedAmount) ? parsedAmount : 0)}
-            </div>
+            </button>
           )}
 
-          {slice && (
-            <span className="text-xs text-muted-foreground">
-              {installments}× של{" "}
-              <span dir="ltr" className="font-mono">
-                {ILS.format(slice)}
-              </span>
-            </span>
-          )}
-
-          {editing ? (
+          {editingMerchant ? (
             <input
+              autoFocus
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
+              onBlur={() => setEditingMerchant(false)}
               placeholder="שם בית עסק"
-              className="w-full max-w-xs rounded-xl border border-white/10 bg-surface/70 px-4 py-2 text-center text-base text-foreground outline-none focus:border-[color:var(--neon)]"
+              className="w-full max-w-[220px] rounded-lg border border-white/12 bg-black/30 px-3 py-1.5 text-center text-sm text-foreground outline-none focus:border-[color:var(--neon)]"
             />
           ) : (
-            <div className="text-lg font-medium text-foreground">
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                setEditingMerchant(true);
+              }}
+              className="text-sm font-medium text-foreground"
+            >
               {merchant.trim() || "עסק לא ידוע"}
-            </div>
+            </button>
           )}
 
-          {entry.cardLast4 && (
-            <span dir="ltr" className="text-xs text-muted-foreground/80">
+          {entry.cardLast4 ? (
+            <span dir="ltr" className="text-[10px] text-muted-foreground/80">
               ····{entry.cardLast4}
             </span>
-          )}
+          ) : null}
         </motion.div>
 
-        {/* Category chip — taps open the picker sheet */}
+        {/* Category chip */}
         <motion.button
           type="button"
           onClick={() => {
             tap();
             setPickerOpen(true);
           }}
-          whileTap={{ scale: 0.97 }}
-          initial={{ opacity: 0, y: 8 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.3 }}
-          className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-surface/60 p-3 text-start"
+          transition={{ delay: 0.08, duration: 0.28 }}
+          className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5 text-start"
         >
-          <span className="flex items-center gap-3">
+          <span className="flex items-center gap-2">
             <span
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
               style={{
                 background: `${categoryMeta.accent}22`,
                 color: categoryMeta.accent,
               }}
             >
-              <categoryMeta.icon className="h-5 w-5" strokeWidth={1.6} />
+              <categoryMeta.icon className="h-4 w-4" strokeWidth={1.6} />
             </span>
-            <span className="flex flex-col">
-              <span className="text-xs text-muted-foreground">קטגוריה</span>
-              <span className="text-base font-medium text-foreground">
+            <span className="flex flex-col leading-tight">
+              <span className="text-[10px] text-muted-foreground">
+                קטגוריה
+              </span>
+              <span className="text-sm font-medium text-foreground">
                 {categoryMeta.label}
               </span>
             </span>
           </span>
-          <span className="text-xs text-muted-foreground">החלף</span>
+          <span className="text-[10px] text-muted-foreground">החלף</span>
         </motion.button>
 
-        {/* Installments controls — only shown in edit mode */}
-        {editing && (
-          <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-surface/60 p-3">
-            <div className="flex flex-col">
-              <span className="text-xs text-muted-foreground">תשלומים</span>
-              <span className="text-base font-medium">{installments}</span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  tap();
-                  setInstallments((n) => Math.max(1, n - 1));
-                }}
-                className="h-9 w-9 rounded-full border border-white/12 bg-surface/80 text-foreground"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  tap();
-                  setInstallments((n) => Math.min(60, n + 1));
-                }}
-                className="h-9 w-9 rounded-full border border-white/12 bg-surface/80 text-foreground"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Budget inclusion toggle */}
+        {/* Budget inclusion — compact row */}
         <motion.label
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.14, duration: 0.32 }}
-          className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-surface/40 px-4 py-3"
+          transition={{ delay: 0.1, duration: 0.28 }}
+          className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5"
         >
-          <div className="flex flex-col gap-0.5 text-right">
-            <span className="text-sm font-medium text-foreground">
-              כלול בתקציב החודשי
+          <div className="flex flex-col gap-0.5 text-right leading-tight">
+            <span className="text-[12px] font-medium text-foreground">
+              כלול בתקציב
             </span>
-            <span className="text-[11px] text-muted-foreground">
-              {includeInBudget
-                ? "החיוב נספר ב־actualSpentThisMonth"
-                : "נשמר בהיסטוריה, לא נספר בתקציב"}
+            <span className="text-[10px] text-muted-foreground">
+              {includeInBudget ? "נספר בחודש" : "לא נספר בחודש"}
             </span>
           </div>
           <button
@@ -229,7 +204,7 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
             }}
             dir="ltr"
             aria-pressed={includeInBudget}
-            className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors ${
+            className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
               includeInBudget
                 ? "border-[color:var(--neon)]/70 bg-[color:var(--neon)]/20"
                 : "border-white/20 bg-background/40"
@@ -238,61 +213,53 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
             <motion.span
               initial={false}
               animate={{
-                left: includeInBudget ? "22px" : "2px",
+                left: includeInBudget ? "21px" : "2px",
                 backgroundColor: includeInBudget ? "#00E5FF" : "#A1A1AA",
               }}
               transition={{ type: "spring", stiffness: 500, damping: 32 }}
-              className="absolute top-1/2 block size-5 -translate-y-1/2 rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.4)]"
+              className="absolute top-1/2 block size-4 -translate-y-1/2 rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.4)]"
             />
           </button>
         </motion.label>
 
-        {/* Action buttons — large, green/red, premium feel */}
+        {/* Actions */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18, duration: 0.32 }}
-          className="flex flex-col gap-2 pt-1"
+          transition={{ delay: 0.14, duration: 0.28 }}
+          className="flex flex-col gap-1.5 pt-0.5"
         >
           <button
             type="button"
             onClick={handleConfirm}
-            className="btn-confirm flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-transform active:scale-[0.99]"
+            className="btn-confirm flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold transition-transform active:scale-[0.99]"
           >
-            <Check className="h-5 w-5" strokeWidth={2.2} />
+            <Check className="h-4 w-4" strokeWidth={2.4} />
             אשר והוסף
           </button>
-
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <button
               type="button"
               onClick={() => {
                 tap();
-                setEditing((v) => !v);
+                setEditingAmount(true);
               }}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-surface/60 text-sm text-foreground/90 transition-colors hover:border-white/20"
+              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-black/30 text-[12px] text-foreground/90 transition-colors hover:border-white/20"
             >
-              {editing ? (
-                <>
-                  <X className="h-4 w-4" /> סיים עריכה
-                </>
-              ) : (
-                <>
-                  <Pencil className="h-4 w-4" /> ערוך
-                </>
-              )}
+              <Pencil className="h-3.5 w-3.5" />
+              ערוך סכום
             </button>
             <button
               type="button"
               onClick={handleDismiss}
-              className="btn-cancel flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition-transform active:scale-[0.99]"
+              className="btn-cancel flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[12px] font-semibold transition-transform active:scale-[0.99]"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
               לא שלי
             </button>
           </div>
         </motion.div>
-      </BottomSheet>
+      </GlassPopup>
 
       <CategoryPickerSheet
         open={pickerOpen}
@@ -301,8 +268,6 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
         suggested={(() => {
           if (!merchant.trim()) return undefined;
           const hint = categorize(merchant.trim()) as CategoryId;
-          // `categorize` falls back to "other" when nothing matched;
-          // surfacing that as a "מומלץ" chip would be noise.
           return hint !== "other" ? hint : undefined;
         })()}
         onSelect={(id) => setCategory(id)}
@@ -310,4 +275,3 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
     </>
   );
 }
-

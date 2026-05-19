@@ -168,11 +168,11 @@ export function ConfirmPageClient({ externalId }: { externalId: string }) {
     );
   }
 
-  // Full-bleed dark backdrop — confirmation sheet feels like a popup,
-  // never a "page". After handleClose's router.replace("/") the dashboard
-  // takes over.
+  // GlassPopup owns the dimming backdrop; the surrounding <main> stays
+  // empty so the popup floats over nothing instead of stacking two
+  // overlays. router.replace("/") on close lets the dashboard reappear.
   return (
-    <main className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md">
+    <main className="min-h-[100dvh]">
       <ConfirmationSheet
         open={open}
         onOpenChange={handleClose}

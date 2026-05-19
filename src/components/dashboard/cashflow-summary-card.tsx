@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertOctagon,
   ArrowDownToLine,
   Banknote,
+  ChevronLeft,
   CreditCard,
   Receipt,
   ShieldCheck,
@@ -20,6 +21,8 @@ import {
   type FinancialSnapshot,
   type RiskLevel,
 } from "@/lib/financial-snapshot";
+import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
+import { tap } from "@/lib/haptics";
 
 // One Intl formatter, plain — never `signDisplay`, which crashes iOS < 15.4
 // on module load.
@@ -41,6 +44,15 @@ const TONE: Record<RiskLevel, { accent: string; label: string; icon: typeof Shie
   overdraft: { accent: "#F87171", label: "צפי לחריגה", icon: AlertOctagon },
 };
 
+type DrilldownState =
+  | { kind: "closed" }
+  | {
+      kind: "open";
+      title: string;
+      subtitle?: string;
+      filter: "actual-this-month" | "budgeted-this-month" | "all-this-month";
+    };
+
 export function CashflowSummaryCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -48,6 +60,15 @@ export function CashflowSummaryCard() {
   const incomes = useFinanceStore((s) => s.incomes);
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
+  const [drilldown, setDrilldown] = useState<DrilldownState>({ kind: "closed" });
+  const openDrilldown = (
+    title: string,
+    filter: "actual-this-month" | "budgeted-this-month" | "all-this-month",
+    subtitle?: string,
+  ) => {
+    tap();
+    setDrilldown({ kind: "open", title, subtitle, filter });
+  };
   const statuses = useFinanceStore((s) => s.statuses);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
@@ -217,6 +238,13 @@ export function CashflowSummaryCard() {
             label="כבר ניצלת"
             value={`−${ILS.format(snapshot.actualSpentThisMonth)}`}
             tone="negative"
+            onClick={() =>
+              openDrilldown(
+                "בפועל החודש",
+                "actual-this-month",
+                "כל החיובים שנכנסו עד עכשיו",
+              )
+            }
           />
           <Row
             icon={<Sparkles className="h-3.5 w-3.5" />}
@@ -231,9 +259,28 @@ export function CashflowSummaryCard() {
             label="כמה עוד צפוי לצאת"
             value={`−${ILS.format(snapshot.remainingPlannedSpending)}`}
             tone="negative"
+            onClick={() =>
+              openDrilldown(
+                "השפעת תקציב",
+                "budgeted-this-month",
+                "חיובים שנספרים מול התקציב",
+              )
+            }
           />
         </div>
       ) : null}
+
+      <TransactionsDrilldown
+        open={drilldown.kind === "open"}
+        onOpenChange={(o) => {
+          if (!o) setDrilldown({ kind: "closed" });
+        }}
+        title={drilldown.kind === "open" ? drilldown.title : ""}
+        subtitle={drilldown.kind === "open" ? drilldown.subtitle : undefined}
+        filter={
+          drilldown.kind === "open" ? drilldown.filter : "actual-this-month"
+        }
+      />
     </motion.section>
   );
 }
@@ -243,11 +290,13 @@ function Row({
   label,
   value,
   tone,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   tone: "positive" | "negative" | "neutral";
+  onClick?: () => void;
 }) {
   const color =
     tone === "positive"
@@ -255,11 +304,17 @@ function Row({
       : tone === "negative"
         ? "#F87171"
         : "#E4E7EC";
-  return (
-    <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/25 px-3 py-2">
+  const interactive = Boolean(onClick);
+  const baseClass =
+    "flex w-full items-center justify-between gap-2 rounded-xl border border-white/5 bg-black/25 px-3 py-2 text-start transition-colors";
+  const inner = (
+    <>
       <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         {icon}
         {label}
+        {interactive ? (
+          <ChevronLeft className="size-3 text-muted-foreground/60" />
+        ) : null}
       </span>
       <span
         data-mono="true"
@@ -269,6 +324,18 @@ function Row({
       >
         {value}
       </span>
-    </div>
+    </>
   );
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${baseClass} hover:border-white/15 active:scale-[0.99]`}
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <div className={baseClass}>{inner}</div>;
 }
