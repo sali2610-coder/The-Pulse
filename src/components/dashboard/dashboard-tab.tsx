@@ -113,6 +113,12 @@ const RecentActivity = lazy(() =>
   })),
 );
 
+const CashflowTimeline = lazy(() =>
+  import("@/components/dashboard/cashflow-timeline").then((m) => ({
+    default: m.CashflowTimeline as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -144,6 +150,11 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-6">
         <Safe name="RecentActivity"><RecentActivity /></Safe>
+      </div>
+
+      {/* CASHFLOW TIMELINE — day-by-day projected events */}
+      <div className="sm:col-span-6">
+        <Safe name="CashflowTimeline"><CashflowTimeline /></Safe>
       </div>
 
       {/* QUICK DAILY GLANCE — split row */}
