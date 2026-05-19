@@ -9,6 +9,7 @@ import {
   deviceIdFromStateKey,
   getUserState,
   isKvConfigured,
+  kv,
   listDeviceStateKeys,
   pullTransactionsSince,
 } from "@/lib/kv";
@@ -30,14 +31,28 @@ export async function GET(): Promise<Response> {
 
   const keys = await listDeviceStateKeys();
 
-  // Bound concurrency so a large KV doesn't fan out into hundreds of
-  // simultaneous requests.
+  /** Tiny cache so we don't re-check the same orphan userId twice. */
+  const userExistsCache = new Map<string, boolean>();
+  async function userExists(uid: string): Promise<boolean> {
+    if (userExistsCache.has(uid)) return userExistsCache.get(uid)!;
+    const v = await kv().get(`sally:auth:user:${uid}`);
+    const exists = v !== null && v !== undefined;
+    userExistsCache.set(uid, exists);
+    return exists;
+  }
+
   const candidates: Array<{
     deviceId: string;
     richness: number;
     updatedAt: number;
     txCount: number;
     claimedByMe: boolean;
+    /** Claim points to a userId whose user record is gone (former
+     *  session that expired or was deleted). Safe to take over because
+     *  no live user owns it. */
+    claimedByOrphan: boolean;
+    /** Original claim userId — useful for debugging in the UI. */
+    claimedUserId?: string;
   }> = [];
 
   for (const key of keys) {
@@ -45,7 +60,19 @@ export async function GET(): Promise<Response> {
     if (!deviceId) continue;
 
     const claim = await getDeviceClaimUserId(deviceId);
-    if (claim && claim !== userId) continue; // someone else's
+    let claimedByMe = false;
+    let claimedByOrphan = false;
+    if (claim) {
+      if (claim === userId) {
+        claimedByMe = true;
+      } else {
+        // Claim points elsewhere. If that user record no longer exists,
+        // surface as orphan — the caller can take it over.
+        const stillThere = await userExists(claim);
+        if (stillThere) continue; // genuinely belongs to another user
+        claimedByOrphan = true;
+      }
+    }
 
     const blob = await getUserState({ kind: "device", id: deviceId });
     if (!blob) continue;
@@ -58,7 +85,6 @@ export async function GET(): Promise<Response> {
       ).catch(() => [])
     ).length;
 
-    // Skip empty blobs so the UI doesn't list dozens of nothings.
     if (richness === 0 && txCount === 0) continue;
 
     candidates.push({
@@ -66,7 +92,9 @@ export async function GET(): Promise<Response> {
       richness,
       updatedAt: blob.updatedAt,
       txCount,
-      claimedByMe: claim === userId,
+      claimedByMe,
+      claimedByOrphan,
+      claimedUserId: claim ?? undefined,
     });
   }
 

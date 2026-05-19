@@ -35,6 +35,8 @@ type OrphanRow = {
   updatedAt: number;
   txCount: number;
   claimedByMe: boolean;
+  claimedByOrphan?: boolean;
+  claimedUserId?: string;
 };
 
 const ILS_DATE = new Intl.DateTimeFormat("he-IL", {
@@ -131,7 +133,7 @@ export function DeviceRecoveryCard() {
 
   // ── Restore current device ────────────────────────────────────────
   const restore = async (
-    strategy: "newest" | "force-device",
+    strategy: "newest" | "force-device" | "takeover",
     deviceId: string = currentDeviceId,
   ) => {
     if (busy) return;
@@ -326,34 +328,54 @@ export function DeviceRecoveryCard() {
             {orphansLoading ? (
               <div className="text-[11px] text-muted-foreground">סורק…</div>
             ) : orphans && orphans.length > 0 ? (
-              orphans.map((o) => (
-                <div
-                  key={o.deviceId}
-                  className="flex items-center gap-2 rounded-2xl border border-white/8 bg-background/30 p-3"
-                >
-                  <div className="flex-1 text-right">
-                    <div
-                      data-mono="true"
-                      dir="ltr"
-                      className="text-[11px] text-foreground"
-                    >
-                      {shortDevice(o.deviceId)}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {o.richness} items · {o.txCount} txs · {fmtTime(o.updatedAt)}
-                    </div>
-                  </div>
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => restore("force-device", o.deviceId)}
-                    disabled={busy}
-                    className="rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold transition-colors hover:bg-gold/15 disabled:opacity-50"
+              orphans.map((o) => {
+                const isOrphan = !o.claimedByMe && o.claimedByOrphan;
+                const strategy: "force-device" | "takeover" = isOrphan
+                  ? "takeover"
+                  : "force-device";
+                return (
+                  <div
+                    key={o.deviceId}
+                    className={`flex items-center gap-2 rounded-2xl border p-3 ${
+                      isOrphan
+                        ? "border-[color:var(--neon)]/30 bg-[color:var(--neon)]/8"
+                        : "border-white/8 bg-background/30"
+                    }`}
                   >
-                    שחזר
-                  </motion.button>
-                </div>
-              ))
+                    <div className="flex-1 text-right">
+                      <div
+                        data-mono="true"
+                        dir="ltr"
+                        className="text-[11px] text-foreground"
+                      >
+                        {shortDevice(o.deviceId)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {o.richness} items · {o.txCount} txs ·{" "}
+                        {fmtTime(o.updatedAt)}
+                      </div>
+                      {isOrphan ? (
+                        <div className="mt-0.5 text-[10px] text-[color:var(--neon)]/80">
+                          התחברות ישנה שפג תוקפה — אפשר לאמץ
+                        </div>
+                      ) : null}
+                    </div>
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => restore(strategy, o.deviceId)}
+                      disabled={busy}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                        isOrphan
+                          ? "border-[color:var(--neon)]/50 bg-[color:var(--neon)]/15 text-[color:var(--neon)] hover:bg-[color:var(--neon)]/25"
+                          : "border-gold/40 bg-gold/10 text-gold hover:bg-gold/15"
+                      }`}
+                    >
+                      {isOrphan ? "אמץ ושחזר" : "שחזר"}
+                    </motion.button>
+                  </div>
+                );
+              })
             ) : (
               <div className="text-[11px] text-muted-foreground">
                 לא נמצאו גיבויים נוספים שייכים לחשבון שלך.
