@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { CloudDownload, History, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  CloudDownload,
+  History,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { getOrCreateDeviceId } from "@/lib/device-id";
@@ -23,6 +29,14 @@ type Probe =
       deviceIsNewer: boolean;
     };
 
+type OrphanRow = {
+  deviceId: string;
+  richness: number;
+  updatedAt: number;
+  txCount: number;
+  claimedByMe: boolean;
+};
+
 const ILS_DATE = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -37,26 +51,27 @@ function fmtTime(ts: number | null | undefined): string {
   }
 }
 
-/**
- * Defensive recovery panel. Only shown when the signed-in user has a
- * device-scoped blob still alive in KV (the original local backup that
- * lived before the first Google sign-in). Lets the user pull that backup
- * forward in two taps without DevTools.
- *
- * Renders nothing when:
- *   - auth disabled
- *   - no session
- *   - no device backup exists for this device id
- */
+function shortDevice(id: string): string {
+  if (id.length <= 14) return id;
+  return `${id.slice(0, 6)}…${id.slice(-4)}`;
+}
+
 export function DeviceRecoveryCard() {
   const [probe, setProbe] = useState<Probe>({ state: "loading" });
   const [busy, setBusy] = useState(false);
 
+  const [orphansOpen, setOrphansOpen] = useState(false);
+  const [orphansLoading, setOrphansLoading] = useState(false);
+  const [orphans, setOrphans] = useState<OrphanRow[] | null>(null);
+
+  const currentDeviceId =
+    typeof window !== "undefined" ? getOrCreateDeviceId() : "";
+
+  // ── Current-device probe ─────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // 1. Need an active session before recover-device returns anything.
         const sessionRes = await fetch("/api/auth/session", {
           cache: "no-store",
         });
@@ -69,7 +84,6 @@ export function DeviceRecoveryCard() {
           return;
         }
 
-        // 2. Ask the server what's stored.
         const deviceId = getOrCreateDeviceId();
         const res = await fetch(
           `/api/auth/recover-device?deviceId=${encodeURIComponent(deviceId)}`,
@@ -90,8 +104,6 @@ export function DeviceRecoveryCard() {
         const deviceTxCount = data.deviceTxCount ?? 0;
         const deviceRichness = data.device?.richness ?? 0;
 
-        // Nothing to recover when neither the state blob nor the tx
-        // queue has anything under the device prefix.
         if (deviceRichness === 0 && deviceTxCount === 0) {
           setProbe({ state: "no-device-backup", user: data.user });
           return;
@@ -117,7 +129,11 @@ export function DeviceRecoveryCard() {
     };
   }, []);
 
-  const restore = async (strategy: "newest" | "force-device") => {
+  // ── Restore current device ────────────────────────────────────────
+  const restore = async (
+    strategy: "newest" | "force-device",
+    deviceId: string = currentDeviceId,
+  ) => {
     if (busy) return;
     setBusy(true);
     tap();
@@ -126,10 +142,7 @@ export function DeviceRecoveryCard() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deviceId: getOrCreateDeviceId(),
-          strategy,
-        }),
+        body: JSON.stringify({ deviceId, strategy }),
       });
       if (!res.ok) {
         toast.error("שחזור נכשל");
@@ -160,10 +173,41 @@ export function DeviceRecoveryCard() {
     }
   };
 
-  // Don't render when nothing to offer.
+  // ── Orphan-device search ──────────────────────────────────────────
+  const loadOrphans = useCallback(async () => {
+    setOrphansLoading(true);
+    try {
+      const res = await fetch("/api/auth/recoverable-devices", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setOrphans([]);
+        return;
+      }
+      const data = (await res.json()) as { candidates: OrphanRow[] };
+      const filtered = (data.candidates ?? []).filter(
+        (c) => c.deviceId !== currentDeviceId,
+      );
+      setOrphans(filtered);
+    } catch {
+      setOrphans([]);
+    } finally {
+      setOrphansLoading(false);
+    }
+  }, [currentDeviceId]);
+
+  const toggleOrphans = () => {
+    if (!orphansOpen && orphans === null) {
+      void loadOrphans();
+    }
+    setOrphansOpen((v) => !v);
+  };
+
   if (probe.state === "loading") return null;
   if (probe.state === "no-session") return null;
-  if (probe.state === "no-device-backup") return null;
+
+  const cardVisible = probe.state === "available";
 
   return (
     <motion.section
@@ -171,77 +215,153 @@ export function DeviceRecoveryCard() {
       animate={{ opacity: 1, y: 0 }}
       className="rounded-3xl border border-gold/30 bg-gradient-to-b from-gold/[0.08] to-transparent p-5 backdrop-blur-md"
     >
-      <header className="flex items-start gap-3">
-        <span className="flex size-10 items-center justify-center rounded-2xl bg-gold/15 text-gold">
-          <History className="size-5" />
-        </span>
-        <div className="flex-1">
-          <div className="text-sm font-medium text-foreground">
-            גיבוי מקומי זמין
+      {cardVisible ? (
+        <>
+          <header className="flex items-start gap-3">
+            <span className="flex size-10 items-center justify-center rounded-2xl bg-gold/15 text-gold">
+              <History className="size-5" />
+            </span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-foreground">
+                גיבוי מקומי זמין
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                במכשיר הזה יש גיבוי מהתקופה לפני ההתחברות ל־Google.
+                {probe.deviceTxCount > 0 ? (
+                  <>
+                    {" "}
+                    כולל{" "}
+                    <strong className="text-foreground">
+                      {probe.deviceTxCount}
+                    </strong>{" "}
+                    חיובים שעוד לא הועברו לחשבון.
+                  </>
+                ) : null}
+                {" "}אם הדאשבורד שלך לא מציג את הנתונים שאתה זוכר — אפשר לשחזר
+                מכאן.
+              </p>
+            </div>
+          </header>
+
+          <div
+            dir="ltr"
+            className="mt-4 grid grid-cols-2 gap-2 text-right text-[11px] text-muted-foreground"
+          >
+            <Stat
+              label="חשבון Google"
+              richness={probe.user?.richness ?? 0}
+              updatedAt={probe.user?.updatedAt ?? 0}
+            />
+            <Stat
+              label="גיבוי מקומי"
+              richness={probe.device?.richness ?? 0}
+              updatedAt={probe.device?.updatedAt ?? 0}
+              highlight={probe.deviceIsRicher || probe.deviceIsNewer}
+            />
           </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            במכשיר הזה יש גיבוי מהתקופה לפני ההתחברות ל־Google.
-            {probe.deviceTxCount > 0 ? (
-              <>
-                {" "}
-                כולל{" "}
-                <strong className="text-foreground">
-                  {probe.deviceTxCount}
-                </strong>{" "}
-                חיובים שעוד לא הועברו לחשבון.
-              </>
-            ) : null}
-            {" "}
-            אם הדאשבורד שלך לא מציג את הנתונים שאתה זוכר — אפשר לשחזר
-            מכאן.
+
+          <div className="mt-4 flex flex-col gap-2">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.98 }}
+              onClick={() => restore("newest")}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-3 py-2.5 text-[12px] font-medium text-[color:var(--neon)] transition-colors hover:bg-[color:var(--neon)]/15 disabled:opacity-50"
+            >
+              <ShieldCheck className="size-3.5" />
+              שחזור חכם — שמירת החדש מבין השניים
+            </motion.button>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.98 }}
+              onClick={() => restore("force-device")}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-gold/40 bg-gold/10 px-3 py-2.5 text-[12px] font-medium text-gold transition-colors hover:bg-gold/15 disabled:opacity-50"
+            >
+              <CloudDownload className="size-3.5" />
+              שחזור מלא מהגיבוי המקומי
+            </motion.button>
+          </div>
+
+          <p className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <RefreshCw className="size-3" />
+            השחזור לא מוחק את הגיבוי. אפשר לחזור ולנסות שוב.
           </p>
-        </div>
-      </header>
+        </>
+      ) : (
+        <header className="flex items-start gap-3">
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-gold/15 text-gold">
+            <History className="size-5" />
+          </span>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-foreground">
+              חיפוש גיבויים ישנים
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+              חסר לך מידע ישן? אם ה־deviceId של הדפדפן השתנה (התקנה מחדש,
+              ניקוי דפדפן), הגיבוי לא נמחק — אפשר לחפש אותו.
+            </p>
+          </div>
+        </header>
+      )}
 
-      <div
-        dir="ltr"
-        className="mt-4 grid grid-cols-2 gap-2 text-right text-[11px] text-muted-foreground"
-      >
-        <Stat
-          label="חשבון Google"
-          richness={probe.user?.richness ?? 0}
-          updatedAt={probe.user?.updatedAt ?? 0}
-        />
-        <Stat
-          label="גיבוי מקומי"
-          richness={probe.device?.richness ?? 0}
-          updatedAt={probe.device?.updatedAt ?? 0}
-          highlight={probe.deviceIsRicher || probe.deviceIsNewer}
-        />
-      </div>
-
-      <div className="mt-4 flex flex-col gap-2">
-        <motion.button
+      {/* Orphan-device discovery */}
+      <div className="mt-4 border-t border-white/8 pt-3">
+        <button
           type="button"
-          whileTap={{ scale: 0.98 }}
-          onClick={() => restore("newest")}
-          disabled={busy}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-3 py-2.5 text-[12px] font-medium text-[color:var(--neon)] transition-colors hover:bg-[color:var(--neon)]/15 disabled:opacity-50"
+          onClick={toggleOrphans}
+          className="flex w-full items-center justify-between text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ShieldCheck className="size-3.5" />
-          שחזור חכם — שמירת החדש מבין השניים
-        </motion.button>
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
-          onClick={() => restore("force-device")}
-          disabled={busy}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-gold/40 bg-gold/10 px-3 py-2.5 text-[12px] font-medium text-gold transition-colors hover:bg-gold/15 disabled:opacity-50"
-        >
-          <CloudDownload className="size-3.5" />
-          שחזור מלא מהגיבוי המקומי
-        </motion.button>
-      </div>
+          <span className="flex items-center gap-1.5">
+            <Search className="size-3" />
+            מצא גיבויים נוספים מהחשבון שלי
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.18em]">
+            {orphansOpen ? "סגור" : "פתח"}
+          </span>
+        </button>
 
-      <p className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-        <RefreshCw className="size-3" />
-        השחזור לא מוחק את הגיבוי. אפשר לחזור ולנסות שוב.
-      </p>
+        {orphansOpen ? (
+          <div className="mt-3 flex flex-col gap-2">
+            {orphansLoading ? (
+              <div className="text-[11px] text-muted-foreground">סורק…</div>
+            ) : orphans && orphans.length > 0 ? (
+              orphans.map((o) => (
+                <div
+                  key={o.deviceId}
+                  className="flex items-center gap-2 rounded-2xl border border-white/8 bg-background/30 p-3"
+                >
+                  <div className="flex-1 text-right">
+                    <div
+                      data-mono="true"
+                      dir="ltr"
+                      className="text-[11px] text-foreground"
+                    >
+                      {shortDevice(o.deviceId)}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {o.richness} items · {o.txCount} txs · {fmtTime(o.updatedAt)}
+                    </div>
+                  </div>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => restore("force-device", o.deviceId)}
+                    disabled={busy}
+                    className="rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[11px] font-medium text-gold transition-colors hover:bg-gold/15 disabled:opacity-50"
+                  >
+                    שחזר
+                  </motion.button>
+                </div>
+              ))
+            ) : (
+              <div className="text-[11px] text-muted-foreground">
+                לא נמצאו גיבויים נוספים שייכים לחשבון שלך.
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
     </motion.section>
   );
 }

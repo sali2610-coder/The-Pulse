@@ -146,6 +146,38 @@ export async function pullTransactionsSince(
 }
 
 /**
+ * Scan KV for every `sally:device:<id>:state` key. Returns the list of
+ * device ids. Used by the recovery flow to surface orphan blobs the user
+ * may have lost when their deviceId changed (PWA reinstall, /reset,
+ * Safari "clear website data").
+ *
+ * SCAN is cooperative — Upstash returns at most ~10k keys per call. For
+ * a single-tenant app this is more than enough; if it ever isn't, the
+ * caller can paginate via the returned cursor.
+ */
+export async function listDeviceStateKeys(): Promise<string[]> {
+  const out: string[] = [];
+  let cursor: string | number = 0;
+  for (let i = 0; i < 20; i++) {
+    const res = (await kv().scan(cursor, {
+      match: "sally:device:*:state",
+      count: 500,
+    })) as [string, string[]];
+    const [next, batch] = res;
+    for (const k of batch) out.push(k);
+    if (String(next) === "0") break;
+    cursor = next;
+  }
+  return out;
+}
+
+/** Extract the deviceId portion of a `sally:device:<id>:state` key. */
+export function deviceIdFromStateKey(key: string): string | null {
+  const m = key.match(/^sally:device:(.+):state$/);
+  return m ? m[1] : null;
+}
+
+/**
  * One-shot migration helper: copy every transaction in the source scope's
  * ZSET into the target scope, then delete the source. Used by claim-device
  * when a device that's been ingesting webhooks gets bound to a freshly
