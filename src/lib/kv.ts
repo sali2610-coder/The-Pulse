@@ -41,6 +41,7 @@ const TX_KEY = (scope: Scope) => `${scopePrefix(scope)}:tx`;
 const TX_SEEN_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:tx:seen:${externalId}`;
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
+const PUSH_LAST_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:last`;
 const STATE_KEY = (scope: Scope) => `${scopePrefix(scope)}:state`;
 // Long TTL so a user who reinstalls the PWA after 90 days still gets their
 // state back. Touched on every write — effectively permanent for active users.
@@ -316,6 +317,40 @@ export async function getPushSubscription(
 
 export async function deletePushSubscription(scope: Scope): Promise<void> {
   await kv().del(SUB_KEY(scope));
+}
+
+export type PushAttempt = {
+  ts: number;
+  ok: boolean;
+  gone: boolean;
+  status?: number;
+  reason?: string;
+  endpointHost?: string;
+  externalId?: string;
+};
+
+export async function recordPushAttempt(
+  scope: Scope,
+  attempt: PushAttempt,
+): Promise<void> {
+  const key = PUSH_LAST_KEY(scope);
+  await kv().set(key, JSON.stringify(attempt));
+  await kv().expire(key, TX_TTL_SECONDS);
+}
+
+export async function readPushAttempt(
+  scope: Scope,
+): Promise<PushAttempt | null> {
+  const raw = await kv().get(PUSH_LAST_KEY(scope));
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as PushAttempt;
+    } catch {
+      return null;
+    }
+  }
+  return raw as PushAttempt;
 }
 
 export async function recordCategoryOverride(

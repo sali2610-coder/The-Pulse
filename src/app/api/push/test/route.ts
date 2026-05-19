@@ -2,6 +2,7 @@ import {
   deletePushSubscription,
   getPushSubscription,
   pushTransaction,
+  recordPushAttempt,
   type StoredTransaction,
 } from "@/lib/kv";
 import {
@@ -82,6 +83,16 @@ export async function POST(req: Request): Promise<Response> {
     categoryHint: "other",
     occurredAt,
   });
+
+  await recordPushAttempt(scopeRes.scope, {
+    ts: Date.now(),
+    ok: result.ok,
+    gone: result.gone,
+    status: result.status,
+    reason: result.reason,
+    endpointHost: result.endpointHost,
+    externalId,
+  }).catch(() => undefined);
 
   if (result.gone) {
     await deletePushSubscription(scopeRes.scope);

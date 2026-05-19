@@ -9,6 +9,7 @@ import {
   isKvConfigured,
   getPushSubscription,
   deletePushSubscription,
+  recordPushAttempt,
   appendUserWebhookLog,
   appendAnonWebhookLog,
   type StoredTransaction,
@@ -356,6 +357,15 @@ export async function POST(req: Request): Promise<Response> {
       });
       pushed = result.gone ? "gone" : result.ok ? "sent" : "skipped";
       if (result.gone) await deletePushSubscription(scope);
+      await recordPushAttempt(scope, {
+        ts: Date.now(),
+        ok: result.ok,
+        gone: result.gone,
+        status: result.status,
+        reason: result.reason,
+        endpointHost: result.endpointHost,
+        externalId,
+      }).catch(() => undefined);
     }
   }
 

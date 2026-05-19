@@ -13,6 +13,7 @@ import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { soft, tap } from "@/lib/haptics";
 import { toast } from "sonner";
+import { PushDiagnostics } from "./push-diagnostics";
 
 function scopeHeaders(): Record<string, string> {
   return { "x-sally-device": getOrCreateDeviceId() };
@@ -319,7 +320,7 @@ export function PushToggle() {
         return;
       }
       toast.success(
-        `נשלחה התראת בדיקה${detail} — אם לא הופיעה, בדוק Settings → Notifications → Sally`,
+        `נשלחה התראת בדיקה${detail}. אם לא הופיעה: נעל את המסך + ודא iOS Settings → Notifications → Sally → Allow.`,
       );
     } finally {
       setBusy(false);
@@ -420,7 +421,7 @@ export function PushToggle() {
               </motion.button>
             )}
           </div>
-          {IS_DEV && debug ? (
+          {debug ? (
             <div
               dir="ltr"
               className="rounded-md border border-white/8 bg-background/40 px-2 py-1 font-mono text-[10px] text-muted-foreground"
@@ -430,6 +431,9 @@ export function PushToggle() {
           ) : null}
         </div>
       )}
+      <div className="mt-4">
+        <PushDiagnostics />
+      </div>
     </section>
   );
 }

@@ -6,7 +6,7 @@
 // Web Push notifications and route the user back into the app when they
 // tap one.
 
-const SW_VERSION = "sally-push-v2";
+const SW_VERSION = "sally-push-v3";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -82,10 +82,23 @@ self.addEventListener("push", (event) => {
   let payload;
   try {
     payload = event.data ? event.data.json() : null;
-  } catch {
+  } catch (err) {
+    console.error("[sw] push payload parse failed", err);
     payload = null;
   }
-  if (!payload) return;
+  console.info("[sw] push event received", payload?.kind, payload?.externalId);
+  if (!payload) {
+    // Show a generic notification so the user knows something arrived
+    // even when the payload format is wrong — better than silent drop.
+    event.waitUntil(
+      self.registration.showNotification("Sally", {
+        body: "התקבל חיוב חדש",
+        icon: "/icon.svg",
+        tag: "sally-generic",
+      }),
+    );
+    return;
+  }
 
   if (payload.kind === "alert") {
     const meta = ALERT_META[payload.severity] || ALERT_META.info;
