@@ -42,6 +42,7 @@ const TX_SEEN_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:tx:seen:${externalId}`;
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
 const PUSH_LAST_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:last`;
+const PUSH_CLICK_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:click`;
 const STATE_KEY = (scope: Scope) => `${scopePrefix(scope)}:state`;
 // Long TTL so a user who reinstalls the PWA after 90 days still gets their
 // state back. Touched on every write — effectively permanent for active users.
@@ -386,6 +387,41 @@ export async function readPushAttempt(
     }
   }
   return raw as PushAttempt;
+}
+
+export type PushClick = {
+  externalId: string;
+  ts: number;
+};
+
+/** Record a notification-tap target so the PWA can recover the
+ *  deep-link on next mount when the SW's openWindow/navigate calls
+ *  fail (iOS standalone PWA). 5-minute TTL — long enough for the user
+ *  to come back, short enough not to re-open stale targets. */
+export async function recordPushClick(
+  scope: Scope,
+  click: PushClick,
+): Promise<void> {
+  const key = PUSH_CLICK_KEY(scope);
+  await kv().set(key, JSON.stringify(click), { ex: 300 });
+}
+
+/** Atomically read + clear the most recent push click. */
+export async function consumePushClick(
+  scope: Scope,
+): Promise<PushClick | null> {
+  const key = PUSH_CLICK_KEY(scope);
+  const raw = await kv().get(key);
+  if (!raw) return null;
+  await kv().del(key);
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as PushClick;
+    } catch {
+      return null;
+    }
+  }
+  return raw as PushClick;
 }
 
 export async function recordCategoryOverride(

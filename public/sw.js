@@ -6,7 +6,7 @@
 // Web Push notifications and route the user back into the app when they
 // tap one.
 
-const SW_VERSION = "sally-push-v4";
+const SW_VERSION = "sally-push-v5";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -174,7 +174,26 @@ self.addEventListener("notificationclick", (event) => {
 
   const target = `/confirm/${encodeURIComponent(externalId)}`;
   console.info("[sw] notificationclick → ", target);
-  event.waitUntil(openClient(target, { externalId }));
+
+  // Two parallel signals:
+  //   1. server-side beacon (read back on every PWA mount)
+  //   2. focus/navigate/openWindow + postMessage
+  // Belt-and-suspenders for iOS quirks where the in-process paths fail.
+  event.waitUntil(
+    Promise.all([
+      fetch("/api/push/click", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-sally-device": data.deviceId || "",
+        },
+        body: JSON.stringify({ externalId }),
+        keepalive: true,
+        credentials: "same-origin",
+      }).catch((err) => console.error("[sw] beacon failed", err)),
+      openClient(target, { externalId }),
+    ]),
+  );
 });
 
 /**
