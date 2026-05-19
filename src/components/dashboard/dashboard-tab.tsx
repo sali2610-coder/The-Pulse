@@ -127,7 +127,7 @@ export function DashboardTab() {
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:gap-4">
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-6 sm:gap-3">
       <div className="sm:col-span-6">
         <Safe name="HealthScoreCard"><HealthScoreCard /></Safe>
       </div>

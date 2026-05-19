@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { PulseExplainerSheet } from "@/components/pulse/pulse-explainer-sheet";
+import { tap } from "@/lib/haptics";
 import { TrendingUp } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { addMonths, currentMonthKey } from "@/lib/dates";
@@ -158,15 +160,32 @@ export function PulseBar({ budget }: Props) {
     el.style.removeProperty("--spot-y");
   }, []);
 
+  const [explainerOpen, setExplainerOpen] = useState(false);
+
   return (
+   <>
     <motion.section
       ref={sectionRef}
       onPointerMove={onPointerMove}
       onPointerLeave={onPointerLeave}
+      onClick={() => {
+        tap();
+        setExplainerOpen(true);
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="הסבר על Pulse"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          tap();
+          setExplainerOpen(true);
+        }
+      }}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.045] to-white/[0.01] p-5 backdrop-blur-2xl"
+      className="group relative cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.045] to-white/[0.01] p-5 backdrop-blur-2xl outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
       style={{
         // Layered glass: top inner highlight + bottom inner shadow + colored
         // outer drop tinted to the current status accent.
@@ -371,6 +390,16 @@ export function PulseBar({ budget }: Props) {
         <ForecastDetail forecast={forecast} budget={budget} accent={FORECAST_COLOR} />
       ) : null}
     </motion.section>
+    <PulseExplainerSheet
+      open={explainerOpen}
+      onOpenChange={setExplainerOpen}
+      actual={actual}
+      projected={projected}
+      budget={budget}
+      benchmark={benchmark}
+      status={status}
+    />
+   </>
   );
 }
 
