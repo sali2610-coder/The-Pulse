@@ -1,9 +1,25 @@
-// Central cash-flow engine.
+// Central cash-flow engine — THE SINGLE FINANCIAL BRAIN.
 //
-// One function, one shape, one truth. Every dashboard widget that used to
-// run its own forecast math now reads from this snapshot. Eliminates the
-// drift between CFO Summary / BalanceForecast / HealthScore / Pulse — they
-// all answer the SAME question with the SAME numbers.
+// Live-engine contract (Phase 80):
+//
+//   buildFinancialSnapshot(args) is a PURE function over the Zustand
+//   store's inputs:
+//
+//     accounts · loans · incomes · entries · rules · statuses ·
+//     monthlyBudget · monthKey · now
+//
+//   Every consumer (PulseBar, CashflowSummaryCard, CfoSummary,
+//   DailyAllowance, HealthScoreCard, MonthlyDigestCard, SmartSummary,
+//   CashflowTimeline) re-renders on store change and recomputes its
+//   slice via useMemo with these inputs as deps.
+//
+//   THERE IS NO CACHED COPY of any financial number anywhere in the
+//   client. Edits to a salary / loan / recurring rule / expense / budget
+//   propagate to every visible metric on the next render, with no
+//   manual recomputation step.
+//
+//   Tests/live-engine.test.ts pins this contract. Any future refactor
+//   that introduces a cached intermediate must update those specs.
 //
 // Question this snapshot answers:
 //   "Where will my balance land on the 1st of next month after every
