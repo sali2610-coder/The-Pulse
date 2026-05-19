@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDownToLine, Plus, Power, Trash2 } from "lucide-react";
+import { ArrowDownToLine, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -28,11 +28,35 @@ const EMPTY: FormState = { label: "", amount: "", dayOfMonth: "1" };
 export function IncomePanel() {
   const incomes = useFinanceStore((s) => s.incomes);
   const addIncome = useFinanceStore((s) => s.addIncome);
+  const updateIncome = useFinanceStore((s) => s.updateIncome);
   const toggleIncome = useFinanceStore((s) => s.toggleIncome);
   const deleteIncome = useFinanceStore((s) => s.deleteIncome);
 
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<FormState>(EMPTY);
   const [form, setForm] = useState<FormState>(EMPTY);
+
+  const startEdit = (inc: typeof incomes[number]) => {
+    setEditingId(inc.id);
+    setEditForm({
+      label: inc.label,
+      amount: String(inc.amount),
+      dayOfMonth: String(inc.dayOfMonth),
+    });
+  };
+
+  const submitEdit = () => {
+    if (!editingId) return;
+    if (!editForm.label.trim() || !editForm.amount.trim()) return;
+    updateIncome(editingId, {
+      label: editForm.label,
+      amount: Number(editForm.amount.replace(/,/g, "")),
+      dayOfMonth: Number(editForm.dayOfMonth) || 1,
+    });
+    tap();
+    setEditingId(null);
+  };
 
   const monthly = incomes
     .filter((i) => i.active)
@@ -201,28 +225,89 @@ export function IncomePanel() {
                     <div className="mt-0.5 text-[11px] text-muted-foreground">
                       ב־{inc.dayOfMonth} בחודש
                     </div>
-                    <div className="mt-2 flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleIncome(inc.id)}
-                        className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
-                      >
-                        <Power className="size-3" />
-                        {inc.active ? "כבה" : "הפעל"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`למחוק "${inc.label}"?`)) {
-                            deleteIncome(inc.id);
+                    {editingId === inc.id ? (
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <Input
+                          value={editForm.label}
+                          onChange={(e) =>
+                            setEditForm((f) => ({ ...f, label: e.target.value }))
                           }
-                        }}
-                        className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-destructive/80 hover:bg-destructive/10"
-                      >
-                        <Trash2 className="size-3" />
-                        מחק
-                      </button>
-                    </div>
+                          placeholder="שם"
+                          className="col-span-3 h-8 text-xs"
+                        />
+                        <Input
+                          value={editForm.amount}
+                          onChange={(e) =>
+                            setEditForm((f) => ({ ...f, amount: e.target.value }))
+                          }
+                          inputMode="decimal"
+                          placeholder="₪"
+                          className="col-span-2 h-8 text-xs"
+                        />
+                        <Input
+                          value={editForm.dayOfMonth}
+                          onChange={(e) =>
+                            setEditForm((f) => ({
+                              ...f,
+                              dayOfMonth: e.target.value,
+                            }))
+                          }
+                          inputMode="numeric"
+                          placeholder="יום"
+                          className="h-8 text-xs"
+                        />
+                        <div className="col-span-3 flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={submitEdit}
+                            className="h-8 flex-1 text-xs"
+                          >
+                            שמור
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingId(null)}
+                            className="h-8 text-xs"
+                          >
+                            בטל
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(inc)}
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                        >
+                          <Pencil className="size-3" />
+                          ערוך
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleIncome(inc.id)}
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                        >
+                          <Power className="size-3" />
+                          {inc.active ? "כבה" : "הפעל"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`למחוק "${inc.label}"?`)) {
+                              deleteIncome(inc.id);
+                            }
+                          }}
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-destructive/80 hover:bg-destructive/10"
+                        >
+                          <Trash2 className="size-3" />
+                          מחק
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.li>

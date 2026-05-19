@@ -6,6 +6,7 @@ import { Coins } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { dailyAllowance } from "@/lib/forecast";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 const formatILS = (value: number) =>
   new Intl.NumberFormat("he-IL", {
@@ -56,16 +57,13 @@ export function DailyAllowance() {
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-xs text-muted-foreground">מותר היום</span>
-          <motion.span
-            key={Math.round(data.allowance)}
-            initial={{ opacity: 0, y: 2 }}
-            animate={{ opacity: 1, y: 0 }}
+          <span
             data-mono="true"
             className="text-xl"
             style={{ direction: "ltr", color: allowanceColor }}
           >
-            {formatILS(data.allowance)}
-          </motion.span>
+            <AnimatedCounter value={data.allowance} format={formatILS} />
+          </span>
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
           <span>

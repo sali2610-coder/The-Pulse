@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Banknote, Plus, Power, Trash2 } from "lucide-react";
+import { Banknote, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -57,10 +57,40 @@ function nowDefaults(): FormState {
 export function LoansPanel() {
   const loans = useFinanceStore((s) => s.loans);
   const addLoan = useFinanceStore((s) => s.addLoan);
+  const updateLoan = useFinanceStore((s) => s.updateLoan);
   const toggleLoan = useFinanceStore((s) => s.toggleLoan);
   const deleteLoan = useFinanceStore((s) => s.deleteLoan);
 
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<FormState>(nowDefaults);
+
+  const startEdit = (loan: typeof loans[number]) => {
+    setEditingId(loan.id);
+    setEditForm({
+      label: loan.label,
+      monthlyInstallment: String(loan.monthlyInstallment),
+      startMonth: String(loan.startMonth ?? new Date().getMonth() + 1),
+      startYear: String(loan.startYear ?? new Date().getFullYear()),
+      totalPayments: String(loan.totalPayments ?? 12),
+      dayOfMonth: String(loan.dayOfMonth),
+    });
+  };
+
+  const submitEdit = () => {
+    if (!editingId) return;
+    if (!editForm.label.trim() || !editForm.monthlyInstallment.trim()) return;
+    updateLoan(editingId, {
+      label: editForm.label,
+      monthlyInstallment: Number(editForm.monthlyInstallment.replace(/,/g, "")),
+      startMonth: Number(editForm.startMonth) || 1,
+      startYear: Number(editForm.startYear) || new Date().getFullYear(),
+      totalPayments: Number(editForm.totalPayments) || 12,
+      dayOfMonth: Number(editForm.dayOfMonth) || 1,
+    });
+    tap();
+    setEditingId(null);
+  };
   const [form, setForm] = useState<FormState>(nowDefaults);
 
   const monthKey = currentMonthKey();
@@ -352,28 +382,107 @@ export function LoansPanel() {
                           />
                         </div>
                       ) : null}
-                      <div className="mt-2 flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => toggleLoan(loan.id)}
-                          className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
-                        >
-                          <Power className="size-3" />
-                          {loan.active ? "כבה" : "הפעל"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`למחוק "${loan.label}"?`)) {
-                              deleteLoan(loan.id);
+                      {editingId === loan.id ? (
+                        <div className="mt-2 grid grid-cols-4 gap-2">
+                          <Input
+                            value={editForm.label}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                label: e.target.value,
+                              }))
                             }
-                          }}
-                          className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-destructive/80 hover:bg-destructive/10"
-                        >
-                          <Trash2 className="size-3" />
-                          מחק
-                        </button>
-                      </div>
+                            placeholder="שם הלוואה"
+                            className="col-span-4 h-8 text-xs"
+                          />
+                          <Input
+                            value={editForm.monthlyInstallment}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                monthlyInstallment: e.target.value,
+                              }))
+                            }
+                            inputMode="decimal"
+                            placeholder="תשלום ₪"
+                            className="col-span-2 h-8 text-xs"
+                          />
+                          <Input
+                            value={editForm.totalPayments}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                totalPayments: e.target.value,
+                              }))
+                            }
+                            inputMode="numeric"
+                            placeholder="סה״כ"
+                            className="h-8 text-xs"
+                          />
+                          <Input
+                            value={editForm.dayOfMonth}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                dayOfMonth: e.target.value,
+                              }))
+                            }
+                            inputMode="numeric"
+                            placeholder="יום"
+                            className="h-8 text-xs"
+                          />
+                          <div className="col-span-4 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={submitEdit}
+                              className="h-8 flex-1 text-xs"
+                            >
+                              שמור
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingId(null)}
+                              className="h-8 text-xs"
+                            >
+                              בטל
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(loan)}
+                            className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                          >
+                            <Pencil className="size-3" />
+                            ערוך
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleLoan(loan.id)}
+                            className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                          >
+                            <Power className="size-3" />
+                            {loan.active ? "כבה" : "הפעל"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`למחוק "${loan.label}"?`)) {
+                                deleteLoan(loan.id);
+                              }
+                            }}
+                            className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-destructive/80 hover:bg-destructive/10"
+                          >
+                            <Trash2 className="size-3" />
+                            מחק
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.li>

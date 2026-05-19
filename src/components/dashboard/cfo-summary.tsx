@@ -14,6 +14,7 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 // Manual sign-prepending instead of `signDisplay: "always"` — the latter
 // throws RangeError on iOS Safari < 15.4 when Intl.NumberFormat is
@@ -117,16 +118,13 @@ export function CfoSummary() {
             />
             CFO Brain · End of month
           </div>
-          <motion.div
-            key={Math.round(forecast)}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
+          <div
             data-mono="true"
             className="mt-2 text-3xl font-light tracking-tight"
             style={{ direction: "ltr", color: accent }}
           >
-            {formatILSSign(forecast)}
-          </motion.div>
+            <AnimatedCounter value={forecast} format={formatILSSign} />
+          </div>
           <div className="text-xs text-muted-foreground">
             {isRed ? "סיום חודש בחריגה" : "סיום חודש בעודף"}
           </div>
