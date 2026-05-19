@@ -8,23 +8,26 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 /**
  * Routes the user to /confirm/<externalId> after a notification tap.
  *
- * Three signals are honored, in order of speed:
+ * iOS Safari PWA scenarios that this has to cover:
  *
- *   1. ServiceWorker postMessage — fires the moment notificationclick
- *      runs IF the PWA was already open and reachable from
- *      clients.matchAll. Most responsive when it works.
+ *   1. PWA is in background. Tap notification.
+ *      - iOS foregrounds the existing PWA window.
+ *      - visibilitychange fires.
+ *      - SW notificationclick runs concurrently; its POST to
+ *        /api/push/click may complete BEFORE OR AFTER our first
+ *        beacon read on visibility resume — so we have to retry.
  *
- *   2. Server-side click beacon — the SW also POSTs the externalId to
- *      `/api/push/click`. On mount and on every visibilitychange this
- *      listener GETs the same endpoint (which atomically consumes the
- *      marker). Covers the iOS standalone PWA case where postMessage
- *      and openWindow both silently fail.
+ *   2. PWA is closed. Tap notification.
+ *      - SW.openWindow may or may not honor the deep URL on iOS
+ *        standalone — Apple ships this inconsistently.
+ *      - When the PWA mounts, the URL is often just `/`. The mount
+ *        beacon poll then catches the marker and router.push'es.
  *
- *   3. Visibility change — every time the PWA returns to foreground
- *      (e.g. user taps the notification banner), re-check the beacon.
+ *   3. PWA is foreground already. Tap notification (rare).
+ *      - SW.postMessage delivers immediately.
  *
- * Only one of the three needs to fire for the navigation to happen;
- * a guard flag prevents double-routing for the same externalId.
+ * Strategy: combine three signals AND retry the beacon a few times
+ * after every visibility resume.
  */
 export function PendingConfirmListener() {
   const router = useRouter();
@@ -37,13 +40,13 @@ export function PendingConfirmListener() {
       if (!externalId) return;
       if (lastHandledRef.current === externalId) return;
       lastHandledRef.current = externalId;
-      const target =
-        path ?? `/confirm/${encodeURIComponent(externalId)}`;
-      console.info("[PendingConfirmListener] → ", target);
+      const target = path ?? `/confirm/${encodeURIComponent(externalId)}`;
+      console.info("[PendingConfirmListener] →", target);
       router.push(target);
     }
 
-    async function pollBeacon() {
+    let stopRetries = false;
+    async function pollBeacon(): Promise<boolean> {
       try {
         const res = await fetch("/api/push/click", {
           method: "GET",
@@ -51,53 +54,73 @@ export function PendingConfirmListener() {
           credentials: "same-origin",
           cache: "no-store",
         });
-        if (!res.ok) return;
+        if (!res.ok) return false;
         const data = (await res.json().catch(() => null)) as {
           click?: { externalId?: string; ts?: number } | null;
         } | null;
         const click = data?.click;
-        if (!click?.externalId) return;
-        // Ignore stale beacons (>5 min) — server already TTLs to 300s
-        // but a clock skew + caching could leak older data.
-        if (click.ts && Date.now() - click.ts > 5 * 60 * 1000) return;
+        if (!click?.externalId) return false;
+        if (click.ts && Date.now() - click.ts > 5 * 60 * 1000) return false;
         navigateOnce(click.externalId);
+        return true;
       } catch {
-        /* offline — beacon will retry on next visibility change */
+        return false;
       }
     }
 
-    // 1. SW postMessage path
+    /** Retry sequence — handles the SW-writes-after-PWA-foregrounds
+     *  race. Each successful poll consumes the marker server-side so
+     *  later retries naturally short-circuit. */
+    async function pollWithRetries() {
+      stopRetries = false;
+      const delays = [0, 400, 900, 1800, 3000];
+      for (const ms of delays) {
+        if (stopRetries) return;
+        if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+        if (stopRetries) return;
+        const hit = await pollBeacon();
+        if (hit) {
+          stopRetries = true;
+          return;
+        }
+      }
+    }
+
     function onMessage(event: MessageEvent) {
       const data = event.data as
-        | {
-            type?: string;
-            path?: string;
-            externalId?: string;
-          }
+        | { type?: string; path?: string; externalId?: string }
         | null;
       if (!data || data.type !== "sally:pending-confirm") return;
       if (!data.externalId) return;
       navigateOnce(data.externalId, data.path);
     }
 
-    // 2. Beacon on mount.
-    void pollBeacon();
-
-    // 3. Beacon on visibility resume.
     function onVisible() {
-      if (document.visibilityState === "visible") void pollBeacon();
+      if (document.visibilityState !== "visible") return;
+      void pollWithRetries();
+    }
+
+    function onFocus() {
+      void pollWithRetries();
     }
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("message", onMessage);
     }
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+
+    // First poll on mount — covers the "PWA cold-started by the
+    // notification tap" case where there's no visibility/focus event.
+    void pollWithRetries();
 
     return () => {
+      stopRetries = true;
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.removeEventListener("message", onMessage);
       }
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
     };
   }, [router]);
 
