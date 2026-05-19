@@ -58,6 +58,24 @@ function eventIcon(kind: DailyMovement["events"][number]["kind"]) {
   }
 }
 
+/** Verb-prefix the event label so the timeline reads like a story. */
+function storyLabel(kind: DailyMovement["events"][number]["kind"], label: string): string {
+  switch (kind) {
+    case "income":
+      return `משכורת נכנסה · ${label}`;
+    case "loan":
+      return `הלוואה חויבה · ${label}`;
+    case "rule":
+      return `חיוב חוזר · ${label}`;
+    case "installment":
+      return `תשלום בתשלומים · ${label}`;
+    case "card":
+      return `חיוב כרטיס · ${label}`;
+    default:
+      return label;
+  }
+}
+
 /**
  * Cashflow timeline — last 7 + next 21 days of financial events, with
  * a running balance arc behind them. Replaces the static "future
@@ -108,10 +126,30 @@ export function CashflowTimeline() {
 
   if (!hydrated || !cashflow) return null;
 
-  // Skip rendering entirely when nothing meaningful would show up
-  // (fresh install, no incomes, no entries, no rules, no loans).
   const hasAnyEvent = windowDays.some((d) => d.events.length > 0);
-  if (!hasAnyEvent) return null;
+  // Fresh install: show a calm onboarding card instead of an empty rail.
+  if (!hasAnyEvent) {
+    return (
+      <section className="glass-card flex flex-col gap-3 rounded-3xl p-4">
+        <header className="flex items-baseline justify-between">
+          <div className="flex flex-col text-right">
+            <h3 className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              ציר תזרים
+            </h3>
+            <span className="text-[10px] text-muted-foreground/70">
+              עוד אין נתונים — הוסף משכורת והוצאות קבועות
+            </span>
+          </div>
+          <Wallet className="size-4 text-muted-foreground/60" />
+        </header>
+        <p className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-5 text-center text-[12px] leading-relaxed text-muted-foreground">
+          הוסף משכורת חודשית והלוואות תחת{" "}
+          <span className="text-foreground">הגדרות</span> כדי לראות תזרים יומי
+          חי, יתרה רצה, וצפי לסוף חודש.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-4">
@@ -269,7 +307,7 @@ export function CashflowTimeline() {
                               {eventIcon(ev.kind)}
                             </span>
                             <span className="text-[12px] text-foreground/90">
-                              {ev.label}
+                              {storyLabel(ev.kind, ev.label)}
                             </span>
                           </span>
                           <span

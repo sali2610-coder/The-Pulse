@@ -4,6 +4,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { SPRING_SOFT, FADE_QUICK } from "@/lib/motion-tokens";
 
 type BottomSheetProps = {
   open: boolean;
@@ -37,7 +38,7 @@ export function BottomSheet({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
+                  transition={FADE_QUICK}
                   className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
                 />
               }
@@ -48,12 +49,7 @@ export function BottomSheet({
                   initial={{ y: "100%" }}
                   animate={{ y: 0 }}
                   exit={{ y: "100%" }}
-                  transition={{
-                    type: "spring",
-                    damping: 32,
-                    stiffness: 320,
-                    mass: 0.9,
-                  }}
+                  transition={SPRING_SOFT}
                   drag="y"
                   dragConstraints={{ top: 0, bottom: 0 }}
                   dragElastic={{ top: 0, bottom: 0.5 }}
