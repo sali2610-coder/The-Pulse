@@ -23,7 +23,6 @@ const HAS_GOOGLE_KEYS = Boolean(
 );
 
 const CANONICAL_HOST = "the-pulse-sooty.vercel.app";
-const IS_PRODUCTION = process.env.VERCEL_ENV === "production";
 
 // Paths the middleware lets through even without a session.
 const PUBLIC_PATHS = [
@@ -48,14 +47,23 @@ function isPublic(pathname: string): boolean {
 }
 
 /** True when the host is an alternate Vercel alias that should funnel
- *  to the canonical OAuth host. Skips localhost + preview deployments
- *  so they keep working in dev. */
+ *  to the canonical OAuth host. Skips ONLY localhost (dev). Every
+ *  vercel.app host that isn't the canonical one — including preview
+ *  hashes and the per-deployment URL — gets redirected, because
+ *  NextAuth would otherwise derive a redirect_uri Google Console hasn't
+ *  registered. */
 function shouldCanonicalize(hostname: string, pathname: string): boolean {
-  if (!IS_PRODUCTION) return false;
   if (hostname === CANONICAL_HOST) return false;
+  // Local dev / 127.0.0.1 keeps working.
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".local")
+  ) {
+    return false;
+  }
   // Webhooks are pinned by URL in prod-config.ts and POST from external
   // clients (iPhone Shortcut) that may not follow redirects reliably.
-  // Skip canonicalization for them.
   if (pathname.startsWith("/api/webhooks/")) return false;
   return true;
 }
