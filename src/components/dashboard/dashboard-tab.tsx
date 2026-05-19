@@ -119,6 +119,12 @@ const CashflowTimeline = lazy(() =>
   })),
 );
 
+const SmartSummaryCard = lazy(() =>
+  import("@/components/dashboard/smart-summary-card").then((m) => ({
+    default: m.SmartSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -136,7 +142,12 @@ export function DashboardTab() {
 
   return (
     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-6 sm:gap-3">
-      {/* HERO — The two cards the user looks at first every open. */}
+      {/* SMART SUMMARY — one-line story of the user's financial state. */}
+      <div className="sm:col-span-6">
+        <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
+      </div>
+
+      {/* HERO — primary state + projection */}
       <div className="sm:col-span-6">
         <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
       </div>
