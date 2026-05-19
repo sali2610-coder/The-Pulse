@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useFinanceStore } from "@/lib/store";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -124,73 +125,124 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
   return (
     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-6 sm:gap-3">
+      {/* HERO — The two cards the user looks at first every open. */}
       <div className="sm:col-span-6">
-        <Safe name="HealthScoreCard"><HealthScoreCard /></Safe>
+        <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
       </div>
-      <div className="sm:col-span-6">
-        <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
-      </div>
+
+      {/* PRIMARY ACTIONS — pending review + live activity feed. */}
       <div className="sm:col-span-6">
         <Safe name="PendingTray"><PendingTray /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="RecentActivity"><RecentActivity /></Safe>
       </div>
-      <div className="sm:col-span-6">
-        <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
+
+      {/* QUICK DAILY GLANCE — split row */}
+      <div className="sm:col-span-3">
+        <Safe name="DailyAllowance"><DailyAllowance /></Safe>
       </div>
       <div className="sm:col-span-3">
         <Safe name="CfoSummary"><CfoSummary /></Safe>
       </div>
-      <div className="sm:col-span-3">
-        <Safe name="DailyAllowance"><DailyAllowance /></Safe>
-      </div>
+
+      {/* MONTHLY DIGEST — narrative summary stays in the main flow */}
       <div className="sm:col-span-6">
-        <Safe name="BalanceForecastCard"><BalanceForecastCard /></Safe>
+        <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
       </div>
-      <div className="sm:col-span-6">
-        <Safe name="BalanceHorizonCard"><BalanceHorizonCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="AccountForecastCard"><AccountForecastCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="StatsCards"><StatsCards /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="AnomaliesCard"><AnomaliesCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="SubscriptionRadarCard"><SubscriptionRadarCard /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="ActiveInstallmentsCard"><ActiveInstallmentsCard /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="FuturePressureCard"><FuturePressureCard /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="CategoryDonut"><CategoryDonut /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="HeatmapMini"><HeatmapMini /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="TimelineSync"><TimelineSync budget={monthlyBudget} /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="UpcomingExpenses"><UpcomingExpenses /></Safe>
-      </div>
+
+      {/* Inline floating CTA — sticks above the advanced collapse */}
       <div className="sticky bottom-0 z-30 -mx-5 mt-2 bg-gradient-to-t from-background via-background/95 to-transparent px-5 pb-safe-plus pt-4 sm:static sm:col-span-6 sm:mx-0 sm:bg-none sm:p-0">
         <NewExpenseButton onClick={() => setOpen(true)} />
       </div>
+
+      {/* ADVANCED — collapsed by default so the hero breathes. */}
+      <div className="sm:col-span-6">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="flex w-full items-center justify-between rounded-2xl border border-white/8 bg-surface/40 px-4 py-3 text-[12px] text-muted-foreground transition-colors hover:border-white/16 hover:text-foreground"
+          aria-expanded={advancedOpen}
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-[11px] uppercase tracking-[0.22em]">
+              נתונים מתקדמים
+            </span>
+            <span className="text-[10px] text-muted-foreground/70">
+              {advancedOpen ? "סגור" : "פתח"}
+            </span>
+          </span>
+          <motion.span
+            animate={{ rotate: advancedOpen ? 180 : 0 }}
+            transition={{ duration: 0.22 }}
+            className="text-muted-foreground"
+          >
+            ▾
+          </motion.span>
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {advancedOpen ? (
+          <motion.div
+            key="advanced"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="sm:col-span-6 grid grid-cols-1 gap-2.5 overflow-hidden sm:grid-cols-6 sm:gap-3"
+          >
+            <div className="sm:col-span-6">
+              <Safe name="HealthScoreCard"><HealthScoreCard /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="BalanceForecastCard"><BalanceForecastCard /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="BalanceHorizonCard"><BalanceHorizonCard /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="AccountForecastCard"><AccountForecastCard /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="StatsCards"><StatsCards /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="AnomaliesCard"><AnomaliesCard /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="SubscriptionRadarCard"><SubscriptionRadarCard /></Safe>
+            </div>
+            <div className="sm:col-span-3">
+              <Safe name="ActiveInstallmentsCard"><ActiveInstallmentsCard /></Safe>
+            </div>
+            <div className="sm:col-span-3">
+              <Safe name="FuturePressureCard"><FuturePressureCard /></Safe>
+            </div>
+            <div className="sm:col-span-3">
+              <Safe name="CategoryDonut"><CategoryDonut /></Safe>
+            </div>
+            <div className="sm:col-span-3">
+              <Safe name="HeatmapMini"><HeatmapMini /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="TimelineSync"><TimelineSync budget={monthlyBudget} /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="UpcomingExpenses"><UpcomingExpenses /></Safe>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
       <ExpenseDialog open={open} onOpenChange={setOpen} />
     </div>
   );

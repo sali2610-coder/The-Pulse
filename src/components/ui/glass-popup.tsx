@@ -70,30 +70,34 @@ export function GlassPopup({
                   }}
                   className={cn(
                     // Position: top-anchored, horizontally centered.
-                    "fixed inset-x-0 z-50 mx-auto flex w-full max-w-[320px] flex-col",
+                    "fixed inset-x-0 z-50 mx-auto flex w-full max-w-[300px] flex-col",
                     // Safe-area aware top offset.
                     "px-3",
                     className,
                   )}
                   style={{
-                    top: "max(env(safe-area-inset-top), 16px)",
+                    // Hugs the Dynamic Island region on supported devices,
+                    // sits just below the status bar on the rest.
+                    top: "max(env(safe-area-inset-top), 8px)",
                   }}
                 />
               }
             >
               <div
                 className={cn(
-                  // Glass card body.
-                  "relative overflow-hidden rounded-[28px] border border-white/14",
-                  "bg-gradient-to-b from-white/[0.10] to-white/[0.04]",
-                  "backdrop-blur-2xl",
-                  // Premium inset highlight + drop shadow.
-                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_30px_80px_-20px_rgba(0,0,0,0.65)]",
+                  // Capsule glass — translucent + lighter blur than the
+                  // old sheet so it floats more, occludes less.
+                  "relative overflow-hidden rounded-[32px] border border-white/14",
+                  "bg-gradient-to-b from-white/[0.09] to-white/[0.03]",
+                  "backdrop-blur-xl",
+                  // Subtle glow + drop shadow tinted toward neon for the
+                  // premium-fintech glint.
+                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_24px_72px_-20px_rgba(0,229,255,0.18),0_30px_80px_-20px_rgba(0,0,0,0.65)]",
                 )}
               >
                 {/* Drag handle */}
-                <div className="flex justify-center pt-2">
-                  <div className="h-1 w-9 rounded-full bg-white/18" />
+                <div className="flex justify-center pt-1.5">
+                  <div className="h-0.5 w-8 rounded-full bg-white/22" />
                 </div>
                 {title && (
                   <DialogPrimitive.Title className="sr-only">

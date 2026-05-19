@@ -32,6 +32,15 @@ const ILS = new Intl.NumberFormat("he-IL", {
 });
 
 const TIME_FMT = new Intl.RelativeTimeFormat("he-IL", { numeric: "auto" });
+const DAY_HEADER_FMT = new Intl.DateTimeFormat("he-IL", {
+  weekday: "long",
+  day: "2-digit",
+  month: "2-digit",
+});
+const HOUR_FMT = new Intl.DateTimeFormat("he-IL", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 function timeAgo(date: Date, now: Date = new Date()): string {
   const diffMs = date.getTime() - now.getTime();
@@ -39,10 +48,23 @@ function timeAgo(date: Date, now: Date = new Date()): string {
   if (Math.abs(minutes) < 60) return TIME_FMT.format(minutes, "minute");
   const hours = Math.round(diffMs / 3_600_000);
   if (Math.abs(hours) < 24) return TIME_FMT.format(hours, "hour");
-  const days = Math.round(diffMs / 86_400_000);
-  if (Math.abs(days) < 30) return TIME_FMT.format(days, "day");
-  const months = Math.round(diffMs / (30 * 86_400_000));
-  return TIME_FMT.format(months, "month");
+  return HOUR_FMT.format(date);
+}
+
+function startOfDay(d: Date): number {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+}
+
+function dayHeader(ts: number, now: Date = new Date()): string {
+  const today = startOfDay(now);
+  const yesterday = today - 86_400_000;
+  if (ts === today) return "היום";
+  if (ts === yesterday) return "אתמול";
+  const tomorrow = today + 86_400_000;
+  if (ts === tomorrow) return "מחר";
+  return DAY_HEADER_FMT.format(new Date(ts));
 }
 
 type Direction = "in" | "out";
@@ -142,8 +164,23 @@ export function RecentActivity() {
       });
     }
 
-    return out.sort((a, b) => b.ts.getTime() - a.ts.getTime()).slice(0, 6);
+    return out.sort((a, b) => b.ts.getTime() - a.ts.getTime()).slice(0, 8);
   }, [hydrated, entries, incomes]);
+
+  /** Group activity rows by calendar day so the user sees natural
+   *  "היום / אתמול / DD/MM" chapters instead of a flat timeline. */
+  const grouped = useMemo(() => {
+    const byDay = new Map<number, ActivityItem[]>();
+    for (const item of items) {
+      const key = startOfDay(item.ts);
+      const list = byDay.get(key) ?? [];
+      list.push(item);
+      byDay.set(key, list);
+    }
+    return [...byDay.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([dayTs, list]) => ({ dayTs, items: list }));
+  }, [items]);
 
   if (!hydrated) return null;
 
@@ -180,21 +217,31 @@ export function RecentActivity() {
           </button>
         </header>
 
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-2">
           <AnimatePresence initial={false}>
-            {items.map((item, idx) => (
-              <ActivityRow
-                key={item.id}
-                item={item}
-                delay={idx * 0.04}
-                onTap={() => {
-                  if (!item.entryId) return;
-                  const e = entries.find((x) => x.id === item.entryId);
-                  if (!e) return;
-                  tap();
-                  setEditEntry(e);
-                }}
-              />
+            {grouped.map((group) => (
+              <li key={group.dayTs} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 px-1 pt-1">
+                  <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground/80">
+                    {dayHeader(group.dayTs)}
+                  </span>
+                  <span className="h-px flex-1 bg-white/6" />
+                </div>
+                {group.items.map((item, idx) => (
+                  <ActivityRow
+                    key={item.id}
+                    item={item}
+                    delay={idx * 0.04}
+                    onTap={() => {
+                      if (!item.entryId) return;
+                      const e = entries.find((x) => x.id === item.entryId);
+                      if (!e) return;
+                      tap();
+                      setEditEntry(e);
+                    }}
+                  />
+                ))}
+              </li>
             ))}
           </AnimatePresence>
         </ul>
