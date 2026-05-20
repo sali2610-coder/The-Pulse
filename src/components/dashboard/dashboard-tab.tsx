@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useFinanceStore } from "@/lib/store";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PulseBar } from "@/components/pulse/pulse-bar";
-import { NewExpenseButton } from "@/components/dashboard/new-expense-button";
+import { FloatingCTA } from "@/components/dashboard/floating-cta";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 
 // Every dashboard card except the always-needed PulseBar + NewExpenseButton
@@ -147,7 +147,7 @@ export function DashboardTab() {
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
   return (
-    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-6 sm:gap-3">
+    <div className="grid grid-cols-1 gap-2.5 pb-28 sm:grid-cols-6 sm:gap-3 sm:pb-32">
       {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
@@ -192,10 +192,8 @@ export function DashboardTab() {
         <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
       </div>
 
-      {/* Inline floating CTA — sticks above the advanced collapse */}
-      <div className="sticky bottom-0 z-30 -mx-5 mt-2 bg-gradient-to-t from-background via-background/95 to-transparent px-5 pb-safe-plus pt-4 sm:static sm:col-span-6 sm:mx-0 sm:bg-none sm:p-0">
-        <NewExpenseButton onClick={() => setOpen(true)} />
-      </div>
+      {/* Floating CTA — fixed dock, auto-hides on scroll-down. */}
+      <FloatingCTA onClick={() => setOpen(true)} />
 
       {/* ADVANCED — collapsed by default so the hero breathes. */}
       <div className="sm:col-span-6">

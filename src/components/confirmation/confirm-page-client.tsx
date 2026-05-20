@@ -168,11 +168,14 @@ export function ConfirmPageClient({ externalId }: { externalId: string }) {
     );
   }
 
-  // GlassPopup owns the dimming backdrop; the surrounding <main> stays
-  // empty so the popup floats over nothing instead of stacking two
-  // overlays. router.replace("/") on close lets the dashboard reappear.
+  // Explicit dim overlay UNDER the GlassPopup. Some Safari builds rendered
+  // the GlassPopup body but lost its own backdrop layer when nested inside
+  // a router-transitioned page, which made the confirmation feel "missing".
+  // Painting our own dark fixed layer guarantees the user sees the
+  // characteristic premium-fintech dim + the popup floats over a known
+  // background regardless of any layer-ordering quirk.
   return (
-    <main className="min-h-[100dvh]">
+    <main className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md">
       <ConfirmationSheet
         open={open}
         onOpenChange={handleClose}
