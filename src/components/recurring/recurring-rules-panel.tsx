@@ -12,6 +12,8 @@ import { ruleSchedule } from "@/lib/installment-schedule";
 import { tap } from "@/lib/haptics";
 
 import { RuleForm } from "./rule-form";
+import { buildRuleInstallmentSummary } from "@/lib/installment-summary";
+import { InstallmentSummaryBlock } from "./installment-summary-block";
 
 const formatILS = (value: number) =>
   new Intl.NumberFormat("he-IL", {
@@ -170,9 +172,6 @@ export function RecurringRulesPanel() {
                 const paid = status?.status === "paid";
                 const sched = ruleSchedule(rule, monthKey);
                 const isInstallment = Boolean(rule.installmentTotal);
-                const pct = isInstallment && sched.paymentNumber && rule.installmentTotal
-                  ? Math.min(100, (sched.paymentNumber / rule.installmentTotal) * 100)
-                  : 0;
                 return (
                   <motion.li
                     key={rule.id}
@@ -251,17 +250,18 @@ export function RecurringRulesPanel() {
                           ) : null}
                         </div>
                         {isInstallment && rule.installmentTotal ? (
-                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${pct}%` }}
-                              transition={{ duration: 0.6, ease: "easeOut" }}
-                              className="h-full rounded-full"
-                              style={{
-                                background: `linear-gradient(90deg, ${cat.accent}, ${cat.accent}66)`,
-                              }}
-                            />
-                          </div>
+                          (() => {
+                            const summary = buildRuleInstallmentSummary(
+                              rule,
+                              monthKey,
+                            );
+                            return summary ? (
+                              <InstallmentSummaryBlock
+                                summary={summary}
+                                accent={cat.accent}
+                              />
+                            ) : null;
+                          })()
                         ) : null}
                         <div className="mt-2 flex items-center gap-1">
                           <button
