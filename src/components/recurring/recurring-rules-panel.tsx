@@ -143,6 +143,18 @@ export function RecurringRulesPanel() {
                                 ? "ממתין"
                                 : "כבוי"}
                           </span>
+                          {rule.paymentSource && rule.paymentSource !== "unknown" ? (
+                            <>
+                              <span>·</span>
+                              <span className="rounded-full bg-white/8 px-1.5 py-0.5 text-[9px] text-foreground/85">
+                                {rule.paymentSource === "card"
+                                  ? "כרטיס"
+                                  : rule.paymentSource === "bank"
+                                    ? "בנק"
+                                    : "מזומן"}
+                              </span>
+                            </>
+                          ) : null}
                         </div>
                         {isInstallment && rule.installmentTotal ? (
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/5">

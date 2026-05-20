@@ -14,6 +14,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useFinanceStore } from "@/lib/store";
 import { tap } from "@/lib/haptics";
 import type { RecurringRule } from "@/types/finance";
 
@@ -41,6 +42,8 @@ type SubmitInput = {
   installmentTotal?: number;
   startMonth?: number;
   startYear?: number;
+  paymentSource?: "bank" | "card" | "cash" | "unknown";
+  linkedCardId?: string;
 };
 
 type Mode = "regular" | "installment";
@@ -58,6 +61,15 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
       ? "installment"
       : "regular";
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [paymentSource, setPaymentSource] = useState<
+    "bank" | "card" | "cash" | "unknown"
+  >(initial?.paymentSource ?? "unknown");
+  const [linkedCardId, setLinkedCardId] = useState<string | undefined>(
+    initial?.linkedCardId,
+  );
+  const cards = useFinanceStore((s) =>
+    s.accounts.filter((a) => a.kind === "card" && a.active),
+  );
   const now = new Date();
 
   const {
@@ -95,6 +107,9 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
       payload.startMonth = values.startMonth;
       payload.startYear = values.startYear;
     }
+    payload.paymentSource = paymentSource;
+    payload.linkedCardId =
+      paymentSource === "card" ? linkedCardId : undefined;
     onSubmit(payload);
   });
 
@@ -395,6 +410,59 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
           />
         </div>
       ) : null}
+
+      {/* Payment source (Phase 85) */}
+      <div className="space-y-2 rounded-xl border border-white/8 bg-background/40 p-3">
+        <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          איך משלמים את החיוב?
+        </Label>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(
+            [
+              { id: "bank", label: "בנק" },
+              { id: "card", label: "כרטיס" },
+              { id: "cash", label: "מזומן" },
+              { id: "unknown", label: "—" },
+            ] as const
+          ).map(({ id, label }) => {
+            const active = paymentSource === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPaymentSource(id)}
+                className={`rounded-lg border px-2 py-1.5 text-[11px] transition-colors ${
+                  active
+                    ? "border-[color:var(--neon)]/60 bg-[color:var(--neon)]/12 text-[color:var(--neon)]"
+                    : "border-white/10 bg-background/40 text-muted-foreground hover:border-white/20"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        {paymentSource === "card" ? (
+          <div className="flex flex-col gap-1">
+            <Label className="text-[10px] text-muted-foreground">
+              לאיזה כרטיס לקשר?
+            </Label>
+            <select
+              value={linkedCardId ?? ""}
+              onChange={(e) => setLinkedCardId(e.target.value || undefined)}
+              className="h-9 rounded-lg border border-white/12 bg-background/60 px-2 text-[12px] text-foreground outline-none focus:border-[color:var(--neon)]/60"
+            >
+              <option value="">בלי כרטיס מסוים</option>
+              {cards.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                  {c.cardLast4 ? ` · ····${c.cardLast4}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex items-center justify-end gap-2 pt-1">
         {onCancel ? (

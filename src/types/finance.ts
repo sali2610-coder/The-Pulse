@@ -129,7 +129,17 @@ export type RecurringRule = {
   startMonth?: number;
   /** Installment mode only — calendar year of the first payment. */
   startYear?: number;
+  /** v7+: how the rule is actually paid in the real world. Drives
+   *  card-pressure analytics + future billing-cycle math. Defaults
+   *  on migration to "unknown" so existing rules keep working
+   *  unchanged. */
+  paymentSource?: PaymentSource;
+  /** v7+: when paymentSource === "card", the Account.id of the
+   *  credit card. Optional — undefined means "card but unspecified". */
+  linkedCardId?: string;
 };
+
+export type PaymentSource = "bank" | "card" | "cash" | "unknown";
 
 export type RecurringStatus = {
   ruleId: string;

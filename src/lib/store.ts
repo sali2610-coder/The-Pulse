@@ -51,6 +51,8 @@ type AddRuleInput = {
   installmentTotal?: number;
   startMonth?: number;
   startYear?: number;
+  paymentSource?: "bank" | "card" | "cash" | "unknown";
+  linkedCardId?: string;
 };
 
 type AddAccountInput = {
@@ -402,6 +404,8 @@ export const useFinanceStore = create<State & Actions>()(
           installmentTotal: input.installmentTotal,
           startMonth: input.startMonth,
           startYear: input.startYear,
+          paymentSource: input.paymentSource ?? "unknown",
+          linkedCardId: input.linkedCardId,
         };
         set((state) => ({ rules: [rule, ...state.rules] }));
         return rule;
@@ -441,6 +445,12 @@ export const useFinanceStore = create<State & Actions>()(
                     : {}),
                   ...("startYear" in patch
                     ? { startYear: patch.startYear }
+                    : {}),
+                  ...("paymentSource" in patch
+                    ? { paymentSource: patch.paymentSource }
+                    : {}),
+                  ...("linkedCardId" in patch
+                    ? { linkedCardId: patch.linkedCardId }
                     : {}),
                 }
               : r,
@@ -700,7 +710,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 6,
+      version: 7,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -750,6 +760,18 @@ export const useFinanceStore = create<State & Actions>()(
             return { ...rest, bankPending: pending } as ExpenseEntry;
           });
           migrated = { ...migrated, entries };
+        }
+        if (fromVersion < 7) {
+          // Phase 85 — recurring rules gain optional `paymentSource` +
+          // `linkedCardId`. Defaults to "unknown" so every existing
+          // rule keeps behaving identically; the user can refine each
+          // one inline from the RecurringRulesPanel.
+          const rules = (migrated.rules ?? []).map((r) => {
+            const rule = r as RecurringRule;
+            if (rule.paymentSource !== undefined) return rule;
+            return { ...rule, paymentSource: "unknown" as const };
+          });
+          migrated = { ...migrated, rules };
         }
         return migrated;
       },
