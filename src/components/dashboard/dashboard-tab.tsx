@@ -131,6 +131,12 @@ const CopilotCard = lazy(() =>
   })),
 );
 
+const WelcomeSetupCard = lazy(() =>
+  import("@/components/dashboard/welcome-setup-card").then((m) => ({
+    default: m.WelcomeSetupCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -148,6 +154,11 @@ export function DashboardTab() {
 
   return (
     <div className="grid grid-cols-1 gap-2.5 pb-28 sm:grid-cols-6 sm:gap-3 sm:pb-32">
+      {/* WELCOME / SETUP — calm onboarding card; vanishes when done. */}
+      <div className="sm:col-span-6">
+        <Safe name="WelcomeSetupCard"><WelcomeSetupCard /></Safe>
+      </div>
+
       {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
