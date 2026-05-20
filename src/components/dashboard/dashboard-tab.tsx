@@ -138,6 +138,12 @@ const WelcomeSetupCard = lazy(() =>
   })),
 );
 
+const CardsPressureCard = lazy(() =>
+  import("@/components/dashboard/cards-pressure-card").then((m) => ({
+    default: m.CardsPressureCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -185,6 +191,11 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-6">
         <Safe name="RecentActivity"><RecentActivity /></Safe>
+      </div>
+
+      {/* CARDS PRESSURE — per-card monthly load */}
+      <div className="sm:col-span-6">
+        <Safe name="CardsPressureCard"><CardsPressureCard /></Safe>
       </div>
 
       {/* CASHFLOW TIMELINE — day-by-day projected events */}

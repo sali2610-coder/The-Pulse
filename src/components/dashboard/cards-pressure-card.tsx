@@ -1,0 +1,138 @@
+"use client";
+
+import { useMemo } from "react";
+import { motion } from "framer-motion";
+import { CreditCard, Repeat2 } from "lucide-react";
+
+import { useFinanceStore } from "@/lib/store";
+import { currentMonthKey } from "@/lib/dates";
+import { buildCardPressure } from "@/lib/card-pressure";
+import { Pill } from "@/components/ui/pill";
+import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
+
+const ILS = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Per-card monthly pressure. Surfaces ONLY when:
+ *   • the user has at least one active credit-card account, AND
+ *   • at least one card has a non-zero monthly pressure
+ *     (linked recurring + installment + card-side entries this month)
+ *
+ * Otherwise renders null so the dashboard doesn't show a dead "no
+ * pressure" rectangle.
+ *
+ * Each row shows:
+ *   • card label + last-4 chip
+ *   • total monthly pressure (mono, right-aligned)
+ *   • soft breakdown line: recurring / installments / entries
+ *   • plans-active count when > 0
+ */
+export function CardsPressureCard() {
+  const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const rules = useFinanceStore((s) => s.rules);
+  const entries = useFinanceStore((s) => s.entries);
+  const statuses = useFinanceStore((s) => s.statuses);
+
+  const rows = useMemo(() => {
+    if (!hydrated) return [];
+    return buildCardPressure({
+      accounts,
+      rules,
+      entries,
+      statuses,
+      monthKey: currentMonthKey(),
+    });
+  }, [hydrated, accounts, rules, entries, statuses]);
+
+  if (!hydrated) return null;
+  const meaningful = rows.filter((r) => r.totalThisMonth > 0);
+  if (meaningful.length === 0) return null;
+
+  return (
+    <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
+      <header className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+        <CreditCard className="size-3 text-[color:var(--neon)]" />
+        עומס לפי כרטיס
+      </header>
+
+      <ul className="flex flex-col gap-2">
+        {meaningful.map((row, idx) => (
+          <motion.li
+            key={row.card.id}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: idx * STAGGER_TIGHT,
+              duration: 0.3,
+              ease: EASE_OUT_EXPO,
+            }}
+            className="flex items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[color:var(--neon)]/14 text-[color:var(--neon)]">
+              <CreditCard className="size-4" strokeWidth={1.8} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col leading-tight">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-[13px] font-medium text-foreground">
+                  {row.card.label}
+                </span>
+                {row.card.cardLast4 ? (
+                  <Pill tone="neutral">····{row.card.cardLast4}</Pill>
+                ) : null}
+                {row.installmentPlansActive > 0 ? (
+                  <Pill
+                    tone="purple"
+                    icon={<Repeat2 className="size-2.5" />}
+                  >
+                    {row.installmentPlansActive} פלאנים
+                  </Pill>
+                ) : null}
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px] text-muted-foreground">
+                {row.recurringPendingThisMonth > 0 ? (
+                  <span>
+                    קבועים {ILS.format(row.recurringPendingThisMonth)}
+                  </span>
+                ) : null}
+                {row.installmentThisMonth > 0 ? (
+                  <>
+                    <span>·</span>
+                    <span>תשלומים {ILS.format(row.installmentThisMonth)}</span>
+                  </>
+                ) : null}
+                {row.entriesThisMonth > 0 ? (
+                  <>
+                    <span>·</span>
+                    <span>חיובים {ILS.format(row.entriesThisMonth)}</span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-end leading-tight">
+              <span
+                data-mono="true"
+                dir="ltr"
+                className="text-[14px] font-semibold text-destructive"
+              >
+                −{ILS.format(row.totalThisMonth)}
+              </span>
+              <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+                החודש
+              </span>
+            </div>
+          </motion.li>
+        ))}
+      </ul>
+
+      <p className="text-[10px] text-muted-foreground/80">
+        מחושב מהוצאות קבועות מקושרות לכרטיס + תשלומים + חיובים שכבר נכנסו
+        השבוע.
+      </p>
+    </section>
+  );
+}
