@@ -102,6 +102,70 @@ describe("store.updateExpense", () => {
       .updateExpense("does-not-exist", { amount: 1 });
     expect(out).toBeUndefined();
   });
+
+  it("updates paymentMethod + accountId", async () => {
+    const { useFinanceStore } = await loadStore();
+    const store = useFinanceStore.getState();
+
+    const card = store.addAccount({
+      kind: "card",
+      label: "כאל",
+      issuer: "cal",
+      cardLast4: "1234",
+    });
+
+    const res = useFinanceStore.getState().addExpense({
+      amount: 50,
+      category: "food",
+      installments: 1,
+      paymentMethod: "cash",
+      source: "manual",
+      chargeDate: new Date(2026, 4, 5).toISOString(),
+    });
+
+    useFinanceStore.getState().updateExpense(res.entry.id, {
+      paymentMethod: "credit",
+      accountId: card.id,
+    });
+
+    const e = useFinanceStore
+      .getState()
+      .entries.find((x) => x.id === res.entry.id)!;
+    expect(e.paymentMethod).toBe("credit");
+    expect(e.accountId).toBe(card.id);
+  });
+
+  it("clears accountId when sent empty string", async () => {
+    const { useFinanceStore } = await loadStore();
+    const store = useFinanceStore.getState();
+
+    const card = store.addAccount({
+      kind: "card",
+      label: "כאל",
+      issuer: "cal",
+      cardLast4: "1234",
+    });
+
+    const res = useFinanceStore.getState().addExpense({
+      amount: 50,
+      category: "food",
+      installments: 1,
+      paymentMethod: "credit",
+      source: "manual",
+      accountId: card.id,
+      chargeDate: new Date(2026, 4, 5).toISOString(),
+    });
+    expect(res.entry.accountId).toBe(card.id);
+
+    useFinanceStore
+      .getState()
+      .updateExpense(res.entry.id, { accountId: "" });
+
+    const e = useFinanceStore
+      .getState()
+      .entries.find((x) => x.id === res.entry.id)!;
+    expect(e.accountId).toBeUndefined();
+  });
 });
 
 describe("store.relinkExpense", () => {

@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Link2, Link2Off, Minus, Plus, Trash2 } from "lucide-react";
+import {
+  Banknote,
+  Check,
+  CreditCard,
+  Link2,
+  Link2Off,
+  Minus,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { GlassPopup } from "@/components/ui/glass-popup";
@@ -10,7 +19,8 @@ import { CategoryPickerSheet } from "@/components/confirmation/category-picker-s
 import { getCategory, type CategoryId } from "@/lib/categories";
 import { useFinanceStore } from "@/lib/store";
 import { success, tap } from "@/lib/haptics";
-import type { ExpenseEntry } from "@/types/finance";
+import { getIssuerMeta } from "@/lib/card-issuers";
+import type { ExpenseEntry, PaymentMethod } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -38,6 +48,7 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
   const relinkExpense = useFinanceStore((s) => s.relinkExpense);
   const deleteExpense = useFinanceStore((s) => s.deleteExpense);
   const rules = useFinanceStore((s) => s.rules);
+  const accounts = useFinanceStore((s) => s.accounts);
 
   const [amount, setAmount] = useState(entry ? String(entry.amount) : "");
   const [merchant, setMerchant] = useState(entry?.merchant ?? "");
@@ -47,15 +58,27 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
   const [installments, setInstallments] = useState<number>(
     entry?.installments ?? 1,
   );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    entry?.paymentMethod ?? "credit",
+  );
+  const [accountId, setAccountId] = useState<string | undefined>(
+    entry?.accountId,
+  );
   const [includeInBudget, setIncludeInBudget] = useState(
     !entry?.excludeFromBudget,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [rulePickerOpen, setRulePickerOpen] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
 
   const matchedRule = entry?.matchedRuleId
     ? rules.find((r) => r.id === entry.matchedRuleId)
     : undefined;
+
+  const activeCards = accounts.filter((a) => a.kind === "card" && a.active);
+  const candidateRules = rules.filter(
+    (r) => r.active && r.category === category,
+  );
 
   if (!entry) return null;
   const parsedAmount = Number(amount);
@@ -72,6 +95,8 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
       merchant: merchant.trim(),
       category,
       installments,
+      paymentMethod,
+      accountId: paymentMethod === "credit" ? accountId ?? "" : "",
       excludeFromBudget: !includeInBudget,
     });
     success();
@@ -84,6 +109,14 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
     tap();
     relinkExpense(entry.id, null);
     toast("קישור הוסר");
+  }
+
+  function linkToRule(ruleId: string) {
+    if (!entry) return;
+    tap();
+    relinkExpense(entry.id, ruleId);
+    setRulePickerOpen(false);
+    toast.success("נקשר לקבוע");
   }
 
   function remove() {
@@ -181,6 +214,79 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
           <span className="text-[10px] text-muted-foreground">החלף</span>
         </motion.button>
 
+        {/* Payment method */}
+        <div className="grid grid-cols-2 gap-2">
+          {(["credit", "cash"] as const).map((pm) => (
+            <button
+              key={pm}
+              type="button"
+              onClick={() => {
+                tap();
+                setPaymentMethod(pm);
+                if (pm === "cash") setAccountId(undefined);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs transition-colors ${
+                paymentMethod === pm
+                  ? "border-neon/60 bg-background/80 text-foreground"
+                  : "border-border/60 bg-background/40 text-muted-foreground"
+              }`}
+            >
+              {pm === "credit" ? (
+                <CreditCard className="size-3.5" />
+              ) : (
+                <Banknote className="size-3.5" />
+              )}
+              {pm === "credit" ? "אשראי" : "מזומן"}
+            </button>
+          ))}
+        </div>
+
+        {/* Account picker — credit only, only when there are cards */}
+        {paymentMethod === "credit" && activeCards.length > 0 ? (
+          <div className="rounded-xl border border-white/10 bg-black/30 p-2.5">
+            <div className="mb-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              כרטיס
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {activeCards.map((card) => {
+                const meta = getIssuerMeta(card.issuer);
+                const active = accountId === card.id;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => {
+                      tap();
+                      setAccountId(active ? undefined : card.id);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors ${
+                      active
+                        ? "border-neon/60 bg-background/80 text-foreground"
+                        : "border-white/12 bg-background/40 text-muted-foreground"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className="inline-block size-2 rounded-full"
+                      style={{ background: card.color ?? meta.accent }}
+                    />
+                    <span>{card.label}</span>
+                    {card.cardLast4 ? (
+                      <span
+                        data-mono="true"
+                        className="text-[10px] text-muted-foreground/70"
+                        style={{ direction: "ltr" }}
+                      >
+                        ····{card.cardLast4}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {/* Budget inclusion */}
         <label className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5">
           <div className="flex flex-col gap-0.5 text-right leading-tight">
@@ -276,14 +382,84 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
                 {matchedRule.label}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={unlinkRule}
-              className="flex items-center gap-1 rounded-lg border border-white/12 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
-            >
-              <Link2Off className="size-3" />
-              נתק
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  tap();
+                  setRulePickerOpen((v) => !v);
+                }}
+                className="flex items-center gap-1 rounded-lg border border-white/12 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-white/30 hover:text-foreground"
+              >
+                החלף
+              </button>
+              <button
+                type="button"
+                onClick={unlinkRule}
+                className="flex items-center gap-1 rounded-lg border border-white/12 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+              >
+                <Link2Off className="size-3" />
+                נתק
+              </button>
+            </div>
+          </div>
+        ) : candidateRules.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              tap();
+              setRulePickerOpen((v) => !v);
+            }}
+            className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-white/10 bg-black/20 p-2.5 text-[11px] text-muted-foreground transition-colors hover:border-neon/40 hover:text-foreground"
+          >
+            <span className="flex items-center gap-1.5">
+              <Link2 className="size-3 text-neon" />
+              קשר לקבוע באותה קטגוריה
+            </span>
+            <span className="text-[10px] text-muted-foreground/70">
+              {candidateRules.length} זמינים
+            </span>
+          </button>
+        ) : null}
+
+        {rulePickerOpen ? (
+          <div className="rounded-xl border border-white/10 bg-black/30 p-2.5">
+            <div className="mb-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              חוקים בקטגוריה {meta.label}
+            </div>
+            {candidateRules.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground">
+                אין חוקים פעילים בקטגוריה הזו.
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {candidateRules.map((r) => {
+                  const active = r.id === matchedRule?.id;
+                  return (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() => linkToRule(r.id)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-[12px] transition-colors ${
+                          active
+                            ? "border-neon/60 bg-background/80 text-foreground"
+                            : "border-white/12 bg-background/40 text-muted-foreground hover:border-white/30 hover:text-foreground"
+                        }`}
+                      >
+                        <span className="truncate">{r.label}</span>
+                        <span
+                          data-mono="true"
+                          dir="ltr"
+                          className="text-[10px] text-muted-foreground/70"
+                        >
+                          ₪{r.estimatedAmount} · {r.dayOfMonth}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         ) : null}
 
