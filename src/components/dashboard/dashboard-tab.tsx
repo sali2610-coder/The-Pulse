@@ -144,6 +144,12 @@ const CardsPressureCard = lazy(() =>
   })),
 );
 
+const HousingCard = lazy(() =>
+  import("@/components/dashboard/housing-card").then((m) => ({
+    default: m.HousingCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -196,6 +202,11 @@ export function DashboardTab() {
       {/* CARDS PRESSURE — per-card monthly load */}
       <div className="sm:col-span-6">
         <Safe name="CardsPressureCard"><CardsPressureCard /></Safe>
+      </div>
+
+      {/* HOUSING — living-cost bucket */}
+      <div className="sm:col-span-6">
+        <Safe name="HousingCard"><HousingCard /></Safe>
       </div>
 
       {/* CASHFLOW TIMELINE — day-by-day projected events */}
