@@ -111,6 +111,31 @@ type Actions = {
     merged?: boolean;
   };
   deleteExpense: (id: string) => void;
+  /** Generic post-confirmation edit. Does NOT touch confirmedAt or
+   *  needsConfirmation (those are owned by `confirmExpense`/`dismissPending`).
+   *  Re-runs rule matching only when a field that affects matching changes
+   *  (category / chargeDate / amount). If a previously-matched rule no longer
+   *  fits, the link is dropped and the status reverts to pending. If a new
+   *  rule fits, the link + status are upserted. */
+  updateExpense: (
+    id: string,
+    patch: Partial<{
+      amount: number;
+      category: CategoryId;
+      merchant: string;
+      note: string;
+      installments: number;
+      accountId: string;
+      paymentMethod: PaymentMethod;
+      chargeDate: string;
+      excludeFromBudget: boolean;
+      isRefund: boolean;
+    }>,
+  ) => ExpenseEntry | undefined;
+  /** Manually pin an entry to a recurring rule, or unlink (ruleId === null).
+   *  Updates the `statuses` table accordingly. Used by the Edit sheet when
+   *  the user wants to override automatic matching. */
+  relinkExpense: (id: string, ruleId: string | null) => void;
   /** Apply user edits from the confirmation sheet, set confirmedAt, clear
    *  the needsConfirmation gate. */
   confirmExpense: (
@@ -376,6 +401,137 @@ export const useFinanceStore = create<State & Actions>()(
         set((state) => ({
           entries: state.entries.filter((e) => e.id !== id),
         }));
+      },
+
+      updateExpense: (id, patch) => {
+        let updated: ExpenseEntry | undefined;
+        set((state) => {
+          const target = state.entries.find((e) => e.id === id);
+          if (!target) return state;
+
+          const cleanMerchant =
+            patch.merchant !== undefined
+              ? patch.merchant.trim()
+                ? sanitizeMerchant(patch.merchant)
+                : undefined
+              : target.merchant;
+
+          const next: ExpenseEntry = {
+            ...target,
+            ...(patch.amount !== undefined && Number.isFinite(patch.amount)
+              ? { amount: patch.amount }
+              : {}),
+            ...(patch.category ? { category: patch.category } : {}),
+            ...(patch.merchant !== undefined ? { merchant: cleanMerchant } : {}),
+            ...(patch.note !== undefined ? { note: patch.note } : {}),
+            ...(patch.installments
+              ? { installments: Math.max(1, Math.floor(patch.installments)) }
+              : {}),
+            ...("accountId" in patch
+              ? { accountId: patch.accountId || undefined }
+              : {}),
+            ...(patch.paymentMethod
+              ? { paymentMethod: patch.paymentMethod }
+              : {}),
+            ...(patch.chargeDate ? { chargeDate: patch.chargeDate } : {}),
+            ...(patch.excludeFromBudget !== undefined
+              ? { excludeFromBudget: patch.excludeFromBudget || undefined }
+              : {}),
+            ...(patch.isRefund !== undefined
+              ? { isRefund: patch.isRefund || undefined }
+              : {}),
+          };
+
+          // Re-run matching only if a field that affects rule matching changed.
+          const matchAffecting =
+            patch.category !== undefined ||
+            patch.chargeDate !== undefined ||
+            patch.amount !== undefined;
+
+          let nextStatuses = state.statuses;
+          let finalEntry = next;
+
+          if (matchAffecting) {
+            // Drop the previous link first so re-matching is clean.
+            if (target.matchedRuleId) {
+              nextStatuses = nextStatuses.map((s) =>
+                s.matchedExpenseId === target.id
+                  ? {
+                      ...s,
+                      status: "pending",
+                      matchedExpenseId: undefined,
+                      actualAmount: undefined,
+                    }
+                  : s,
+              );
+              finalEntry = { ...finalEntry, matchedRuleId: undefined };
+            }
+            const reMatch = findMatchingRule({
+              entry: finalEntry,
+              rules: state.rules,
+              statuses: nextStatuses,
+            });
+            if (reMatch) {
+              finalEntry = { ...finalEntry, matchedRuleId: reMatch.id };
+              nextStatuses = upsertStatus(nextStatuses, {
+                ruleId: reMatch.id,
+                monthKey: monthKeyOf(new Date(finalEntry.chargeDate)),
+                status: "paid",
+                matchedExpenseId: finalEntry.id,
+                actualAmount: finalEntry.amount,
+              });
+            }
+          }
+
+          updated = finalEntry;
+          return {
+            entries: state.entries.map((e) =>
+              e.id === id ? finalEntry : e,
+            ),
+            statuses: nextStatuses,
+          };
+        });
+        return updated;
+      },
+
+      relinkExpense: (id, ruleId) => {
+        set((state) => {
+          const entry = state.entries.find((e) => e.id === id);
+          if (!entry) return state;
+
+          // Clear any prior link for this entry.
+          let nextStatuses = state.statuses.map((s) =>
+            s.matchedExpenseId === id
+              ? {
+                  ...s,
+                  status: "pending" as const,
+                  matchedExpenseId: undefined,
+                  actualAmount: undefined,
+                }
+              : s,
+          );
+
+          if (ruleId) {
+            const rule = state.rules.find((r) => r.id === ruleId);
+            if (!rule) return { ...state, statuses: nextStatuses };
+            nextStatuses = upsertStatus(nextStatuses, {
+              ruleId: rule.id,
+              monthKey: monthKeyOf(new Date(entry.chargeDate)),
+              status: "paid",
+              matchedExpenseId: entry.id,
+              actualAmount: entry.amount,
+            });
+          }
+
+          return {
+            entries: state.entries.map((e) =>
+              e.id === id
+                ? { ...e, matchedRuleId: ruleId ?? undefined }
+                : e,
+            ),
+            statuses: nextStatuses,
+          };
+        });
       },
 
       deleteExpense: (id) => {

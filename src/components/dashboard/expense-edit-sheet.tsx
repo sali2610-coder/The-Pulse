@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Trash2 } from "lucide-react";
+import { Check, Link2, Link2Off, Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { GlassPopup } from "@/components/ui/glass-popup";
@@ -34,19 +34,28 @@ type Props = {
  * patch + sets `confirmedAt`. Delete uses `deleteExpense`.
  */
 export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
-  const confirmExpense = useFinanceStore((s) => s.confirmExpense);
+  const updateExpense = useFinanceStore((s) => s.updateExpense);
+  const relinkExpense = useFinanceStore((s) => s.relinkExpense);
   const deleteExpense = useFinanceStore((s) => s.deleteExpense);
+  const rules = useFinanceStore((s) => s.rules);
 
   const [amount, setAmount] = useState(entry ? String(entry.amount) : "");
   const [merchant, setMerchant] = useState(entry?.merchant ?? "");
   const [category, setCategory] = useState<CategoryId>(
     (entry?.category as CategoryId) ?? "other",
   );
+  const [installments, setInstallments] = useState<number>(
+    entry?.installments ?? 1,
+  );
   const [includeInBudget, setIncludeInBudget] = useState(
     !entry?.excludeFromBudget,
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
+
+  const matchedRule = entry?.matchedRuleId
+    ? rules.find((r) => r.id === entry.matchedRuleId)
+    : undefined;
 
   if (!entry) return null;
   const parsedAmount = Number(amount);
@@ -58,15 +67,23 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
       toast.error("הסכום אינו תקין");
       return;
     }
-    confirmExpense(entry.id, {
+    updateExpense(entry.id, {
       amount: parsedAmount,
       merchant: merchant.trim(),
       category,
+      installments,
       excludeFromBudget: !includeInBudget,
     });
     success();
     toast.success("נשמר", { description: merchant.trim() || meta.label });
     onOpenChange(false);
+  }
+
+  function unlinkRule() {
+    if (!entry) return;
+    tap();
+    relinkExpense(entry.id, null);
+    toast("קישור הוסר");
   }
 
   function remove() {
@@ -199,6 +216,76 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
             />
           </button>
         </label>
+
+        {/* Installments */}
+        <div
+          className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5"
+          dir="ltr"
+        >
+          <div className="flex flex-col gap-0.5 text-start leading-tight">
+            <span className="text-[12px] font-medium text-foreground">
+              תשלומים
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {installments > 1
+                ? `${installments}× חיוב חודשי`
+                : "תשלום בודד"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                setInstallments((v) => Math.max(1, v - 1));
+              }}
+              className="flex size-7 items-center justify-center rounded-lg border border-white/12 bg-background/40 text-foreground hover:border-white/30"
+              aria-label="פחות תשלום"
+            >
+              <Minus className="size-3.5" />
+            </button>
+            <span
+              data-mono="true"
+              className="w-7 text-center text-sm font-medium text-foreground"
+            >
+              {installments}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                setInstallments((v) => Math.min(60, v + 1));
+              }}
+              className="flex size-7 items-center justify-center rounded-lg border border-white/12 bg-background/40 text-foreground hover:border-white/30"
+              aria-label="עוד תשלום"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Linked recurring rule */}
+        {matchedRule ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5">
+            <div className="flex min-w-0 flex-col gap-0.5 leading-tight">
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <Link2 className="size-3 text-neon" />
+                מקושר לקבוע
+              </span>
+              <span className="truncate text-[12.5px] font-medium text-foreground">
+                {matchedRule.label}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={unlinkRule}
+              className="flex items-center gap-1 rounded-lg border border-white/12 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+            >
+              <Link2Off className="size-3" />
+              נתק
+            </button>
+          </div>
+        ) : null}
 
         {/* Actions */}
         <div className="flex flex-col gap-1.5 pt-0.5">
