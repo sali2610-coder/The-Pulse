@@ -61,6 +61,11 @@ type AddAccountInput = {
   issuer?: Issuer;
   cardLast4?: string;
   anchorBalance?: number;
+  billingDay?: number;
+  paymentDay?: number;
+  creditLimit?: number;
+  currentDebt?: number;
+  color?: string;
 };
 
 type AddLoanInput = {
@@ -477,21 +482,36 @@ export const useFinanceStore = create<State & Actions>()(
       },
 
       addAccount: (input) => {
+        const isCard = input.kind === "card";
+        const clampDay = (n: number | undefined) =>
+          typeof n === "number" && Number.isFinite(n) && n >= 1 && n <= 31
+            ? Math.floor(n)
+            : undefined;
         const acc: Account = {
           id: uid(),
           kind: input.kind,
           label: input.label.trim(),
-          issuer: input.kind === "card" ? input.issuer : undefined,
-          cardLast4:
-            input.kind === "card"
-              ? input.cardLast4?.replace(/\D/g, "").slice(-4)
-              : undefined,
+          issuer: isCard ? input.issuer : undefined,
+          cardLast4: isCard
+            ? input.cardLast4?.replace(/\D/g, "").slice(-4)
+            : undefined,
           anchorBalance:
             input.kind === "bank" ? safeNumber(input.anchorBalance) : undefined,
           anchorUpdatedAt:
             input.kind === "bank" && input.anchorBalance !== undefined
               ? new Date().toISOString()
               : undefined,
+          billingDay: isCard ? clampDay(input.billingDay) : undefined,
+          paymentDay: isCard ? clampDay(input.paymentDay) : undefined,
+          creditLimit:
+            isCard && typeof input.creditLimit === "number"
+              ? safeNumber(input.creditLimit)
+              : undefined,
+          currentDebt:
+            isCard && typeof input.currentDebt === "number"
+              ? safeNumber(input.currentDebt)
+              : undefined,
+          color: isCard ? input.color : undefined,
           active: true,
           createdAt: new Date().toISOString(),
         };
@@ -523,6 +543,19 @@ export const useFinanceStore = create<State & Actions>()(
                         anchorUpdatedAt: new Date().toISOString(),
                       }
                     : {}),
+                  ...("billingDay" in patch
+                    ? { billingDay: patch.billingDay }
+                    : {}),
+                  ...("paymentDay" in patch
+                    ? { paymentDay: patch.paymentDay }
+                    : {}),
+                  ...("creditLimit" in patch
+                    ? { creditLimit: patch.creditLimit }
+                    : {}),
+                  ...("currentDebt" in patch
+                    ? { currentDebt: patch.currentDebt }
+                    : {}),
+                  ...("color" in patch ? { color: patch.color } : {}),
                 }
               : a,
           ),
@@ -710,7 +743,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 7,
+      version: 8,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -772,6 +805,15 @@ export const useFinanceStore = create<State & Actions>()(
             return { ...rule, paymentSource: "unknown" as const };
           });
           migrated = { ...migrated, rules };
+        }
+        if (fromVersion < 8) {
+          // Phase 90 — Account gained optional card-tracking fields
+          // (billingDay/paymentDay/creditLimit/currentDebt/color).
+          // All optional → existing rows already valid at runtime;
+          // this migration is a no-op guard that records the schema
+          // bump so downstream debug tooling can tell v7 vs v8 state apart.
+          // Existing IDs, links, balances, anchors are untouched.
+          migrated = { ...migrated };
         }
         return migrated;
       },

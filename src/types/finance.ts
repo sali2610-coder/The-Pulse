@@ -4,7 +4,19 @@ export type ExpenseSource = "manual" | "auto" | "sms" | "wallet";
 export type PaymentMethod = "cash" | "credit";
 /** Card issuer — used for Account.issuer and SMS dispatch. Wallet is not
  *  an issuer; it's a channel (see `ExpenseSource`). */
-export type Issuer = "cal" | "max";
+export type Issuer =
+  | "cal"
+  | "max"
+  | "isracard"
+  | "amex"
+  | "hapoalim"
+  | "leumi"
+  | "discount"
+  | "mizrahi"
+  | "fibi"
+  | "visa"
+  | "mastercard"
+  | "other";
 export type Currency = "ILS" | "USD" | "EUR" | "GBP" | "OTHER";
 export type AccountKind = "bank" | "card";
 
@@ -22,6 +34,19 @@ export type Account = {
   anchorUpdatedAt?: string;
   active: boolean;
   createdAt: string;
+  /** Phase 90 — cards only: day-of-month the issuer closes the billing
+   *  cycle (e.g. 25 → charges Sep 25 → Oct 25 land on the next bill). */
+  billingDay?: number;
+  /** Phase 90 — cards only: day-of-month the bank debits the user. */
+  paymentDay?: number;
+  /** Phase 90 — cards only: optional credit limit (₪). */
+  creditLimit?: number;
+  /** Phase 90 — cards only: optional current debt (₪) the user tracks
+   *  manually. Independent of computed pressure — purely informational. */
+  currentDebt?: number;
+  /** Phase 90 — cards only: hex color so the card surfaces visually
+   *  in lists / drilldowns. Defaults to a neutral if absent. */
+  color?: string;
 };
 
 export type Loan = {

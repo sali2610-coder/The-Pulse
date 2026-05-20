@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import type { Scope } from "@/lib/scope";
+import type { Issuer } from "@/types/finance";
 
 // Upstash REST credentials are auto-provisioned by the Vercel Marketplace
 // integration as KV_REST_API_URL + KV_REST_API_TOKEN. We use the REST client
@@ -63,8 +64,9 @@ export type StoredTransaction = {
   paymentMethod: "cash" | "credit";
   installments: number;
   /** Card issuer for SMS rows; `"wallet"` for Wallet notifications where
-   *  we don't always know which card was tapped. */
-  issuer: "cal" | "max" | "wallet";
+   *  we don't always know which card was tapped. Widened in Phase 90 to
+   *  cover the full Issuer enum so non-CAL/MAX SMS sources fit too. */
+  issuer: Issuer | "wallet";
   /** Channel the row arrived on. New writes always set this; older rows
    *  may be undefined and should be treated as `"sms"`. */
   source?: "sms" | "wallet";
