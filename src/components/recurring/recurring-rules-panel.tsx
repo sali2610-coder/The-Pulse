@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Pencil, Trash2, Power } from "lucide-react";
+import { ChevronDown, Plus, Pencil, Trash2, Power } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { getCategory } from "@/lib/categories";
@@ -34,6 +34,59 @@ export function RecurringRulesPanel() {
 
   const monthKey = currentMonthKey();
   const statusMap = useMemo(() => buildStatusMap(statuses), [statuses]);
+
+  type GroupKey =
+    | "installments"
+    | "card"
+    | "bank"
+    | "cash"
+    | "unknown";
+
+  const groups = useMemo(() => {
+    const buckets: Record<
+      GroupKey,
+      { key: GroupKey; label: string; rules: typeof rules; total: number }
+    > = {
+      installments: { key: "installments", label: "תשלומים", rules: [], total: 0 },
+      card: { key: "card", label: "כרטיס אשראי", rules: [], total: 0 },
+      bank: { key: "bank", label: "חיוב בנקאי", rules: [], total: 0 },
+      cash: { key: "cash", label: "מזומן", rules: [], total: 0 },
+      unknown: { key: "unknown", label: "ללא קישור", rules: [], total: 0 },
+    };
+    for (const r of rules) {
+      const key: GroupKey = r.installmentTotal
+        ? "installments"
+        : r.paymentSource === "card"
+          ? "card"
+          : r.paymentSource === "bank"
+            ? "bank"
+            : r.paymentSource === "cash"
+              ? "cash"
+              : "unknown";
+      buckets[key].rules.push(r);
+      if (r.active) buckets[key].total += r.estimatedAmount;
+    }
+    // Stable order: installments first, then by total desc.
+    const ordered: (typeof buckets)[GroupKey][] = [];
+    if (buckets.installments.rules.length > 0) ordered.push(buckets.installments);
+    const rest = (
+      ["card", "bank", "cash", "unknown"] as GroupKey[]
+    )
+      .map((k) => buckets[k])
+      .filter((b) => b.rules.length > 0)
+      .sort((a, b) => b.total - a.total);
+    return [...ordered, ...rest];
+  }, [rules]);
+
+  const [collapsed, setCollapsed] = useState<Set<GroupKey>>(new Set());
+  const toggleGroup = (key: GroupKey) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   return (
     <section className="space-y-3">
@@ -67,9 +120,50 @@ export function RecurringRulesPanel() {
             אין עדיין הוצאות קבועות. הוסף את הראשונה כדי שהמערכת תוכל לשדך אוטומטית חיובים נכנסים.
           </p>
         ) : (
-          <ul className="space-y-2">
-            <AnimatePresence initial={false}>
-              {rules.map((rule) => {
+          <div className="flex flex-col gap-3">
+            {groups.map((group) => {
+              const isCollapsed = collapsed.has(group.key);
+              return (
+                <section key={group.key} className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    className="flex items-center justify-between rounded-xl border border-white/8 bg-background/30 px-3 py-2 text-start transition-colors hover:border-white/16"
+                    aria-expanded={!isCollapsed}
+                  >
+                    <span className="flex items-center gap-2">
+                      <motion.span
+                        animate={{ rotate: isCollapsed ? -90 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="text-muted-foreground"
+                      >
+                        <ChevronDown className="size-3.5" />
+                      </motion.span>
+                      <span className="text-[12px] font-medium text-foreground">
+                        {group.label}
+                      </span>
+                      <span className="rounded-full bg-white/8 px-1.5 py-0.5 text-[9px] text-foreground/80">
+                        {group.rules.length}
+                      </span>
+                    </span>
+                    <span
+                      data-mono="true"
+                      dir="ltr"
+                      className="text-[11px] text-muted-foreground"
+                    >
+                      {formatILS(group.total)}/חודש
+                    </span>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {!isCollapsed ? (
+                      <motion.ul
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.22 }}
+                        className="space-y-2 overflow-hidden"
+                      >
+                        {group.rules.map((rule) => {
                 const cat = getCategory(rule.category);
                 const Icon = cat.icon;
                 const status = statusMap.get(`${rule.id}__${monthKey}`);
@@ -206,8 +300,13 @@ export function RecurringRulesPanel() {
                   </motion.li>
                 );
               })}
-            </AnimatePresence>
-          </ul>
+                      </motion.ul>
+                    ) : null}
+                  </AnimatePresence>
+                </section>
+              );
+            })}
+          </div>
         )
       ) : null}
 
