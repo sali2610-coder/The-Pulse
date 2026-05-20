@@ -21,6 +21,7 @@ import {
   type FinancialSnapshot,
   type RiskLevel,
 } from "@/lib/financial-snapshot";
+import { useSnapshot } from "@/lib/snapshot-context";
 import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { tap } from "@/lib/haptics";
@@ -73,7 +74,12 @@ export function CashflowSummaryCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
+  // Phase 84: prefer the shared snapshot from context, fall back to a
+  // local build when rendered outside SnapshotProvider (legacy tests,
+  // standalone drilldowns).
+  const sharedSnapshot = useSnapshot();
   const snapshot = useMemo<FinancialSnapshot | null>(() => {
+    if (sharedSnapshot) return sharedSnapshot;
     if (!hydrated) return null;
     return buildFinancialSnapshot({
       accounts,
@@ -86,6 +92,7 @@ export function CashflowSummaryCard() {
       monthKey: currentMonthKey(),
     });
   }, [
+    sharedSnapshot,
     hydrated,
     accounts,
     loans,

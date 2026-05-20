@@ -34,11 +34,16 @@ export function FloatingCTA({ onClick }: { onClick: () => void }) {
     if (typeof window === "undefined") return;
     lastYRef.current = window.scrollY;
 
-    const onScroll = () => {
+    // rAF-throttled scroll handler — at most one state evaluation per
+    // frame. Cheap on the main thread even with 60+ scroll events / s
+    // emitted by iOS Safari.
+    let frame = 0;
+    let pending = false;
+    const evaluate = () => {
+      pending = false;
       const y = window.scrollY;
       const dy = y - lastYRef.current;
       lastYRef.current = y;
-      // Always show near the very top of the page.
       if (y < 80) {
         setVisible(true);
         accumulatedRef.current = 0;
@@ -53,9 +58,17 @@ export function FloatingCTA({ onClick }: { onClick: () => void }) {
         accumulatedRef.current = 0;
       }
     };
+    const onScroll = () => {
+      if (pending) return;
+      pending = true;
+      frame = requestAnimationFrame(evaluate);
+    };
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, []);
 
   return (

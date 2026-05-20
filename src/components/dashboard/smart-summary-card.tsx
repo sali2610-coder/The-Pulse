@@ -13,6 +13,7 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
+import { useSnapshot } from "@/lib/snapshot-context";
 import {
   buildSmartSummary,
   type SummaryTone,
@@ -77,24 +78,37 @@ export function SmartSummaryCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
+  const sharedSnapshot = useSnapshot();
   const lines = useMemo(() => {
     if (!hydrated) return [];
-    const snapshot = buildFinancialSnapshot({
-      accounts,
-      loans,
-      incomes,
-      entries,
-      rules,
-      statuses,
-      monthlyBudget,
-      monthKey: currentMonthKey(),
-    });
+    const snapshot =
+      sharedSnapshot ??
+      buildFinancialSnapshot({
+        accounts,
+        loans,
+        incomes,
+        entries,
+        rules,
+        statuses,
+        monthlyBudget,
+        monthKey: currentMonthKey(),
+      });
     return buildSmartSummary({
       snapshot,
       incomes,
       loans,
     });
-  }, [hydrated, accounts, loans, incomes, entries, rules, statuses, monthlyBudget]);
+  }, [
+    hydrated,
+    sharedSnapshot,
+    accounts,
+    loans,
+    incomes,
+    entries,
+    rules,
+    statuses,
+    monthlyBudget,
+  ]);
 
   if (!hydrated || lines.length === 0) return null;
 

@@ -104,7 +104,7 @@ export function CfoSummary() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-5 backdrop-blur-2xl"
+      className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-5 backdrop-blur-md"
       style={{
         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 30px 60px -40px ${accent}55`,
       }}

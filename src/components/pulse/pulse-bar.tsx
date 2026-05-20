@@ -185,7 +185,7 @@ export function PulseBar({ budget }: Props) {
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group relative cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.045] to-white/[0.01] p-5 backdrop-blur-2xl outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+      className="group relative cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.045] to-white/[0.01] p-5 backdrop-blur-md outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
       style={{
         // Layered glass: top inner highlight + bottom inner shadow + colored
         // outer drop tinted to the current status accent.

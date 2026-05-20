@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { PulseBar } from "@/components/pulse/pulse-bar";
 import { FloatingCTA } from "@/components/dashboard/floating-cta";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
+import { SnapshotProvider } from "@/lib/snapshot-context";
 
 // Every dashboard card except the always-needed PulseBar + NewExpenseButton
 // is dynamically imported with `ssr: false`. iPhone Safari was rejecting `/`
@@ -153,6 +154,7 @@ export function DashboardTab() {
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
   return (
+   <SnapshotProvider>
     <div className="grid grid-cols-1 gap-2.5 pb-28 sm:grid-cols-6 sm:gap-3 sm:pb-32">
       {/* WELCOME / SETUP — calm onboarding card; vanishes when done. */}
       <div className="sm:col-span-6">
@@ -287,5 +289,6 @@ export function DashboardTab() {
 
       <ExpenseDialog open={open} onOpenChange={setOpen} />
     </div>
+   </SnapshotProvider>
   );
 }
