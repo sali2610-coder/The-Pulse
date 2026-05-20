@@ -125,6 +125,12 @@ const SmartSummaryCard = lazy(() =>
   })),
 );
 
+const CopilotCard = lazy(() =>
+  import("@/components/dashboard/copilot-card").then((m) => ({
+    default: m.CopilotCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -145,6 +151,11 @@ export function DashboardTab() {
       {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
+      </div>
+
+      {/* COPILOT — forward-looking proactive insights */}
+      <div className="sm:col-span-6">
+        <Safe name="CopilotCard"><CopilotCard /></Safe>
       </div>
 
       {/* HERO — primary state + projection */}
