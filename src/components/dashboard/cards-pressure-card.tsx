@@ -66,11 +66,13 @@ export function CardsPressureCard() {
       const projection = projectCardCycle({
         account: row.card,
         entries,
+        rules,
+        statuses,
       });
       if (projection) map.set(row.card.id, projection);
     }
     return map;
-  }, [hydrated, rows, entries]);
+  }, [hydrated, rows, entries, rules, statuses]);
 
   const aggregate = useMemo(() => {
     if (!hydrated) return null;

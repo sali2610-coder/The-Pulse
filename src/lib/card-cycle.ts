@@ -16,9 +16,12 @@ import type {
   Account,
   ExpenseEntry,
   MonthKey,
+  RecurringRule,
+  RecurringStatus,
 } from "@/types/finance";
 import { sliceForMonth, daysInMonth as daysInMonthKey } from "@/lib/projections";
 import { monthKeyOf, addMonths } from "@/lib/dates";
+import { ruleSchedule } from "@/lib/installment-schedule";
 
 export type CardCycleProjection = {
   accountId: string;
@@ -91,6 +94,14 @@ export function currentCardCycle(
 export function projectCardCycle(args: {
   account: Account;
   entries: ExpenseEntry[];
+  /** Recurring rules — when provided, linked rules
+   *  (`paymentSource === "card"` + `linkedCardId === account.id`)
+   *  that fire inside the cycle window contribute to `projectedAmount`.
+   *  Paid regular rules are skipped (their matched entry is already
+   *  counted); installment rules always contribute since they don't
+   *  produce entries automatically. */
+  rules?: RecurringRule[];
+  statuses?: RecurringStatus[];
   now?: Date;
 }): CardCycleProjection | undefined {
   const now = args.now ?? new Date();
@@ -122,6 +133,41 @@ export function projectCardCycle(args: {
       const sliceMs = slice.chargeDate.getTime();
       if (sliceMs < startMs || sliceMs > endMs) continue;
       projectedAmount += slice.amount;
+      entryCount++;
+      break;
+    }
+  }
+
+  // Linked recurring rules — projected obligations that never produce
+  // entries automatically (installments) or that haven't been paid yet
+  // this month (regular bills). Without this loop the card cycle
+  // projection ignores recurring expenses the user explicitly bound to
+  // the card.
+  const rules = args.rules ?? [];
+  const statuses = args.statuses ?? [];
+  for (const rule of rules) {
+    if (!rule.active) continue;
+    if (rule.paymentSource !== "card") continue;
+    if (rule.linkedCardId !== args.account.id) continue;
+    for (const mk of monthsToScan) {
+      const sched = ruleSchedule(rule, mk);
+      if (!sched.active) continue;
+      if (!rule.installmentTotal) {
+        const paid = statuses.some(
+          (s) =>
+            s.ruleId === rule.id &&
+            s.monthKey === mk &&
+            s.status === "paid",
+        );
+        if (paid) continue;
+      }
+      const [yearStr, monthStr] = mk.split("-");
+      const year = Number(yearStr);
+      const monthIdx0 = Number(monthStr) - 1;
+      const day = clampDayToMonth(rule.dayOfMonth, year, monthIdx0);
+      const chargeMs = new Date(year, monthIdx0, day, 12, 0, 0).getTime();
+      if (chargeMs < startMs || chargeMs > endMs) continue;
+      projectedAmount += rule.estimatedAmount;
       entryCount++;
       break;
     }

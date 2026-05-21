@@ -9,7 +9,13 @@
 // have a manual `currentDebt` value, so even users who don't track
 // debt by hand get a meaningful number.
 
-import type { Account, Loan, MonthKey } from "@/types/finance";
+import type {
+  Account,
+  Loan,
+  MonthKey,
+  RecurringRule,
+  RecurringStatus,
+} from "@/types/finance";
 import { loanSchedule } from "@/lib/installment-schedule";
 import { projectCardCycle } from "@/lib/card-cycle";
 
@@ -32,6 +38,12 @@ export function computeNetWorth(args: {
   accounts: Account[];
   loans: Loan[];
   entries: import("@/types/finance").ExpenseEntry[];
+  /** Optional — when supplied, card-debt projection includes
+   *  card-linked recurring rules + installment plans that fire inside
+   *  the open cycle window. Older callers that omit this still get the
+   *  pre-existing entry-only projection. */
+  rules?: RecurringRule[];
+  statuses?: RecurringStatus[];
   monthKey: MonthKey;
 }): NetWorthBreakdown {
   let assets = 0;
@@ -53,6 +65,8 @@ export function computeNetWorth(args: {
       const projection = projectCardCycle({
         account: a,
         entries: args.entries,
+        rules: args.rules,
+        statuses: args.statuses,
       });
       if (projection) cardDebt += projection.projectedAmount;
     }

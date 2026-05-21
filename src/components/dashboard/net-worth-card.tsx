@@ -24,6 +24,8 @@ export function NetWorthCard() {
   const accounts = useFinanceStore((s) => s.accounts);
   const loans = useFinanceStore((s) => s.loans);
   const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
 
   const nw = useMemo(() => {
     if (!hydrated) return null;
@@ -31,9 +33,11 @@ export function NetWorthCard() {
       accounts,
       loans,
       entries,
+      rules,
+      statuses,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, accounts, loans, entries]);
+  }, [hydrated, accounts, loans, entries, rules, statuses]);
 
   if (!hydrated || !nw) return null;
   const hasAnyEntity =

@@ -4,7 +4,12 @@ import {
   currentCardCycle,
   projectCardCycle,
 } from "@/lib/card-cycle";
-import type { Account, ExpenseEntry } from "@/types/finance";
+import type {
+  Account,
+  ExpenseEntry,
+  RecurringRule,
+  RecurringStatus,
+} from "@/types/finance";
 
 function card(overrides: Partial<Account> = {}): Account {
   return {
@@ -153,5 +158,137 @@ describe("projectCardCycle", () => {
     // the May 10 slice, but does not double-count.
     expect(projection.projectedAmount).toBe(100);
     expect(projection.entryCount).toBe(1);
+  });
+
+  // ── Card-linked recurring rules (Phase 150) ──────────────────────────
+  function rule(overrides: Partial<RecurringRule> = {}): RecurringRule {
+    return {
+      id: `r-${Math.random().toString(36).slice(2, 8)}`,
+      label: "צמיגים",
+      category: "transport",
+      estimatedAmount: 400,
+      dayOfMonth: 10,
+      keywords: [],
+      active: true,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      paymentSource: "card",
+      linkedCardId: "card-1",
+      ...overrides,
+    };
+  }
+
+  it("adds a card-linked regular recurring rule when it fires in the cycle", () => {
+    const now = new Date(2026, 4, 20);
+    const r = rule({ dayOfMonth: 10, estimatedAmount: 400 });
+    const projection = projectCardCycle({
+      account: card(),
+      entries: [],
+      rules: [r],
+      statuses: [],
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(400);
+    expect(projection.entryCount).toBe(1);
+  });
+
+  it("skips a card-linked regular rule when status is paid (entry counts instead)", () => {
+    const now = new Date(2026, 4, 20);
+    const r = rule({ dayOfMonth: 10, estimatedAmount: 400 });
+    const statuses: RecurringStatus[] = [
+      { ruleId: r.id, monthKey: "2026-05", status: "paid" },
+    ];
+    const projection = projectCardCycle({
+      account: card(),
+      entries: [],
+      rules: [r],
+      statuses,
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(0);
+    expect(projection.entryCount).toBe(0);
+  });
+
+  it("ignores rules with paymentSource != card or different linkedCardId", () => {
+    const now = new Date(2026, 4, 20);
+    const rules = [
+      rule({ paymentSource: "bank", linkedCardId: undefined }),
+      rule({ paymentSource: "card", linkedCardId: "other-card" }),
+    ];
+    const projection = projectCardCycle({
+      account: card(),
+      entries: [],
+      rules,
+      statuses: [],
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(0);
+  });
+
+  it("counts a linked installment rule even with no statuses tracked", () => {
+    const now = new Date(2026, 4, 20);
+    // 12-month installment starting Jan 2026 → still firing in May (5/12).
+    const r = rule({
+      dayOfMonth: 10,
+      estimatedAmount: 300,
+      installmentTotal: 12,
+      startMonth: 1,
+      startYear: 2026,
+    });
+    const projection = projectCardCycle({
+      account: card(),
+      entries: [],
+      rules: [r],
+      statuses: [],
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(300);
+  });
+
+  it("excludes inactive linked rules", () => {
+    const now = new Date(2026, 4, 20);
+    const r = rule({ active: false, dayOfMonth: 10, estimatedAmount: 400 });
+    const projection = projectCardCycle({
+      account: card(),
+      entries: [],
+      rules: [r],
+      statuses: [],
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(0);
+  });
+
+  it("excludes a finished installment plan (isComplete)", () => {
+    const now = new Date(2026, 4, 20);
+    // 3-month plan starting Jan 2026 → completed before May (Jan/Feb/Mar).
+    const r = rule({
+      dayOfMonth: 10,
+      estimatedAmount: 300,
+      installmentTotal: 3,
+      startMonth: 1,
+      startYear: 2026,
+    });
+    const projection = projectCardCycle({
+      account: card(),
+      entries: [],
+      rules: [r],
+      statuses: [],
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(0);
+  });
+
+  it("combines card entries and linked rules in the same cycle", () => {
+    const now = new Date(2026, 4, 20);
+    const entries = [entry({ amount: 150 })];
+    const r = rule({ dayOfMonth: 10, estimatedAmount: 400 });
+    const projection = projectCardCycle({
+      account: card(),
+      entries,
+      rules: [r],
+      statuses: [],
+      now,
+    })!;
+    expect(projection.projectedAmount).toBe(550);
+    expect(projection.entryCount).toBe(2);
   });
 });
