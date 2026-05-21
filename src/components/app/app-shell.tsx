@@ -13,6 +13,7 @@ import {
 } from "@/lib/tab-nav";
 import { gatherSmartInsights } from "@/lib/smart-insights";
 import { subscribeInsightDismissals } from "@/lib/insight-dismiss";
+import { useAutoBackup } from "@/lib/auto-backup";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -50,6 +51,8 @@ function AppShellContent() {
   const accounts = useFinanceStore((s) => s.accounts);
   const incomes = useFinanceStore((s) => s.incomes);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+
+  useAutoBackup();
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "dashboard";

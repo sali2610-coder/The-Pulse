@@ -61,11 +61,24 @@ export async function GET(): Promise<Response> {
   });
 }
 
-export async function POST(): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return fail(401, "unauthenticated");
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
+
+  // Accept an optional `reason` so the client-side auto-backup loop
+  // can label its writes as "auto" and live in its own retention
+  // bucket. Default stays "manual" for the settings card button.
+  let reason: "manual" | "auto" = "manual";
+  try {
+    const body = (await req.json().catch(() => null)) as
+      | { reason?: string }
+      | null;
+    if (body?.reason === "auto") reason = "auto";
+  } catch {
+    /* empty body → manual */
+  }
 
   const scope = { kind: "user", id: userId } as const;
   const live = await getUserState(scope);
@@ -81,10 +94,11 @@ export async function POST(): Promise<Response> {
       { status: 400 },
     );
   }
-  const result = await captureStateSnapshot(scope, "manual");
+  const result = await captureStateSnapshot(scope, reason);
   if (!result.captured) return fail(500, "capture_failed");
   return Response.json({
     ok: true,
+    reason,
     capturedAt: result.capturedAt,
     summary: summarizeBlob(live),
   });
