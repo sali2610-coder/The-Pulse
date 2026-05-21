@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Banknote,
+  CalendarDays,
   Check,
   CreditCard,
   Link2,
@@ -27,6 +28,27 @@ const ILS = new Intl.NumberFormat("he-IL", {
   currency: "ILS",
   maximumFractionDigits: 2,
 });
+
+function isoToDateInput(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dateInputToIso(value: string, source: string | undefined): string {
+  if (!value) return source ?? new Date().toISOString();
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d) return source ?? new Date().toISOString();
+  // Preserve the original time-of-day from `source` so we don't reset
+  // to midnight on every edit (matters for same-day ordering in lists).
+  const base = source ? new Date(source) : new Date();
+  const out = new Date(y, m - 1, d, base.getHours(), base.getMinutes(), base.getSeconds(), base.getMilliseconds());
+  return out.toISOString();
+}
 
 type Props = {
   open: boolean;
@@ -64,6 +86,9 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
   const [accountId, setAccountId] = useState<string | undefined>(
     entry?.accountId,
   );
+  const [chargeDate, setChargeDate] = useState<string>(
+    isoToDateInput(entry?.chargeDate),
+  );
   const [includeInBudget, setIncludeInBudget] = useState(
     !entry?.excludeFromBudget,
   );
@@ -90,6 +115,7 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
       toast.error("הסכום אינו תקין");
       return;
     }
+    const nextChargeDate = dateInputToIso(chargeDate, entry.chargeDate);
     updateExpense(entry.id, {
       amount: parsedAmount,
       merchant: merchant.trim(),
@@ -97,6 +123,7 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
       installments,
       paymentMethod,
       accountId: paymentMethod === "credit" ? accountId ?? "" : "",
+      chargeDate: nextChargeDate,
       excludeFromBudget: !includeInBudget,
     });
     success();
@@ -322,6 +349,30 @@ export function ExpenseEditSheet({ open, onOpenChange, entry }: Props) {
             />
           </button>
         </label>
+
+        {/* Charge date */}
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5">
+          <div className="flex items-center gap-2 leading-tight">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/8 text-gold">
+              <CalendarDays className="size-3.5" strokeWidth={1.7} />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                תאריך חיוב
+              </span>
+              <span className="text-[11px] text-muted-foreground/85">
+                שינוי יקפיץ מחדש את השיוך לחוקים קבועים
+              </span>
+            </div>
+          </div>
+          <input
+            type="date"
+            value={chargeDate}
+            onChange={(e) => setChargeDate(e.target.value)}
+            dir="ltr"
+            className="rounded-lg border border-white/12 bg-background/40 px-2 py-1 text-[12px] text-foreground outline-none focus:border-neon/60"
+          />
+        </div>
 
         {/* Installments */}
         <div

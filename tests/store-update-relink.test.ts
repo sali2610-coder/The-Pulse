@@ -135,6 +135,47 @@ describe("store.updateExpense", () => {
     expect(e.accountId).toBe(card.id);
   });
 
+  it("re-runs matching when chargeDate moves to a different month", async () => {
+    const { useFinanceStore } = await loadStore();
+    const store = useFinanceStore.getState();
+
+    const rule = store.addRule({
+      label: "חשמל",
+      category: "bills",
+      estimatedAmount: 400,
+      dayOfMonth: 7,
+      keywords: [],
+    });
+
+    // Entry in May matches → status paid for 2026-05.
+    const res = useFinanceStore.getState().addExpense({
+      amount: 400,
+      category: "bills",
+      installments: 1,
+      paymentMethod: "credit",
+      source: "manual",
+      chargeDate: new Date(2026, 4, 7).toISOString(),
+    });
+    expect(res.matched?.id).toBe(rule.id);
+
+    // Move chargeDate to June → the May status should revert to
+    // pending and a June status should appear as paid.
+    useFinanceStore.getState().updateExpense(res.entry.id, {
+      chargeDate: new Date(2026, 5, 7).toISOString(),
+    });
+
+    const statuses = useFinanceStore.getState().statuses;
+    const may = statuses.find(
+      (s) => s.ruleId === rule.id && s.monthKey === "2026-05",
+    );
+    const june = statuses.find(
+      (s) => s.ruleId === rule.id && s.monthKey === "2026-06",
+    );
+    expect(may?.status).toBe("pending");
+    expect(june?.status).toBe("paid");
+    expect(june?.matchedExpenseId).toBe(res.entry.id);
+  });
+
   it("clears accountId when sent empty string", async () => {
     const { useFinanceStore } = await loadStore();
     const store = useFinanceStore.getState();
