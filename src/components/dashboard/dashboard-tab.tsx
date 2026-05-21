@@ -246,6 +246,12 @@ const LargestChargeCard = lazy(() =>
   })),
 );
 
+const TrackingSinceCard = lazy(() =>
+  import("@/components/dashboard/tracking-since-card").then((m) => ({
+    default: m.TrackingSinceCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -316,6 +322,11 @@ export function DashboardTab() {
       {/* LARGEST CHARGE — biggest single expense spotlight. */}
       <div className="sm:col-span-6">
         <Safe name="LargestChargeCard"><LargestChargeCard /></Safe>
+      </div>
+
+      {/* TRACKING SINCE — anniversary surface. */}
+      <div className="sm:col-span-6">
+        <Safe name="TrackingSinceCard"><TrackingSinceCard /></Safe>
       </div>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
