@@ -25,6 +25,8 @@ type Props = {
   title: string;
   subtitle?: string;
   filter: FilterKind;
+  /** Optional narrowing — only show entries in this category. */
+  categoryFilter?: CategoryId;
 };
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -54,6 +56,7 @@ export function TransactionsDrilldown({
   title,
   subtitle,
   filter,
+  categoryFilter,
 }: Props) {
   const entries = useFinanceStore((s) => s.entries);
   const deleteExpense = useFinanceStore((s) => s.deleteExpense);
@@ -70,6 +73,7 @@ export function TransactionsDrilldown({
     for (const e of entries) {
       if (e.needsConfirmation) continue;
       if (e.bankPending) continue;
+      if (categoryFilter && e.category !== categoryFilter) continue;
       const slice = sliceForMonth(e, monthKey);
       if (!slice) continue;
 
@@ -92,7 +96,7 @@ export function TransactionsDrilldown({
     return out.sort(
       (a, b) => b.chargeDate.getTime() - a.chargeDate.getTime(),
     );
-  }, [entries, monthKey, filter]);
+  }, [entries, monthKey, filter, categoryFilter]);
 
   const total = rows.reduce((sum, r) => sum + r.sliceAmount, 0);
 
