@@ -156,6 +156,12 @@ const CashflowSummaryCard = lazy(() =>
   })),
 );
 
+const AnomalyBanner = lazy(() =>
+  import("@/components/dashboard/anomaly-banner").then((m) => ({
+    default: m.AnomalyBanner as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -176,6 +182,11 @@ export function DashboardTab() {
       {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
+      </div>
+
+      {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
+      <div className="sm:col-span-6">
+        <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
       </div>
 
       {/* COPILOT — forward-looking proactive insights */}
