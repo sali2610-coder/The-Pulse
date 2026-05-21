@@ -11,6 +11,7 @@ import { AccountsPanel } from "@/components/accounts/accounts-panel";
 import { LoansPanel } from "@/components/loans/loans-panel";
 import { IncomePanel } from "@/components/income/income-panel";
 import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-panel";
+import { SubscriptionSuggestions } from "./subscription-suggestions";
 
 export function SettingsTab() {
   return (
@@ -24,6 +25,7 @@ export function SettingsTab() {
       <Section title="חשבונות">
         <AccountsPanel />
       </Section>
+      <SubscriptionSuggestions />
       <Section title="הוצאות וחיובים קבועים">
         <RecurringRulesPanel />
       </Section>
