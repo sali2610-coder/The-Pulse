@@ -6,7 +6,10 @@ import { StatementImport } from "./statement-import";
 import { AudioToggle } from "./audio-toggle";
 import { PushToggle } from "./push-toggle";
 import { AuthCard } from "./auth-card";
-import { DeviceRecoveryCard } from "./device-recovery-card";
+// DeviceRecoveryCard is no longer mounted as a top-level container.
+// BackupsCard renders it inside "אפשרויות מתקדמות" so the user sees
+// one unified backup surface. The component file is intentionally
+// preserved — no logic was deleted.
 import { AccountsPanel } from "@/components/accounts/accounts-panel";
 import { LoansPanel } from "@/components/loans/loans-panel";
 import { IncomePanel } from "@/components/income/income-panel";
@@ -22,7 +25,6 @@ export function SettingsTab() {
     <div className="flex flex-col gap-4">
       <AuthCard />
       <BackupsCard />
-      <DeviceRecoveryCard />
       <BudgetRecommendationCard />
       <BudgetInput />
       <IntegrationInfo />

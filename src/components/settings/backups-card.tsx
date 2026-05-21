@@ -29,6 +29,7 @@ import {
   isEncryptedEnvelope,
 } from "@/lib/backup-crypto";
 import { recommendBackup } from "@/lib/backup-recommender";
+import { DeviceRecoveryCard } from "@/components/settings/device-recovery-card";
 
 type Summary = {
   entries: number;
@@ -97,6 +98,7 @@ export function BackupsCard() {
   const [current, setCurrent] = useState<Summary | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [open, setOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -447,15 +449,28 @@ export function BackupsCard() {
 
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">
-      <header className="mb-4 flex items-center justify-between gap-3">
+      {/* Calm primary header — protection status. */}
+      <header className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="size-5 text-neon" />
+          <ShieldCheck
+            className={`size-5 ${
+              authStatus === "ready" && current
+                ? "text-[#34D399]"
+                : "text-neon"
+            }`}
+          />
           <div className="flex flex-col leading-tight">
             <div className="text-[11px] uppercase tracking-[0.25em] text-neon">
-              גיבויים ושחזור
+              גיבוי ושחזור
             </div>
-            <div className="text-[11px] text-muted-foreground">
-              גיבוי ענן בטוח לחשבון ה־Google שלך
+            <div className="text-[11.5px] text-foreground/90">
+              {authStatus === "ready" && current
+                ? `המידע שלך מגובה · עודכן ${fmtTime(current.updatedAt)}`
+                : authStatus === "no-session"
+                  ? "התחבר עם Google להפעלת גיבוי ענן"
+                  : authStatus === "kv-unavailable"
+                    ? "ענן לא מוגדר — ייצוא/ייבוא מקומי זמין"
+                    : "ממתין לגיבוי ראשון"}
             </div>
           </div>
         </div>
@@ -472,116 +487,72 @@ export function BackupsCard() {
         </button>
       </header>
 
-      {authStatus === "no-session" ? (
-        <p className="rounded-xl border border-dashed border-border/40 px-3 py-6 text-center text-[11px] text-muted-foreground">
-          התחבר עם חשבון Google כדי להפעיל גיבוי ענן.
-        </p>
-      ) : authStatus === "kv-unavailable" ? (
-        <p className="rounded-xl border border-dashed border-border/40 px-3 py-6 text-center text-[11px] text-muted-foreground">
-          ענן לא מוגדר. ייצוא/ייבוא JSON עדיין פעיל.
-        </p>
-      ) : null}
-
-      {/* Current state summary */}
-      {current ? (
-        <div className="mb-3 flex flex-col gap-1 rounded-2xl border border-white/10 bg-black/30 p-3">
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            <span>מצב נוכחי בענן</span>
-            <span data-mono="true" dir="ltr">
-              {fmtTime(current.updatedAt)}
-            </span>
-          </div>
+      {/* Calm summary — counts only when there's data. */}
+      {current && (current.entries > 0 || current.accounts > 0) ? (
+        <div className="mb-3 rounded-2xl border border-white/8 bg-black/25 p-2.5">
           <SummaryRow s={current} />
         </div>
       ) : null}
 
-      {/* Actions */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
+      {/* Primary actions — only the 3 most likely user intents. */}
+      <div className="mb-3 flex flex-col gap-2">
         <button
           type="button"
           disabled={busy || authStatus !== "ready"}
           onClick={manualBackup}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-neon/40 bg-neon/10 px-3 py-2 text-[12px] font-medium text-neon transition-colors hover:bg-neon/20 disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-neon/40 bg-neon/10 px-3 py-2.5 text-[13px] font-medium text-neon transition-colors hover:bg-neon/20 disabled:opacity-50"
         >
           <CloudUpload className="size-3.5" />
           שמור גיבוי עכשיו
         </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={exportLocal}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-background/40 px-3 py-2 text-[12px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
-        >
-          <Download className="size-3.5" />
-          ייצוא JSON
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void exportEncrypted();
-          }}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-3 py-2 text-[12px] font-medium text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20 disabled:opacity-50"
-        >
-          <Lock className="size-3.5" />
-          ייצוא מוצפן
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={triggerImport}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-background/40 px-3 py-2 text-[12px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
-        >
-          <Upload className="size-3.5" />
-          ייבוא מקובץ
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-background/40 px-3 py-2 text-[12px] text-foreground transition-colors hover:border-white/30"
-        >
-          <History className="size-3.5" />
-          {open ? "סגור רשימה" : `${backups.length} גיבויים`}
-        </button>
-      </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void handleImportFile(file);
-        }}
-      />
-
-      {/* Recommended hint */}
-      {recommended && authStatus === "ready" ? (
-        <div className="mb-3 flex items-center gap-2 rounded-2xl border border-[#34D399]/30 bg-[#34D399]/8 p-2.5 text-[11px]">
-          <Sparkles className="size-3.5 text-[#34D399]" />
-          <div className="flex-1 leading-tight text-foreground">
-            <div className="font-medium">גיבוי מומלץ לשחזור</div>
-            <div className="text-[10px] text-muted-foreground">
-              {fmtTime(recommended.capturedAt)} · {recommended.richness} פריטים
-            </div>
-          </div>
+        {recommended && authStatus === "ready" ? (
           <button
             type="button"
+            disabled={busy}
             onClick={() => {
               const target = backups.find(
                 (b) => b.capturedAt === recommended.capturedAt,
               );
               if (target) void restore(target);
             }}
-            className="rounded-lg border border-[#34D399]/50 bg-[#34D399]/15 px-2.5 py-1 text-[11px] font-semibold text-[#34D399] transition-colors hover:bg-[#34D399]/25"
+            className="flex items-center justify-between gap-2 rounded-xl border border-[#34D399]/40 bg-[#34D399]/10 px-3 py-2.5 text-[#34D399] transition-colors hover:bg-[#34D399]/20 disabled:opacity-50"
           >
-            שחזר
+            <span className="flex items-center gap-1.5 text-[13px] font-medium">
+              <Sparkles className="size-3.5" />
+              שחזור מומלץ
+            </span>
+            <span
+              className="text-[10px] text-[#34D399]/80"
+              dir="ltr"
+              data-mono="true"
+            >
+              {fmtTime(recommended.capturedAt)} · {recommended.richness} פריטים
+            </span>
           </button>
-        </div>
-      ) : null}
+        ) : null}
 
-      {/* Backup list */}
+        {backups.length > 0 && authStatus === "ready" ? (
+          <button
+            type="button"
+            onClick={() => {
+              tap();
+              setOpen((v) => !v);
+            }}
+            className="flex items-center justify-between gap-2 rounded-xl border border-white/12 bg-background/40 px-3 py-2.5 text-[13px] text-foreground transition-colors hover:border-white/30"
+          >
+            <span className="flex items-center gap-1.5">
+              <CloudDownload className="size-3.5" />
+              שחזור מגיבוי ענן
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {open ? "סגור" : `${backups.length} גיבויים`}
+            </span>
+          </button>
+        ) : null}
+      </div>
+
+      {/* Backup list — only when "restore from cloud" opens it. */}
       <AnimatePresence initial={false}>
         {open ? (
           <motion.div
@@ -589,7 +560,7 @@ export function BackupsCard() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden"
+            className="mb-3 overflow-hidden"
           >
             {backups.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border/40 px-3 py-6 text-center text-[11px] text-muted-foreground">
@@ -649,6 +620,82 @@ export function BackupsCard() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {/* Advanced — export / import / device recovery. Collapsed by default. */}
+      <button
+        type="button"
+        onClick={() => {
+          tap();
+          setAdvancedOpen((v) => !v);
+        }}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/8 bg-transparent px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+      >
+        <span className="flex items-center gap-1.5">
+          <History className="size-3.5" />
+          אפשרויות מתקדמות
+        </span>
+        <span className="text-[10px]">
+          {advancedOpen ? "סגור" : "פתח"}
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {advancedOpen ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-3 overflow-hidden"
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={exportLocal}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-background/40 px-3 py-2 text-[12px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
+              >
+                <Download className="size-3.5" />
+                ייצוא JSON
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void exportEncrypted();
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-3 py-2 text-[12px] font-medium text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20 disabled:opacity-50"
+              >
+                <Lock className="size-3.5" />
+                ייצוא מוצפן
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={triggerImport}
+                className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-background/40 px-3 py-2 text-[12px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
+              >
+                <Upload className="size-3.5" />
+                ייבוא מקובץ
+              </button>
+            </div>
+            <div className="mt-3">
+              <DeviceRecoveryCard />
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImportFile(file);
+        }}
+      />
     </section>
   );
 }
