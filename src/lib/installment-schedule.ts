@@ -20,6 +20,12 @@ export type Schedule = {
   remaining?: number;
   /** `YYYY-MM` of the last payment, or undefined for open-ended. */
   endMonthKey?: MonthKey;
+  /** True when the installment plan has finished (monthKey > end). Only
+   *  set on finite-installment schedules. */
+  isComplete?: boolean;
+  /** True when the installment plan hasn't started yet (monthKey < start).
+   *  Only set on finite-installment schedules. */
+  isFuture?: boolean;
 };
 
 function monthKeyFromIndex(idx: number): MonthKey {
@@ -45,17 +51,34 @@ export function ruleSchedule(rule: RecurringRule, monthKey: MonthKey): Schedule 
   const startIdx = rule.startYear * 12 + (rule.startMonth - 1);
   const monthIdx = monthIndex(monthKey);
   const offset = monthIdx - startIdx;
-  if (offset < 0) return { active: false };
-  if (offset >= rule.installmentTotal) return { active: false };
+  const endIdx = startIdx + rule.installmentTotal - 1;
+  const endMonthKey = monthKeyFromIndex(endIdx);
+  if (offset < 0) {
+    return {
+      active: false,
+      isFuture: true,
+      totalPayments: rule.installmentTotal,
+      endMonthKey,
+    };
+  }
+  if (offset >= rule.installmentTotal) {
+    return {
+      active: false,
+      isComplete: true,
+      paymentNumber: rule.installmentTotal,
+      totalPayments: rule.installmentTotal,
+      remaining: 0,
+      endMonthKey,
+    };
+  }
   const paymentNumber = offset + 1;
   const remaining = rule.installmentTotal - paymentNumber;
-  const endIdx = startIdx + rule.installmentTotal - 1;
   return {
     active: true,
     paymentNumber,
     totalPayments: rule.installmentTotal,
     remaining,
-    endMonthKey: monthKeyFromIndex(endIdx),
+    endMonthKey,
   };
 }
 
@@ -70,17 +93,34 @@ export function loanSchedule(loan: Loan, monthKey: MonthKey): Schedule {
     const startIdx = loan.startYear * 12 + (loan.startMonth - 1);
     const monthIdx = monthIndex(monthKey);
     const offset = monthIdx - startIdx;
-    if (offset < 0) return { active: false };
-    if (offset >= loan.totalPayments) return { active: false };
+    const endIdx = startIdx + loan.totalPayments - 1;
+    const endMonthKey = monthKeyFromIndex(endIdx);
+    if (offset < 0) {
+      return {
+        active: false,
+        isFuture: true,
+        totalPayments: loan.totalPayments,
+        endMonthKey,
+      };
+    }
+    if (offset >= loan.totalPayments) {
+      return {
+        active: false,
+        isComplete: true,
+        paymentNumber: loan.totalPayments,
+        totalPayments: loan.totalPayments,
+        remaining: 0,
+        endMonthKey,
+      };
+    }
     const paymentNumber = offset + 1;
     const remaining = loan.totalPayments - paymentNumber;
-    const endIdx = startIdx + loan.totalPayments - 1;
     return {
       active: true,
       paymentNumber,
       totalPayments: loan.totalPayments,
       remaining,
-      endMonthKey: monthKeyFromIndex(endIdx),
+      endMonthKey,
     };
   }
 

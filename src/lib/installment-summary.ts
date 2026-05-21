@@ -24,6 +24,10 @@ export type InstallmentSummary = {
   /** `YYYY-MM` of the LAST payment. Undefined if the rule never started
    *  (future-dated schedule). */
   projectedEndMonthKey?: MonthKey;
+  /** True when the plan finished (every installment already billed). */
+  isComplete?: boolean;
+  /** True when the plan hasn't started yet. */
+  isFuture?: boolean;
 };
 
 function fmtMonthKey(monthKey?: MonthKey): MonthKey | undefined {
@@ -38,8 +42,12 @@ export function buildRuleInstallmentSummary(
   const sched = ruleSchedule(rule, monthKey);
   const monthly = rule.estimatedAmount;
   const total = rule.installmentTotal;
-  // sched may be inactive (future-dated). Treat paid as 0 in that case.
-  const paid = sched.paymentNumber ?? 0;
+  // Past-end → all paid. Future → none paid. Active → paymentNumber.
+  const paid = sched.isComplete
+    ? total
+    : sched.isFuture
+      ? 0
+      : sched.paymentNumber ?? 0;
   const remaining = Math.max(0, total - paid);
   return {
     monthlyPayment: monthly,
@@ -50,6 +58,8 @@ export function buildRuleInstallmentSummary(
     totalAlreadyPaid: monthly * paid,
     totalRemaining: monthly * remaining,
     projectedEndMonthKey: fmtMonthKey(sched.endMonthKey),
+    isComplete: sched.isComplete || undefined,
+    isFuture: sched.isFuture || undefined,
   };
 }
 
@@ -61,7 +71,11 @@ export function buildLoanInstallmentSummary(
   const sched = loanSchedule(loan, monthKey);
   const monthly = loan.monthlyInstallment;
   const total = loan.totalPayments;
-  const paid = sched.paymentNumber ?? 0;
+  const paid = sched.isComplete
+    ? total
+    : sched.isFuture
+      ? 0
+      : sched.paymentNumber ?? 0;
   const remaining = Math.max(0, total - paid);
   return {
     monthlyPayment: monthly,
@@ -72,5 +86,7 @@ export function buildLoanInstallmentSummary(
     totalAlreadyPaid: monthly * paid,
     totalRemaining: monthly * remaining,
     projectedEndMonthKey: fmtMonthKey(sched.endMonthKey),
+    isComplete: sched.isComplete || undefined,
+    isFuture: sched.isFuture || undefined,
   };
 }

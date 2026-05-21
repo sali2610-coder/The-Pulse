@@ -1,4 +1,4 @@
-import { CalendarCheck2, Coins } from "lucide-react";
+import { BadgeCheck, CalendarCheck2, Clock, Coins } from "lucide-react";
 import type { InstallmentSummary } from "@/lib/installment-summary";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -56,12 +56,36 @@ export function InstallmentSummaryBlock({
         )
       : 0;
 
+  const tone = summary.isComplete
+    ? "#34D399"
+    : summary.isFuture
+      ? "#A1A1AA"
+      : accent;
+  const statusLabel = summary.isComplete
+    ? "הושלם"
+    : summary.isFuture
+      ? "טרם החל"
+      : "סיכום עסקה";
+  const StatusIcon = summary.isComplete
+    ? BadgeCheck
+    : summary.isFuture
+      ? Clock
+      : Coins;
+
   return (
-    <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-white/8 bg-black/25 p-2.5">
+    <div
+      className={`mt-2 flex flex-col gap-2 rounded-2xl border bg-black/25 p-2.5 ${
+        summary.isComplete
+          ? "border-[#34D399]/30"
+          : summary.isFuture
+            ? "border-white/8 opacity-80"
+            : "border-white/8"
+      }`}
+    >
       <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Coins className="size-2.5" />
-          סיכום עסקה
+        <span className="flex items-center gap-1" style={{ color: tone }}>
+          <StatusIcon className="size-2.5" />
+          {statusLabel}
         </span>
         <span data-mono="true">
           {summary.installmentsPaid}/{summary.installmentCount}
@@ -73,7 +97,7 @@ export function InstallmentSummaryBlock({
           className="h-full rounded-full"
           style={{
             width: `${pct}%`,
-            background: `linear-gradient(90deg, ${accent}, ${accent}66)`,
+            background: `linear-gradient(90deg, ${tone}, ${tone}66)`,
           }}
         />
       </div>

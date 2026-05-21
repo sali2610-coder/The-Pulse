@@ -75,18 +75,24 @@ describe("buildRuleInstallmentSummary", () => {
     expect(s.totalRemaining).toBe(255 * 36);
   });
 
-  it("returns paid===total for a rule whose schedule has ended", () => {
-    // Started Sep 2020, 36 months → ends Aug 2023. May 2026 is past
-    // end → schedule reports inactive, paymentNumber undefined → paid
-    // falls to 0. Stricter check: confirm null OR paid 0 case.
+  it("returns paid===total for a rule whose schedule has ended (isComplete)", () => {
+    // Started Sep 2020, 36 months → ends Aug 2023. May 2026 is past end.
     const past = makeRule({ startMonth: 9, startYear: 2020 });
     const s = buildRuleInstallmentSummary(past, MAY)!;
     expect(s.installmentCount).toBe(36);
-    // After the schedule ends the inactive branch returns
-    // paymentNumber undefined → paid = 0; deliberate fallback so the
-    // UI shows "0 paid" rather than ghost claims. Total deal still
-    // shown accurately so the user can verify.
+    expect(s.installmentsPaid).toBe(36);
+    expect(s.installmentsRemaining).toBe(0);
+    expect(s.totalRemaining).toBe(0);
+    expect(s.isComplete).toBe(true);
+    expect(s.projectedEndMonthKey).toBe("2023-08");
+  });
+
+  it("flags isFuture for a not-yet-started rule", () => {
+    const future = makeRule({ startMonth: 12, startYear: 2027 });
+    const s = buildRuleInstallmentSummary(future, MAY)!;
+    expect(s.isFuture).toBe(true);
     expect(s.installmentsPaid).toBe(0);
+    expect(s.installmentsRemaining).toBe(36);
   });
 });
 
@@ -111,5 +117,22 @@ describe("buildLoanInstallmentSummary", () => {
     expect(s.totalAlreadyPaid).toBe(1500 * 17);
     expect(s.totalRemaining).toBe(1500 * 43);
     expect(s.projectedEndMonthKey).toBe("2029-12");
+    expect(s.isComplete).toBeUndefined();
+    expect(s.isFuture).toBeUndefined();
+  });
+
+  it("marks isComplete for a loan whose schedule has ended", () => {
+    // 12 monthly payments from Jan 2024 → ends Dec 2024. May 2026 past.
+    const past = makeLoan({
+      startMonth: 1,
+      startYear: 2024,
+      totalPayments: 12,
+    });
+    const s = buildLoanInstallmentSummary(past, MAY)!;
+    expect(s.installmentsPaid).toBe(12);
+    expect(s.installmentsRemaining).toBe(0);
+    expect(s.totalRemaining).toBe(0);
+    expect(s.isComplete).toBe(true);
+    expect(s.projectedEndMonthKey).toBe("2024-12");
   });
 });
