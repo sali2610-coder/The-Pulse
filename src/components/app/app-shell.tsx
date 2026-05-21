@@ -11,6 +11,7 @@ import {
   tabFromHash,
   type TabId,
 } from "@/lib/tab-nav";
+import { gatherSmartInsights } from "@/lib/smart-insights";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -45,6 +46,8 @@ function AppShellContent() {
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const incomes = useFinanceStore((s) => s.incomes);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
@@ -91,6 +94,19 @@ function AppShellContent() {
     });
     return actual > monthlyBudget;
   }, [hydrated, entries, rules, statuses, monthlyBudget]);
+
+  const insightCount = useMemo(() => {
+    if (!hydrated) return 0;
+    return gatherSmartInsights({
+      entries,
+      rules,
+      statuses,
+      accounts,
+      incomes,
+      monthlyBudget,
+      monthKey: currentMonthKey(),
+    }).total;
+  }, [hydrated, entries, rules, statuses, accounts, incomes, monthlyBudget]);
 
   return (
     <main
@@ -144,7 +160,21 @@ function AppShellContent() {
             <TabsTrigger value="analytics">ניתוח</TabsTrigger>
             <TabsTrigger value="history">היסטוריה</TabsTrigger>
             <TabsTrigger value="setup">מדריך</TabsTrigger>
-            <TabsTrigger value="settings">הגדרות</TabsTrigger>
+            <TabsTrigger value="settings">
+              <span className="relative inline-flex items-center gap-1">
+                הגדרות
+                {insightCount > 0 ? (
+                  <span
+                    aria-label={`${insightCount} תובנות ממתינות`}
+                    className="inline-flex min-w-4 items-center justify-center rounded-full bg-neon px-1 text-[9px] font-bold text-[#050505] tabular-nums leading-none"
+                    style={{ height: 16 }}
+                    data-mono="true"
+                  >
+                    {insightCount > 9 ? "9+" : insightCount}
+                  </span>
+                ) : null}
+              </span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="mt-4">
