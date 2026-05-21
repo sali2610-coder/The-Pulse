@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ChevronLeft, Bell } from "lucide-react";
+import { Sparkles, ChevronLeft, Bell, CheckCheck } from "lucide-react";
+import { toast } from "sonner";
 
 import { useFinanceStore } from "@/lib/store";
 import { getCategory } from "@/lib/categories";
-import { tap } from "@/lib/haptics";
+import { tap, success } from "@/lib/haptics";
 import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -34,10 +35,32 @@ export function PendingTray() {
   const pending = useFinanceStore((s) =>
     s.entries.filter((e) => e.needsConfirmation && !e.confirmedAt),
   );
+  const confirmExpense = useFinanceStore((s) => s.confirmExpense);
 
   const [active, setActive] = useState<ExpenseEntry | null>(null);
 
   if (!hydrated || pending.length === 0) return null;
+
+  function confirmAll() {
+    if (pending.length === 0) return;
+    tap();
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`לאשר ${pending.length} חיובים עם הערכים הנוכחיים?`)
+    ) {
+      return;
+    }
+    for (const entry of pending) {
+      // confirmExpense with no patch keeps current amount/category/
+      // merchant/installments, just clears needsConfirmation + stamps
+      // confirmedAt.
+      confirmExpense(entry.id);
+    }
+    success();
+    toast.success(
+      `אושרו ${pending.length} ${pending.length === 1 ? "חיוב" : "חיובים"}`,
+    );
+  }
 
   return (
     <>
@@ -66,10 +89,21 @@ export function PendingTray() {
               </span>
             </div>
           </div>
-          <Sparkles
-            className="h-5 w-5 text-[color:var(--neon)]/60"
-            strokeWidth={1.4}
-          />
+          {pending.length >= 2 ? (
+            <button
+              type="button"
+              onClick={confirmAll}
+              className="flex items-center gap-1 rounded-full border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-2.5 py-1 text-[11px] font-semibold text-[color:var(--neon)] transition-colors hover:bg-[color:var(--neon)]/20"
+            >
+              <CheckCheck className="size-3.5" />
+              אשר הכל
+            </button>
+          ) : (
+            <Sparkles
+              className="h-5 w-5 text-[color:var(--neon)]/60"
+              strokeWidth={1.4}
+            />
+          )}
         </header>
 
         <ul className="flex flex-col gap-2">
