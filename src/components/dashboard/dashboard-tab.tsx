@@ -174,6 +174,12 @@ const UpcomingDebitsBanner = lazy(() =>
   })),
 );
 
+const CashflowTrendCard = lazy(() =>
+  import("@/components/dashboard/cashflow-trend-card").then((m) => ({
+    default: m.CashflowTrendCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -209,6 +215,11 @@ export function DashboardTab() {
       {/* MONTH-OVER-MONTH DELTA — net change + top grew/shrunk. */}
       <div className="sm:col-span-6">
         <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
+      </div>
+
+      {/* CASHFLOW TREND — 6-month income-vs-expense sparkline. */}
+      <div className="sm:col-span-6">
+        <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
       </div>
 
       {/* COPILOT — forward-looking proactive insights */}
