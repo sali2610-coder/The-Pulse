@@ -11,6 +11,7 @@ import { useFinanceStore } from "@/lib/store";
 import { getCategory, type CategoryId } from "@/lib/categories";
 import { categorize } from "@/lib/parsers";
 import { success, tap } from "@/lib/haptics";
+import { beginSpan, isOverBudget } from "@/lib/perf-trace";
 import type { ExpenseEntry } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -47,18 +48,28 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
       toast.error("הסכום אינו תקין");
       return;
     }
-    confirmExpense(entry.id, {
-      amount: parsedAmount,
-      merchant: merchant.trim(),
-      category,
-      installments: entry.installments,
-      excludeFromBudget: !includeInBudget,
-    });
-    success();
-    toast.success("החיוב אושר", {
-      description: merchant.trim() || categoryMeta.label,
-    });
-    onOpenChange(false);
+    const span = beginSpan("transaction.save", { kind: "confirm" });
+    try {
+      confirmExpense(entry.id, {
+        amount: parsedAmount,
+        merchant: merchant.trim(),
+        category,
+        installments: entry.installments,
+        excludeFromBudget: !includeInBudget,
+      });
+      success();
+      toast.success("החיוב אושר", {
+        description: merchant.trim() || categoryMeta.label,
+      });
+      onOpenChange(false);
+    } finally {
+      const s = span.end();
+      if (process.env.NODE_ENV !== "production" && isOverBudget(s)) {
+        console.warn(
+          `[perf] transaction.save (confirm) over budget: ${s.duration.toFixed(0)}ms`,
+        );
+      }
+    }
   }
 
   function handleDismiss() {

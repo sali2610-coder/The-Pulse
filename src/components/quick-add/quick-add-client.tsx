@@ -22,6 +22,7 @@ import {
 } from "@/lib/categories";
 import { categorize } from "@/lib/parsers";
 import { success, tap } from "@/lib/haptics";
+import { beginSpan, isOverBudget } from "@/lib/perf-trace";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -84,6 +85,10 @@ export function QuickAddClient({
   const [pickerOpen, setPickerOpen] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
 
+  // Perf-trace: measure perceived open time from first paint until
+  // the keyboard-focus tick lands. Budget = 150 ms (Phase 139).
+  const openSpanRef = useRef(beginSpan("quick-add.open"));
+
   const amountInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     // Pop the keyboard immediately on iPhone PWA so the user can
@@ -91,6 +96,15 @@ export function QuickAddClient({
     // (Safari occasionally rejects autofocus from non-user gestures).
     const t = setTimeout(() => {
       amountInputRef.current?.focus({ preventScroll: true });
+      const span = openSpanRef.current.end();
+      if (
+        process.env.NODE_ENV !== "production" &&
+        isOverBudget(span)
+      ) {
+        console.warn(
+          `[perf] quick-add.open over budget: ${span.duration.toFixed(0)}ms`,
+        );
+      }
     }, 80);
     return () => clearTimeout(t);
   }, []);
@@ -109,6 +123,9 @@ export function QuickAddClient({
     if (!ready || saving) return;
     setSaving(true);
     tap();
+    const saveSpan = beginSpan("transaction.save", {
+      kind: isIncome ? "income" : "expense",
+    });
     try {
       if (isIncome) {
         const dayOfMonth = new Date().getDate();
@@ -138,6 +155,15 @@ export function QuickAddClient({
       }
       close();
     } finally {
+      const span = saveSpan.end();
+      if (
+        process.env.NODE_ENV !== "production" &&
+        isOverBudget(span)
+      ) {
+        console.warn(
+          `[perf] transaction.save over budget: ${span.duration.toFixed(0)}ms`,
+        );
+      }
       setSaving(false);
     }
   }
