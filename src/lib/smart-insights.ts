@@ -18,6 +18,7 @@ import { detectSubscriptionCandidates } from "@/lib/subscription-detector";
 import { detectRuleDrift } from "@/lib/rule-drift";
 import { detectDormantRules } from "@/lib/rule-dormancy";
 import { recommendBudget } from "@/lib/budget-recommendation";
+import { isInsightDismissed } from "@/lib/insight-dismiss";
 
 export type SmartInsights = {
   subscriptionCount: number;
@@ -43,18 +44,18 @@ export function gatherSmartInsights(args: {
   const subs = detectSubscriptionCandidates({
     entries: args.entries,
     rules: args.rules,
-  });
+  }).filter((c) => !isInsightDismissed("subscription", c.merchantKey));
   const drift = detectRuleDrift({
     rules: args.rules,
     entries: args.entries,
     statuses: args.statuses,
     monthKey: args.monthKey,
-  });
+  }).filter((d) => !isInsightDismissed("rule-drift", d.ruleId));
   const dormant = detectDormantRules({
     rules: args.rules,
     statuses: args.statuses,
     monthKey: args.monthKey,
-  });
+  }).filter((d) => !isInsightDismissed("dormant-rule", d.ruleId));
   const recommendation = recommendBudget({
     entries: args.entries,
     monthKey: args.monthKey,
@@ -62,6 +63,10 @@ export function gatherSmartInsights(args: {
   const recommendationActionable =
     recommendation.hasEnoughData &&
     recommendation.recommended > 0 &&
+    !isInsightDismissed(
+      "budget-recommendation",
+      String(recommendation.recommended),
+    ) &&
     (args.monthlyBudget <= 0 ||
       Math.abs(recommendation.recommended - args.monthlyBudget) /
         args.monthlyBudget >=

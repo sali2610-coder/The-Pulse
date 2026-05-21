@@ -1,12 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { gatherSmartInsights } from "@/lib/smart-insights";
+import {
+  clearInsightDismissals,
+  dismissInsight,
+} from "@/lib/insight-dismiss";
 import type {
   ExpenseEntry,
   MonthKey,
   RecurringRule,
   RecurringStatus,
 } from "@/types/finance";
+
+beforeEach(() => {
+  clearInsightDismissals();
+});
 
 const MAY: MonthKey = "2026-05";
 
@@ -137,6 +145,36 @@ describe("gatherSmartInsights", () => {
     });
     expect(out.budgetRecommendationAvailable).toBe(true);
     expect(out.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it("subtracts dismissed insights from the count", () => {
+    const entries = [
+      entry({ chargeDate: new Date(2026, 1, 10).toISOString() }),
+      entry({ chargeDate: new Date(2026, 2, 10).toISOString() }),
+      entry({ chargeDate: new Date(2026, 3, 10).toISOString() }),
+    ];
+    const before = gatherSmartInsights({
+      entries,
+      rules: [],
+      statuses: [],
+      accounts: [],
+      incomes: [],
+      monthlyBudget: 5000,
+      monthKey: MAY,
+    });
+    expect(before.subscriptionCount).toBe(1);
+    dismissInsight("subscription", "netflix");
+    const after = gatherSmartInsights({
+      entries,
+      rules: [],
+      statuses: [],
+      accounts: [],
+      incomes: [],
+      monthlyBudget: 5000,
+      monthKey: MAY,
+    });
+    expect(after.subscriptionCount).toBe(0);
+    expect(after.total).toBeLessThan(before.total);
   });
 
   it("does not flag budget recommendation when current is close to history", () => {

@@ -48,6 +48,26 @@ function key(kind: DetectorKind, targetId: string): string {
   return `${kind}:${targetId}`;
 }
 
+const subscribers = new Set<() => void>();
+
+function emitChange(): void {
+  for (const fn of subscribers) {
+    try {
+      fn();
+    } catch (err) {
+      console.error("[insight-dismiss] subscriber threw", err);
+    }
+  }
+}
+
+/** Subscribe to dismissal changes. Returns an unsubscribe fn. */
+export function subscribeInsightDismissals(fn: () => void): () => void {
+  subscribers.add(fn);
+  return () => {
+    subscribers.delete(fn);
+  };
+}
+
 export function dismissInsight(
   kind: DetectorKind,
   targetId: string,
@@ -57,6 +77,7 @@ export function dismissInsight(
   const map = read();
   map[key(kind, targetId)] = now;
   write(map);
+  emitChange();
 }
 
 export function isInsightDismissed(
@@ -100,4 +121,5 @@ export function clearInsightDismissals(): void {
   } catch {
     /* ignore */
   }
+  emitChange();
 }

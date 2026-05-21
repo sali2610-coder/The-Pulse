@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -15,6 +15,7 @@ import { gatherSmartInsights } from "@/lib/smart-insights";
 import { currentMonthKey } from "@/lib/dates";
 import { navigateToTab } from "@/lib/tab-nav";
 import { tap } from "@/lib/haptics";
+import { subscribeInsightDismissals } from "@/lib/insight-dismiss";
 
 type Chip = {
   key: string;
@@ -42,8 +43,16 @@ export function SmartInsightsCard() {
   const incomes = useFinanceStore((s) => s.incomes);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
+  const [dismissTick, setDismissTick] = useState(0);
+  useEffect(() => {
+    return subscribeInsightDismissals(() =>
+      setDismissTick((t) => t + 1),
+    );
+  }, []);
+
   const insights = useMemo(() => {
     if (!hydrated) return null;
+    void dismissTick;
     return gatherSmartInsights({
       entries,
       rules,
@@ -53,7 +62,16 @@ export function SmartInsightsCard() {
       monthlyBudget,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, entries, rules, statuses, accounts, incomes, monthlyBudget]);
+  }, [
+    hydrated,
+    entries,
+    rules,
+    statuses,
+    accounts,
+    incomes,
+    monthlyBudget,
+    dismissTick,
+  ]);
 
   if (!hydrated || !insights) return null;
   if (insights.total === 0) return null;

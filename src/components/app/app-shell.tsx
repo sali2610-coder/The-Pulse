@@ -12,6 +12,7 @@ import {
   type TabId,
 } from "@/lib/tab-nav";
 import { gatherSmartInsights } from "@/lib/smart-insights";
+import { subscribeInsightDismissals } from "@/lib/insight-dismiss";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -111,8 +112,16 @@ function AppShellContent() {
     return actual > monthlyBudget;
   }, [hydrated, entries, rules, statuses, monthlyBudget]);
 
+  const [dismissTick, setDismissTick] = useState(0);
+  useEffect(() => {
+    return subscribeInsightDismissals(() =>
+      setDismissTick((t) => t + 1),
+    );
+  }, []);
+
   const insightCount = useMemo(() => {
     if (!hydrated) return 0;
+    void dismissTick;
     return gatherSmartInsights({
       entries,
       rules,
@@ -122,7 +131,16 @@ function AppShellContent() {
       monthlyBudget,
       monthKey: currentMonthKey(),
     }).total;
-  }, [hydrated, entries, rules, statuses, accounts, incomes, monthlyBudget]);
+  }, [
+    hydrated,
+    entries,
+    rules,
+    statuses,
+    accounts,
+    incomes,
+    monthlyBudget,
+    dismissTick,
+  ]);
 
   const pendingCount = useMemo(() => {
     if (!hydrated) return 0;

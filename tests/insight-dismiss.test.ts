@@ -5,6 +5,7 @@ import {
   dismissInsight,
   isInsightDismissed,
   pruneExpiredDismissals,
+  subscribeInsightDismissals,
 } from "@/lib/insight-dismiss";
 
 beforeEach(() => {
@@ -47,5 +48,20 @@ describe("insight-dismiss", () => {
   it("ignores empty target ids", () => {
     dismissInsight("subscription", "");
     expect(isInsightDismissed("subscription", "")).toBe(false);
+  });
+
+  it("notifies subscribers on dismiss + clear", () => {
+    let calls = 0;
+    const unsub = subscribeInsightDismissals(() => {
+      calls++;
+    });
+    dismissInsight("subscription", "netflix");
+    dismissInsight("rule-drift", "r1");
+    expect(calls).toBe(2);
+    clearInsightDismissals();
+    expect(calls).toBe(3);
+    unsub();
+    dismissInsight("subscription", "spotify");
+    expect(calls).toBe(3);
   });
 });
