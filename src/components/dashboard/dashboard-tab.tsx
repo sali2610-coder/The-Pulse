@@ -210,6 +210,12 @@ const BillingCalendarCard = lazy(() =>
   })),
 );
 
+const StaleAnchorsBanner = lazy(() =>
+  import("@/components/dashboard/stale-anchors-banner").then((m) => ({
+    default: m.StaleAnchorsBanner as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -230,6 +236,11 @@ export function DashboardTab() {
       {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
+      </div>
+
+      {/* STALE ANCHORS — bank balance needs refresh. */}
+      <div className="sm:col-span-6">
+        <Safe name="StaleAnchorsBanner"><StaleAnchorsBanner /></Safe>
       </div>
 
       {/* UPCOMING CARD DEBITS — heads-up before the bank pulls. */}

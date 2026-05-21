@@ -26,7 +26,7 @@ export function SettingsTab() {
       <IntegrationInfo />
       <PushToggle />
       <AudioToggle />
-      <Section title="חשבונות">
+      <Section title="חשבונות" section="accounts">
         <AccountsPanel />
       </Section>
       <SubscriptionSuggestions />
