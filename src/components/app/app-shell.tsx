@@ -1,11 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { projectMonth } from "@/lib/projections";
+import {
+  subscribeTabNav,
+  tabFromHash,
+  type TabId,
+} from "@/lib/tab-nav";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -41,6 +46,40 @@ function AppShellContent() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (typeof window === "undefined") return "dashboard";
+    return tabFromHash(window.location.hash) ?? "dashboard";
+  });
+
+  // Hash change + in-app nav listeners. Initial hash is read by the
+  // useState lazy initializer above so we don't setState in effect.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onHashChange = () => {
+      const next = tabFromHash(window.location.hash);
+      if (next) setActiveTab(next);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    const unsubNav = subscribeTabNav((next) => {
+      setActiveTab(next);
+      if (next === "dashboard") {
+        if (window.location.hash) {
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+        }
+      } else if (window.location.hash !== `#${next}`) {
+        window.history.replaceState(null, "", `#${next}`);
+      }
+    });
+    return () => {
+      window.removeEventListener("hashchange", onHashChange);
+      unsubNav();
+    };
+  }, []);
 
   const isOverBudget = useMemo(() => {
     if (!hydrated || monthlyBudget <= 0) return false;
@@ -79,7 +118,27 @@ function AppShellContent() {
           <HeaderUser />
         </motion.header>
 
-        <Tabs defaultValue="dashboard">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            if (typeof v === "string") {
+              setActiveTab(v as TabId);
+              if (typeof window !== "undefined") {
+                if (v === "dashboard") {
+                  if (window.location.hash) {
+                    window.history.replaceState(
+                      null,
+                      "",
+                      window.location.pathname + window.location.search,
+                    );
+                  }
+                } else if (window.location.hash !== `#${v}`) {
+                  window.history.replaceState(null, "", `#${v}`);
+                }
+              }
+            }
+          }}
+        >
           <TabsList className="w-full bg-surface/60 backdrop-blur-md">
             <TabsTrigger value="dashboard">לוח</TabsTrigger>
             <TabsTrigger value="analytics">ניתוח</TabsTrigger>

@@ -13,6 +13,8 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { gatherSmartInsights } from "@/lib/smart-insights";
 import { currentMonthKey } from "@/lib/dates";
+import { navigateToTab } from "@/lib/tab-nav";
+import { tap } from "@/lib/haptics";
 
 type Chip = {
   key: string;
@@ -85,6 +87,11 @@ export function SmartInsightsCard() {
     },
   ].filter((c) => c.count > 0);
 
+  function openSettings() {
+    tap();
+    navigateToTab("settings");
+  }
+
   return (
     <motion.section
       layout
@@ -108,19 +115,25 @@ export function SmartInsightsCard() {
             </span>
           </div>
         </div>
-        <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        <button
+          type="button"
+          onClick={openSettings}
+          className="flex items-center gap-1 rounded-full border border-white/12 bg-background/40 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:border-neon/40 hover:text-foreground"
+        >
           לטאב הגדרות
           <ChevronLeft className="size-3" />
-        </span>
+        </button>
       </header>
 
       <div className="flex flex-wrap gap-1.5">
         {chips.map((chip) => {
           const Icon = chip.Icon;
           return (
-            <span
+            <button
+              type="button"
               key={chip.key}
-              className="flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px]"
+              onClick={openSettings}
+              className="flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] transition-transform active:scale-[0.97]"
               style={{
                 borderColor: `${chip.tone}66`,
                 background: `${chip.tone}14`,
@@ -132,7 +145,7 @@ export function SmartInsightsCard() {
               <span data-mono="true" dir="ltr">
                 {chip.count}
               </span>
-            </span>
+            </button>
           );
         })}
       </div>
