@@ -75,127 +75,111 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
         onOpenChange={onOpenChange}
         title="אישור חיוב חדש"
       >
-        {/* Hero — amount + merchant. Tap either to edit inline. */}
+        {/* Compact layout — Apple Wallet / Live Activity vibe. Two
+            tight rows: meta row (amount + merchant + meta chips) and
+            action row (confirm + reject + edit). Total height
+            ≈ 110-130px on iPhone, no scroll, single screen. */}
         <motion.div
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.3 }}
-          className="flex flex-col items-center gap-1.5 pt-1"
+          transition={{ delay: 0.04, duration: 0.22 }}
+          className="flex items-center gap-2.5 pt-0.5"
         >
-          <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground/80">
-            חיוב חדש
-          </span>
+          {/* Amount + merchant — primary visual focus, flex-1 */}
+          <div className="flex min-w-0 flex-1 flex-col leading-none">
+            {editingAmount ? (
+              <div
+                className="flex items-baseline gap-0.5 font-mono text-[26px] font-light tracking-tight text-foreground"
+                dir="ltr"
+              >
+                <input
+                  autoFocus
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) =>
+                    setAmount(e.target.value.replace(/[^\d.]/g, ""))
+                  }
+                  onBlur={() => setEditingAmount(false)}
+                  className="w-24 bg-transparent outline-none ring-0"
+                />
+                <span className="text-[16px] text-muted-foreground">₪</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  tap();
+                  setEditingAmount(true);
+                }}
+                className="text-start font-mono text-[26px] font-light leading-none tracking-tight text-foreground"
+                dir="ltr"
+              >
+                {ILS.format(
+                  Number.isFinite(parsedAmount) ? parsedAmount : 0,
+                )}
+              </button>
+            )}
 
-          {editingAmount ? (
-            <div
-              className="flex items-baseline gap-1 font-mono text-4xl font-light tracking-tight text-foreground"
-              dir="ltr"
-            >
+            {editingMerchant ? (
               <input
                 autoFocus
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) =>
-                  setAmount(e.target.value.replace(/[^\d.]/g, ""))
-                }
-                onBlur={() => setEditingAmount(false)}
-                className="w-32 bg-transparent text-center outline-none ring-0"
+                value={merchant}
+                onChange={(e) => setMerchant(e.target.value)}
+                onBlur={() => setEditingMerchant(false)}
+                placeholder="שם בית עסק"
+                className="mt-1 w-full max-w-[200px] truncate rounded-md border border-white/12 bg-black/30 px-2 py-0.5 text-[12px] text-foreground outline-none focus:border-[color:var(--neon)]"
               />
-              <span className="text-2xl text-muted-foreground">₪</span>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                tap();
-                setEditingAmount(true);
-              }}
-              className="font-mono text-4xl font-light tracking-tight text-foreground"
-              dir="ltr"
-            >
-              {ILS.format(Number.isFinite(parsedAmount) ? parsedAmount : 0)}
-            </button>
-          )}
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  tap();
+                  setEditingMerchant(true);
+                }}
+                className="mt-1 flex items-center gap-1 text-start text-[12px] font-medium text-muted-foreground"
+              >
+                <span className="truncate">
+                  {merchant.trim() || "עסק לא ידוע"}
+                </span>
+                <Pencil className="h-2.5 w-2.5 shrink-0 text-[#34D399]" />
+              </button>
+            )}
+            {entry.cardLast4 ? (
+              <span
+                dir="ltr"
+                className="mt-0.5 text-[9px] text-muted-foreground/70"
+              >
+                ····{entry.cardLast4}
+              </span>
+            ) : null}
+          </div>
 
-          {editingMerchant ? (
-            <input
-              autoFocus
-              value={merchant}
-              onChange={(e) => setMerchant(e.target.value)}
-              onBlur={() => setEditingMerchant(false)}
-              placeholder="שם בית עסק"
-              className="w-full max-w-[220px] rounded-lg border border-white/12 bg-black/30 px-3 py-1.5 text-center text-sm text-foreground outline-none focus:border-[color:var(--neon)]"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                tap();
-                setEditingMerchant(true);
-              }}
-              className="text-sm font-medium text-foreground"
-            >
-              {merchant.trim() || "עסק לא ידוע"}
-            </button>
-          )}
-
-          {entry.cardLast4 ? (
-            <span dir="ltr" className="text-[10px] text-muted-foreground/80">
-              ····{entry.cardLast4}
-            </span>
-          ) : null}
-        </motion.div>
-
-        {/* Category chip */}
-        <motion.button
-          type="button"
-          onClick={() => {
-            tap();
-            setPickerOpen(true);
-          }}
-          whileTap={{ scale: 0.98 }}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08, duration: 0.28 }}
-          className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5 text-start"
-        >
-          <span className="flex items-center gap-2">
+          {/* Category chip — tap to open picker. */}
+          <motion.button
+            type="button"
+            onClick={() => {
+              tap();
+              setPickerOpen(true);
+            }}
+            whileTap={{ scale: 0.96 }}
+            className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl border border-white/10 bg-black/30 px-2 py-1.5 text-center"
+            aria-label="החלף קטגוריה"
+          >
             <span
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
               style={{
                 background: `${categoryMeta.accent}22`,
                 color: categoryMeta.accent,
               }}
             >
-              <categoryMeta.icon className="h-4 w-4" strokeWidth={1.6} />
+              <categoryMeta.icon className="h-3.5 w-3.5" strokeWidth={1.6} />
             </span>
-            <span className="flex flex-col leading-tight">
-              <span className="text-[10px] text-muted-foreground">
-                קטגוריה
-              </span>
-              <span className="text-sm font-medium text-foreground">
-                {categoryMeta.label}
-              </span>
+            <span className="text-[9px] leading-none text-muted-foreground">
+              {categoryMeta.label}
             </span>
-          </span>
-          <span className="text-[10px] text-muted-foreground">החלף</span>
-        </motion.button>
+          </motion.button>
 
-        {/* Budget inclusion — compact row */}
-        <motion.label
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.28 }}
-          className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 p-2.5"
-        >
-          <div className="flex flex-col gap-0.5 text-right leading-tight">
-            <span className="text-[12px] font-medium text-foreground">
-              כלול בתקציב
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              {includeInBudget ? "נספר בחודש" : "לא נספר בחודש"}
-            </span>
-          </div>
+          {/* Budget toggle — compact pill */}
           <button
             type="button"
             onClick={() => {
@@ -203,6 +187,9 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
               setIncludeInBudget((v) => !v);
             }}
             dir="ltr"
+            aria-label={
+              includeInBudget ? "נכלל בתקציב" : "לא נכלל בתקציב"
+            }
             aria-pressed={includeInBudget}
             className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
               includeInBudget
@@ -220,44 +207,42 @@ export function ConfirmationSheet({ open, onOpenChange, entry }: Props) {
               className="absolute top-1/2 block size-4 -translate-y-1/2 rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.4)]"
             />
           </button>
-        </motion.label>
+        </motion.div>
 
-        {/* Actions */}
+        {/* Action row — confirm primary, reject + edit secondary */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.14, duration: 0.28 }}
-          className="flex flex-col gap-1.5 pt-0.5"
+          transition={{ delay: 0.08, duration: 0.22 }}
+          className="flex items-center gap-1.5 pt-0.5"
         >
           <button
             type="button"
             onClick={handleConfirm}
-            className="btn-confirm flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold transition-transform active:scale-[0.99]"
+            className="btn-confirm flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold transition-transform active:scale-[0.99]"
           >
-            <Check className="h-4 w-4" strokeWidth={2.4} />
+            <Check className="h-3.5 w-3.5" strokeWidth={2.4} />
             אשר והוסף
           </button>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                tap();
-                setEditingAmount(true);
-              }}
-              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-black/30 text-[12px] text-foreground/90 transition-colors hover:border-white/20"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              ערוך סכום
-            </button>
-            <button
-              type="button"
-              onClick={handleDismiss}
-              className="btn-cancel flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[12px] font-semibold transition-transform active:scale-[0.99]"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              לא שלי
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            aria-label="לא שלי"
+            className="btn-cancel flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform active:scale-[0.99]"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              tap();
+              setEditingAmount(true);
+            }}
+            aria-label="ערוך סכום"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-black/30 text-foreground/90 transition-colors hover:border-white/20"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
         </motion.div>
       </GlassPopup>
 

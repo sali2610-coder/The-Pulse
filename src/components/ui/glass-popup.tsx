@@ -67,7 +67,7 @@ export function GlassPopup({
                   className={cn(
                     // Floats horizontally centered, adapts width across
                     // iPhone mini → tablet. Mobile-first clamp.
-                    "fixed inset-x-0 z-50 mx-auto flex w-[min(94vw,360px)] flex-col px-2",
+                    "fixed inset-x-0 z-50 mx-auto flex w-[min(94vw,420px)] flex-col px-2",
                     "max-h-[calc(100vh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)]",
                     className,
                   )}
