@@ -36,6 +36,46 @@ export function richnessScore(blob: StateBlob): number {
   );
 }
 
+export type BlobSummary = {
+  entries: number;
+  accounts: number;
+  loans: number;
+  rules: number;
+  incomes: number;
+  statuses: number;
+  monthlyBudget: number;
+  richness: number;
+};
+
+/** Detailed per-entity counts for backup previews. */
+export function summarizeBlob(blob: StateBlob | null): BlobSummary {
+  if (!blob) {
+    return {
+      entries: 0,
+      accounts: 0,
+      loans: 0,
+      rules: 0,
+      incomes: 0,
+      statuses: 0,
+      monthlyBudget: 0,
+      richness: 0,
+    };
+  }
+  const s = (blob.state ?? {}) as AnyBlobState & { statuses?: unknown[] };
+  const count = (a?: unknown[]) => (Array.isArray(a) ? a.length : 0);
+  return {
+    entries: count(s.entries),
+    accounts: count(s.accounts),
+    loans: count(s.loans),
+    rules: count(s.rules),
+    incomes: count(s.incomes),
+    statuses: count(s.statuses),
+    monthlyBudget:
+      typeof s.monthlyBudget === "number" ? s.monthlyBudget : 0,
+    richness: richnessScore(blob),
+  };
+}
+
 /** True when the blob has no user-meaningful content. */
 export function isEmptyBlob(blob: StateBlob): boolean {
   return richnessScore(blob) === 0;

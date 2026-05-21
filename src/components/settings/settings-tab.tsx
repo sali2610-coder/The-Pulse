@@ -15,11 +15,13 @@ import { SubscriptionSuggestions } from "./subscription-suggestions";
 import { RuleDriftCard } from "./rule-drift-card";
 import { DormantRulesCard } from "./dormant-rules-card";
 import { BudgetRecommendationCard } from "./budget-recommendation-card";
+import { BackupsCard } from "./backups-card";
 
 export function SettingsTab() {
   return (
     <div className="flex flex-col gap-4">
       <AuthCard />
+      <BackupsCard />
       <DeviceRecoveryCard />
       <BudgetRecommendationCard />
       <BudgetInput />

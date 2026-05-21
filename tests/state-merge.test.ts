@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { pickWinner, planMigration, richnessScore } from "@/lib/state-merge";
+import {
+  pickWinner,
+  planMigration,
+  richnessScore,
+  summarizeBlob,
+} from "@/lib/state-merge";
 import type { StateBlob } from "@/lib/kv";
 
 function blob(updatedAt: number, state: Record<string, unknown>): StateBlob {
@@ -41,6 +46,32 @@ describe("richnessScore", () => {
 
   it("treats missing arrays as 0", () => {
     expect(richnessScore(blob(0, {}))).toBe(0);
+  });
+});
+
+describe("summarizeBlob", () => {
+  it("returns zeros for null", () => {
+    expect(summarizeBlob(null)).toEqual({
+      entries: 0,
+      accounts: 0,
+      loans: 0,
+      rules: 0,
+      incomes: 0,
+      statuses: 0,
+      monthlyBudget: 0,
+      richness: 0,
+    });
+  });
+
+  it("counts every entity from the rich state", () => {
+    const s = summarizeBlob(blob(0, RICH_STATE));
+    expect(s.accounts).toBe(2);
+    expect(s.loans).toBe(1);
+    expect(s.incomes).toBe(3);
+    expect(s.rules).toBe(2);
+    expect(s.entries).toBe(50);
+    expect(s.monthlyBudget).toBe(8000);
+    expect(s.richness).toBe(2 + 1 + 3 + 2 + 50 + 1);
   });
 });
 

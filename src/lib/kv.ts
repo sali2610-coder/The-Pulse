@@ -337,41 +337,89 @@ export type StateSnapshot = {
     | "pre-claim-device"
     | "pre-recover-device"
     | "pre-restore"
-    | "manual";
+    | "manual"
+    | "auto";
   capturedAt: number;
   blob: StateBlob;
 };
 
-const MAX_SNAPSHOTS_KEEP = 10;
+// Per-reason retention budget. Manual backups are pinned highest so
+// a user's explicit save survives bursts of automatic snapshots.
+const SNAPSHOT_RETENTION: Record<StateSnapshot["reason"], number> = {
+  manual: 10,
+  "pre-restore": 5,
+  "pre-claim-device": 5,
+  "pre-recover-device": 5,
+  auto: 20,
+};
+const SNAPSHOT_HARD_CAP = 50;
 
 /**
  * Capture the CURRENT user/device state as a rollback snapshot before
- * any destructive write. List trimmed to the last MAX_SNAPSHOTS_KEEP
- * entries to avoid unbounded growth. No-op when the current state is
- * empty — empty snapshots have no recovery value.
+ * any destructive write. Uses per-reason retention budgets so manual
+ * backups never get evicted by a burst of automatic ones. No-op when
+ * the current state is empty — empty snapshots have no recovery value.
  */
 export async function captureStateSnapshot(
   scope: Scope,
   reason: StateSnapshot["reason"],
-): Promise<{ captured: boolean }> {
+): Promise<{ captured: boolean; capturedAt: number | null }> {
   const blob = await getUserState(scope);
-  if (!blob) return { captured: false };
+  if (!blob) return { captured: false, capturedAt: null };
   const entry: StateSnapshot = {
     reason,
     capturedAt: Date.now(),
     blob,
   };
-  // Use a sorted set scored by capturedAt; latest first.
   const key = SNAPSHOTS_KEY(scope);
   await kv().zadd(key, {
     score: entry.capturedAt,
     member: JSON.stringify(entry),
   });
-  // Trim — keep the newest MAX_SNAPSHOTS_KEEP. zremrangebyrank with
-  // negative end-index keeps the top-N by rank.
-  await kv().zremrangebyrank(key, 0, -MAX_SNAPSHOTS_KEEP - 1);
+  await trimSnapshotsByReason(scope);
   await kv().expire(key, STATE_TTL_SECONDS);
-  return { captured: true };
+  return { captured: true, capturedAt: entry.capturedAt };
+}
+
+async function trimSnapshotsByReason(scope: Scope): Promise<void> {
+  const key = SNAPSHOTS_KEY(scope);
+  const raw = (await kv().zrange(key, 0, -1, { rev: true })) as Array<
+    string | StateSnapshot
+  >;
+  const parsed: Array<{ s: StateSnapshot; raw: string }> = [];
+  for (const v of raw) {
+    if (typeof v === "string") {
+      try {
+        parsed.push({ s: JSON.parse(v) as StateSnapshot, raw: v });
+      } catch {
+        /* ignore corrupted entry */
+      }
+    } else {
+      parsed.push({ s: v as StateSnapshot, raw: JSON.stringify(v) });
+    }
+  }
+  const buckets = new Map<StateSnapshot["reason"], typeof parsed>();
+  for (const item of parsed) {
+    const list = buckets.get(item.s.reason) ?? [];
+    list.push(item);
+    buckets.set(item.s.reason, list);
+  }
+  const evictions = new Set<string>();
+  for (const [reason, list] of buckets) {
+    const cap = SNAPSHOT_RETENTION[reason] ?? 5;
+    if (list.length <= cap) continue;
+    list.sort((a, b) => b.s.capturedAt - a.s.capturedAt);
+    for (const item of list.slice(cap)) evictions.add(item.raw);
+  }
+  if (parsed.length > SNAPSHOT_HARD_CAP) {
+    parsed.sort((a, b) => b.s.capturedAt - a.s.capturedAt);
+    for (const item of parsed.slice(SNAPSHOT_HARD_CAP)) {
+      evictions.add(item.raw);
+    }
+  }
+  if (evictions.size > 0) {
+    await kv().zrem(key, ...Array.from(evictions));
+  }
 }
 
 /** List captured snapshots, newest first. */

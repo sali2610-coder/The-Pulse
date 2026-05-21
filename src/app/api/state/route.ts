@@ -7,12 +7,14 @@
 // No Bearer required.
 
 import {
+  captureStateSnapshot,
   getUserState,
   isKvConfigured,
   saveUserState,
   type StateBlob,
 } from "@/lib/kv";
 import { resolveRequestScope } from "@/lib/scope-resolver";
+import { richnessScore } from "@/lib/state-merge";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -64,6 +66,45 @@ export async function PUT(req: Request): Promise<Response> {
     updatedAt: Date.now(),
     state: candidate.state,
   };
+
+  // DATA SAFETY: never let an empty incoming blob overwrite a rich
+  // stored blob unless the caller passes ?force=true explicitly.
+  // Closes the silent-wipe vector where a hydration race / stale tab
+  // / debounced PUT after a sign-in flow could land an empty state on
+  // top of months of real data.
+  const force = new URL(req.url).searchParams.get("force") === "true";
+  if (!force) {
+    const incomingRichness = richnessScore(blob);
+    if (incomingRichness === 0) {
+      const existing = await getUserState(scopeRes.scope);
+      if (existing && richnessScore(existing) > 0) {
+        return Response.json(
+          {
+            ok: false,
+            error: "empty_overwrite_blocked",
+            existingRichness: richnessScore(existing),
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
+  // Capture a snapshot before overwriting a rich blob with a meaningfully
+  // smaller one so the user can always roll back.
+  if (!force) {
+    const existing = await getUserState(scopeRes.scope);
+    if (existing) {
+      const existingR = richnessScore(existing);
+      const incomingR = richnessScore(blob);
+      if (existingR > 0 && incomingR < existingR / 2) {
+        await captureStateSnapshot(scopeRes.scope, "manual").catch(
+          () => undefined,
+        );
+      }
+    }
+  }
+
   await saveUserState(scopeRes.scope, blob);
   return Response.json({ ok: true, updatedAt: blob.updatedAt });
 }
