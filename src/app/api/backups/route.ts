@@ -13,6 +13,7 @@
 
 import { auth } from "@/lib/auth/config";
 import {
+  appendBackupLog,
   captureStateSnapshot,
   getUserState,
   isKvConfigured,
@@ -96,6 +97,15 @@ export async function POST(req: Request): Promise<Response> {
   }
   const result = await captureStateSnapshot(scope, reason);
   if (!result.captured) return fail(500, "capture_failed");
+
+  await appendBackupLog(scope, {
+    ts: Date.now(),
+    kind: reason === "auto" ? "backup-auto" : "backup-manual",
+    capturedAt: result.capturedAt ?? undefined,
+    counts: summarizeBlob(live),
+    ok: true,
+  }).catch(() => undefined);
+
   return Response.json({
     ok: true,
     reason,

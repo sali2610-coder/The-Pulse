@@ -295,6 +295,25 @@ export function BackupsCard() {
               `ייבוא יחליף את המצב הנוכחי במכשיר (${liveRichness} פריטים) במצב מתוך הקובץ (${importedRichness} פריטים). להמשיך?`,
             );
       if (!proceed) return;
+      // Safety net: take a cloud backup of the CURRENT live state before
+      // the import overwrites it. Fire-and-await with a 3s cap so a
+      // slow network doesn't block the import.
+      if (liveRichness > 0) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3000);
+          await fetch("/api/backups", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "manual" }),
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+        } catch {
+          /* timeout / offline — proceed anyway */
+        }
+      }
       // Replace the persisted slice. Zustand setState merges shallow.
       const api = useFinanceStore.setState as (
         partial: Partial<ReturnType<typeof useFinanceStore.getState>>,

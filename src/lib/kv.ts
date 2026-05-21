@@ -46,6 +46,9 @@ const PUSH_LAST_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:last`;
 const PUSH_CLICK_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:click`;
 const SNAPSHOTS_KEY = (scope: Scope) => `${scopePrefix(scope)}:state:snapshots`;
 const STATE_KEY = (scope: Scope) => `${scopePrefix(scope)}:state`;
+const BACKUP_LOG_KEY = (scope: Scope) =>
+  `${scopePrefix(scope)}:state:backuplog`;
+const BACKUP_LOG_KEEP = 50;
 // Long TTL so a user who reinstalls the PWA after 90 days still gets their
 // state back. Touched on every write — effectively permanent for active users.
 const STATE_TTL_SECONDS = 365 * 24 * 60 * 60;
@@ -459,6 +462,70 @@ export async function restoreFromSnapshot(
     state: target.blob.state,
   });
   return { restored: true };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Backup audit log — every manual / auto / restore event lands here so the
+// user can prove that a backup actually happened. Capped at BACKUP_LOG_KEEP
+// to avoid unbounded growth. Stored as a sorted set scored by ts, newest
+// first on read.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type BackupLogEvent = {
+  ts: number;
+  kind:
+    | "backup-manual"
+    | "backup-auto"
+    | "backup-pre-restore"
+    | "restore"
+    | "restore-blocked-empty";
+  capturedAt?: number;
+  counts?: {
+    entries: number;
+    accounts: number;
+    loans: number;
+    rules: number;
+    incomes: number;
+    statuses: number;
+    monthlyBudget: number;
+    richness: number;
+  };
+  ok: boolean;
+  note?: string;
+};
+
+export async function appendBackupLog(
+  scope: Scope,
+  event: BackupLogEvent,
+): Promise<void> {
+  const key = BACKUP_LOG_KEY(scope);
+  await kv().zadd(key, {
+    score: event.ts,
+    member: JSON.stringify(event),
+  });
+  await kv().zremrangebyrank(key, 0, -BACKUP_LOG_KEEP - 1);
+  await kv().expire(key, STATE_TTL_SECONDS);
+}
+
+export async function listBackupLog(
+  scope: Scope,
+): Promise<BackupLogEvent[]> {
+  const key = BACKUP_LOG_KEY(scope);
+  const raw = (await kv().zrange(key, 0, -1, {
+    rev: true,
+  })) as Array<string | BackupLogEvent>;
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") {
+        try {
+          return JSON.parse(entry) as BackupLogEvent;
+        } catch {
+          return null;
+        }
+      }
+      return entry;
+    })
+    .filter((v): v is BackupLogEvent => v !== null);
 }
 
 export async function savePushSubscription(

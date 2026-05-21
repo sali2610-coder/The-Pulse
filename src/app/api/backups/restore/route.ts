@@ -10,6 +10,7 @@
 
 import { auth } from "@/lib/auth/config";
 import {
+  appendBackupLog,
   captureStateSnapshot,
   getUserState,
   isKvConfigured,
@@ -58,6 +59,14 @@ export async function POST(req: Request): Promise<Response> {
   // Anti-foot-gun: empty backup on top of rich state requires the
   // caller to opt in explicitly.
   if (liveRichness > 0 && targetRichness === 0 && !confirmEmpty) {
+    await appendBackupLog(scope, {
+      ts: Date.now(),
+      kind: "restore-blocked-empty",
+      capturedAt,
+      counts: summarizeBlob(live),
+      ok: false,
+      note: "empty_backup_blocked",
+    }).catch(() => undefined);
     return Response.json(
       {
         ok: false,
@@ -71,10 +80,29 @@ export async function POST(req: Request): Promise<Response> {
 
   // Always snapshot the live state before restoring. If the snapshot
   // store also holds nothing live, capture is a no-op and we proceed.
-  await captureStateSnapshot(scope, "pre-restore").catch(() => undefined);
+  const preRestore = await captureStateSnapshot(scope, "pre-restore").catch(
+    () => ({ captured: false, capturedAt: null }),
+  );
+  if (preRestore.captured) {
+    await appendBackupLog(scope, {
+      ts: Date.now(),
+      kind: "backup-pre-restore",
+      capturedAt: preRestore.capturedAt ?? undefined,
+      counts: summarizeBlob(live),
+      ok: true,
+    }).catch(() => undefined);
+  }
 
   const result = await restoreFromSnapshot(scope, capturedAt);
   if (!result.restored) return fail(500, "restore_failed");
+
+  await appendBackupLog(scope, {
+    ts: Date.now(),
+    kind: "restore",
+    capturedAt,
+    counts: summarizeBlob(target.blob),
+    ok: true,
+  }).catch(() => undefined);
 
   return Response.json({
     ok: true,
