@@ -234,6 +234,12 @@ const RefundSummaryCard = lazy(() =>
   })),
 );
 
+const TrackingStreakCard = lazy(() =>
+  import("@/components/dashboard/tracking-streak-card").then((m) => ({
+    default: m.TrackingStreakCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -294,6 +300,11 @@ export function DashboardTab() {
       {/* REFUNDS — credit-backs this month (positive flow). */}
       <div className="sm:col-span-6">
         <Safe name="RefundSummaryCard"><RefundSummaryCard /></Safe>
+      </div>
+
+      {/* TRACKING STREAK — habit-formation flame. */}
+      <div className="sm:col-span-6">
+        <Safe name="TrackingStreakCard"><TrackingStreakCard /></Safe>
       </div>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
