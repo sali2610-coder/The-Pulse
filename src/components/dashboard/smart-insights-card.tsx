@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import {
   ChevronLeft,
   Moon,
+  RefreshCcw,
   Sparkles,
   Wallet,
   Wand2,
@@ -108,6 +109,14 @@ export function SmartInsightsCard() {
       count: insights.budgetRecommendationAvailable ? 1 : 0,
       tone: "#34D399",
       Icon: Wallet,
+    },
+    {
+      key: "stale",
+      section: "accounts",
+      label: "יתרות לרענון",
+      count: insights.staleAnchorCount,
+      tone: "#F87171",
+      Icon: RefreshCcw,
     },
   ].filter((c) => c.count > 0);
 

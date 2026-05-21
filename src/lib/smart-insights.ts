@@ -18,6 +18,7 @@ import { detectSubscriptionCandidates } from "@/lib/subscription-detector";
 import { detectRuleDrift } from "@/lib/rule-drift";
 import { detectDormantRules } from "@/lib/rule-dormancy";
 import { recommendBudget } from "@/lib/budget-recommendation";
+import { detectStaleAnchors } from "@/lib/anchor-staleness";
 import { isInsightDismissed } from "@/lib/insight-dismiss";
 
 export type SmartInsights = {
@@ -25,6 +26,7 @@ export type SmartInsights = {
   ruleDriftCount: number;
   dormantCount: number;
   budgetRecommendationAvailable: boolean;
+  staleAnchorCount: number;
   /** Sum of all surfaceable insights. */
   total: number;
 };
@@ -38,7 +40,6 @@ export function gatherSmartInsights(args: {
   monthlyBudget: number;
   monthKey: MonthKey;
 }): SmartInsights {
-  void args.accounts;
   void args.incomes;
 
   const subs = detectSubscriptionCandidates({
@@ -72,20 +73,24 @@ export function gatherSmartInsights(args: {
         args.monthlyBudget >=
         0.3);
 
+  const stale = detectStaleAnchors({ accounts: args.accounts });
   const subscriptionCount = subs.length;
   const ruleDriftCount = drift.length;
   const dormantCount = dormant.length;
   const budgetRecommendationAvailable = recommendationActionable;
+  const staleAnchorCount = stale.length;
 
   return {
     subscriptionCount,
     ruleDriftCount,
     dormantCount,
     budgetRecommendationAvailable,
+    staleAnchorCount,
     total:
       subscriptionCount +
       ruleDriftCount +
       dormantCount +
+      staleAnchorCount +
       (budgetRecommendationAvailable ? 1 : 0),
   };
 }

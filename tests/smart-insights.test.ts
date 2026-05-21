@@ -6,6 +6,7 @@ import {
   dismissInsight,
 } from "@/lib/insight-dismiss";
 import type {
+  Account,
   ExpenseEntry,
   MonthKey,
   RecurringRule,
@@ -175,6 +176,31 @@ describe("gatherSmartInsights", () => {
     });
     expect(after.subscriptionCount).toBe(0);
     expect(after.total).toBeLessThan(before.total);
+  });
+
+  it("counts stale bank anchors", () => {
+    const stale: Account = {
+      id: "bank-1",
+      kind: "bank",
+      label: "Discount",
+      anchorBalance: 5000,
+      anchorUpdatedAt: new Date(
+        Date.now() - 40 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      active: true,
+      createdAt: "2024-01-01T00:00:00.000Z",
+    };
+    const out = gatherSmartInsights({
+      entries: [],
+      rules: [],
+      statuses: [],
+      accounts: [stale],
+      incomes: [],
+      monthlyBudget: 5000,
+      monthKey: MAY,
+    });
+    expect(out.staleAnchorCount).toBe(1);
+    expect(out.total).toBeGreaterThanOrEqual(1);
   });
 
   it("does not flag budget recommendation when current is close to history", () => {
