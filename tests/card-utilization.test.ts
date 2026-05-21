@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cardUtilization } from "@/lib/card-utilization";
+import { aggregateCardUtilization, cardUtilization } from "@/lib/card-utilization";
 import type { CardCycleProjection } from "@/lib/card-cycle";
 import type { Account } from "@/types/finance";
 
@@ -89,5 +89,37 @@ describe("cardUtilization", () => {
       const u = cardUtilization({ account: card({ currentDebt: debt }) })!;
       expect(u.severity).toBe(expected);
     }
+  });
+});
+
+describe("aggregateCardUtilization", () => {
+  it("returns null when no card has creditLimit", () => {
+    const accounts: Account[] = [
+      card({ id: "a", creditLimit: undefined }),
+      card({ id: "b", kind: "bank", creditLimit: undefined }),
+    ];
+    expect(aggregateCardUtilization({ accounts })).toBeNull();
+  });
+
+  it("sums used + limit across active cards with creditLimit", () => {
+    const accounts: Account[] = [
+      card({ id: "a", creditLimit: 10000, currentDebt: 3000 }),
+      card({ id: "b", creditLimit: 5000, currentDebt: 2000 }),
+      card({ id: "c", creditLimit: 5000, active: false }),
+    ];
+    const agg = aggregateCardUtilization({ accounts })!;
+    expect(agg.cardCount).toBe(2);
+    expect(agg.totalUsed).toBe(5000);
+    expect(agg.totalLimit).toBe(15000);
+    expect(agg.ratio).toBeCloseTo(0.333, 2);
+    expect(agg.severity).toBe("calm");
+  });
+
+  it("flags alert when aggregate ratio ≥ 90%", () => {
+    const accounts: Account[] = [
+      card({ id: "a", creditLimit: 10000, currentDebt: 9500 }),
+    ];
+    const agg = aggregateCardUtilization({ accounts })!;
+    expect(agg.severity).toBe("alert");
   });
 });

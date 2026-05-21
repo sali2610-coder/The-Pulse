@@ -8,7 +8,10 @@ import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildCardPressure } from "@/lib/card-pressure";
 import { projectCardCycle } from "@/lib/card-cycle";
-import { cardUtilization } from "@/lib/card-utilization";
+import {
+  aggregateCardUtilization,
+  cardUtilization,
+} from "@/lib/card-utilization";
 import { Pill } from "@/components/ui/pill";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
 import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
@@ -67,6 +70,14 @@ export function CardsPressureCard() {
     return map;
   }, [hydrated, rows, entries]);
 
+  const aggregate = useMemo(() => {
+    if (!hydrated) return null;
+    return aggregateCardUtilization({
+      accounts,
+      projectionsById: cyclesById,
+    });
+  }, [hydrated, accounts, cyclesById]);
+
   const [drilldown, setDrilldown] = useState<
     | {
         accountId: string;
@@ -80,11 +91,38 @@ export function CardsPressureCard() {
   const meaningful = rows.filter((r) => r.totalThisMonth > 0);
   if (meaningful.length === 0) return null;
 
+  const aggregatePct = aggregate
+    ? Math.min(100, Math.round(aggregate.ratio * 100))
+    : 0;
+  const aggregateTone = aggregate
+    ? aggregate.severity === "alert"
+      ? "#F87171"
+      : aggregate.severity === "warn"
+        ? "#D4AF37"
+        : aggregate.severity === "watch"
+          ? "#FCD34D"
+          : "#34D399"
+    : "#A1A1AA";
+
   return (
     <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
-      <header className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-        <CreditCard className="size-3 text-[color:var(--neon)]" />
-        עומס לפי כרטיס
+      <header className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <CreditCard className="size-3 text-[color:var(--neon)]" />
+          עומס לפי כרטיס
+        </span>
+        {aggregate ? (
+          <span
+            className="rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em]"
+            style={{
+              background: `${aggregateTone}22`,
+              color: aggregateTone,
+            }}
+            dir="ltr"
+          >
+            ניצול {aggregatePct}% · {aggregate.cardCount} כרטיסים
+          </span>
+        ) : null}
       </header>
 
       <ul className="flex flex-col gap-2">

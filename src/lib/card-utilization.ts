@@ -37,6 +37,47 @@ function severityFor(ratio: number): UtilizationSeverity {
   return "calm";
 }
 
+export type AggregateUtilization = {
+  totalUsed: number;
+  totalLimit: number;
+  ratio: number;
+  severity: UtilizationSeverity;
+  /** Number of cards that contributed (active + creditLimit > 0). */
+  cardCount: number;
+};
+
+export function aggregateCardUtilization(args: {
+  accounts: Account[];
+  projectionsById?: Map<string, CardCycleProjection | undefined>;
+}): AggregateUtilization | null {
+  let totalUsed = 0;
+  let totalLimit = 0;
+  let cardCount = 0;
+  for (const a of args.accounts) {
+    if (a.kind !== "card") continue;
+    if (!a.active) continue;
+    if (!a.creditLimit || a.creditLimit <= 0) continue;
+    const projection = args.projectionsById?.get(a.id);
+    const util = cardUtilization({
+      account: a,
+      cycleProjection: projection ?? undefined,
+    });
+    if (!util) continue;
+    totalUsed += util.used;
+    totalLimit += util.limit;
+    cardCount += 1;
+  }
+  if (cardCount === 0 || totalLimit <= 0) return null;
+  const ratio = Math.max(0, totalUsed / totalLimit);
+  return {
+    totalUsed,
+    totalLimit,
+    ratio,
+    severity: severityFor(ratio),
+    cardCount,
+  };
+}
+
 export function cardUtilization(args: {
   account: Account;
   cycleProjection?: CardCycleProjection;
