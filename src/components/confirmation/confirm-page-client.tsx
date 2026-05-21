@@ -1,185 +1,44 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
-import { useFinanceStore } from "@/lib/store";
-import { getOrCreateDeviceId } from "@/lib/device-id";
-import type { CategoryId } from "@/lib/categories";
-import { categorize } from "@/lib/parsers";
-import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet";
-import type { ExpenseEntry } from "@/types/finance";
+import { openPendingConfirmation } from "@/lib/pending-confirm-channel";
 
-type PendingResponse = {
-  ok: boolean;
-  configured: boolean;
-  transaction: {
-    externalId: string;
-    amount: number;
-    category: string;
-    paymentMethod: "cash" | "credit";
-    installments: number;
-    issuer: "cal" | "max" | "wallet";
-    source?: "sms" | "wallet";
-    cardLast4?: string;
-    merchant?: string;
-    note?: string;
-    occurredAt: string;
-    needsConfirmation?: boolean;
-    bankPending?: boolean;
-    rawNotificationBody?: string;
-  } | null;
-};
-
+/**
+ * Legacy /confirm/[externalId] deep-link page.
+ *
+ * After the unified PendingConfirmOverlay shipped, the confirmation
+ * UI lives at AppShell level and is opened via a channel rather than
+ * a route. This page now exists ONLY to handle the cold-start case
+ * where the Service Worker's `openWindow` lands the user on this URL
+ * before the SPA has had a chance to subscribe to the channel.
+ *
+ * Behavior:
+ *   1. Fire `openPendingConfirmation(externalId)` so the channel
+ *      replays it the moment the AppShell mounts on `/`.
+ *   2. router.replace("/") so the user lands on the dashboard with
+ *      the overlay floating over it — same UX as a notification tap
+ *      when the PWA is already in the foreground.
+ *
+ * A loader is shown for the few hundred ms it takes the replace to
+ * resolve, so the user never sees a flash of empty content.
+ */
 export function ConfirmPageClient({ externalId }: { externalId: string }) {
   const router = useRouter();
-  const hydrated = useFinanceStore((s) => s.hasHydrated);
-  const localEntry = useFinanceStore((s) =>
-    s.entries.find((e) => e.externalId === externalId),
-  );
-  const addExpense = useFinanceStore((s) => s.addExpense);
 
-  const [open, setOpen] = useState(true);
-  const [serverEntry, setServerEntry] = useState<ExpenseEntry | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [fetchAttempted, setFetchAttempted] = useState(false);
-
-  // Trigger the server-fetch fallback when the entry isn't already local.
   useEffect(() => {
-    if (!hydrated) return;
-    if (localEntry) return;
-    if (fetchAttempted) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        // Always send device id — the server picks the strongest scope
-        // (NextAuth session → device-claim → bare device) via
-        // resolveRequestScope, so the header is harmless when a session
-        // exists and load-bearing when it doesn't.
-        const headers: Record<string, string> = {
-          "x-sally-device": getOrCreateDeviceId(),
-        };
-        const res = await fetch(
-          `/api/transactions/pending/${encodeURIComponent(externalId)}`,
-          { method: "GET", headers, cache: "no-store" },
-        );
-        if (cancelled) return;
-        if (!res.ok) {
-          setError("transaction_not_found");
-          setFetchAttempted(true);
-          return;
-        }
-        const data = (await res.json()) as PendingResponse;
-        if (!data.transaction) {
-          setError("transaction_not_found");
-          setFetchAttempted(true);
-          return;
-        }
-        const tx = data.transaction;
-        const result = addExpense({
-          amount: tx.amount,
-          category: tx.category as CategoryId,
-          note: tx.note,
-          installments: Math.max(1, tx.installments),
-          paymentMethod: tx.paymentMethod,
-          source: tx.source ?? (tx.issuer === "wallet" ? "wallet" : "sms"),
-          chargeDate: tx.occurredAt,
-          externalId: tx.externalId,
-          issuer: tx.issuer === "wallet" ? undefined : tx.issuer,
-          cardLast4: tx.cardLast4,
-          merchant: tx.merchant,
-          bankPending: tx.bankPending,
-          needsConfirmation: tx.needsConfirmation,
-          rawNotificationBody: tx.rawNotificationBody,
-        });
-        setServerEntry(result.entry);
-        setFetchAttempted(true);
-      } catch {
-        if (!cancelled) {
-          setError("network_error");
-          setFetchAttempted(true);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [hydrated, localEntry, externalId, addExpense, fetchAttempted]);
+    if (!externalId) return;
+    openPendingConfirmation(externalId);
+    router.replace("/");
+  }, [externalId, router]);
 
-  const loading = !hydrated || (!localEntry && !serverEntry && !error);
-
-  const entry = useMemo(() => {
-    if (localEntry) return localEntry;
-    return serverEntry;
-  }, [localEntry, serverEntry]);
-
-  // Make sure the picked category respects sanitize/categorize when the
-  // server row landed with the default `other` from a Wallet partial. Done
-  // at render time so subsequent edits in the sheet stick.
-  const seededEntry = useMemo<ExpenseEntry | null>(() => {
-    if (!entry) return null;
-    if (entry.category !== "other") return entry;
-    const guess: CategoryId = entry.merchant
-      ? categorize(entry.merchant)
-      : "other";
-    return guess === entry.category ? entry : { ...entry, category: guess };
-  }, [entry]);
-
-  function handleClose(next: boolean) {
-    setOpen(next);
-    if (!next) {
-      // Small delay lets the sheet animate out before the route changes.
-      setTimeout(() => router.replace("/"), 250);
-    }
-  }
-
-  // Render a full-bleed dark backdrop the moment we mount so the user
-  // never sees a flash of dashboard chrome between notification tap and
-  // confirmation sheet appearing.
-  if (loading) {
-    return (
-      <main className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md">
-        <Loader2
-          className="h-6 w-6 animate-spin text-muted-foreground"
-          strokeWidth={1.6}
-        />
-      </main>
-    );
-  }
-
-  if (error || !seededEntry) {
-    return (
-      <main className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center backdrop-blur-md">
-        <h1 className="text-xl font-semibold text-foreground">
-          לא מצאנו את החיוב
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          ייתכן שהוא כבר אושר במכשיר אחר או פג תוקפו.
-        </p>
-        <button
-          type="button"
-          onClick={() => router.replace("/")}
-          className="rounded-2xl border border-white/12 bg-surface/60 px-4 py-2 text-sm text-foreground"
-        >
-          חזרה לדשבורד
-        </button>
-      </main>
-    );
-  }
-
-  // Explicit dim overlay UNDER the GlassPopup. Some Safari builds rendered
-  // the GlassPopup body but lost its own backdrop layer when nested inside
-  // a router-transitioned page, which made the confirmation feel "missing".
-  // Painting our own dark fixed layer guarantees the user sees the
-  // characteristic premium-fintech dim + the popup floats over a known
-  // background regardless of any layer-ordering quirk.
   return (
-    <main className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md">
-      <ConfirmationSheet
-        open={open}
-        onOpenChange={handleClose}
-        entry={seededEntry}
+    <main className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md">
+      <Loader2
+        className="h-6 w-6 animate-spin text-muted-foreground"
+        strokeWidth={1.6}
       />
     </main>
   );

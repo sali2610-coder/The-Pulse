@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 
 import { getOrCreateDeviceId } from "@/lib/device-id";
+import { openPendingConfirmation } from "@/lib/pending-confirm-channel";
 
 /**
  * Routes the user to /confirm/<externalId> after a notification tap.
@@ -30,19 +30,17 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
  * after every visibility resume.
  */
 export function PendingConfirmListener() {
-  const router = useRouter();
   const lastHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    function navigateOnce(externalId: string, path?: string) {
+    function navigateOnce(externalId: string) {
       if (!externalId) return;
       if (lastHandledRef.current === externalId) return;
       lastHandledRef.current = externalId;
-      const target = path ?? `/confirm/${encodeURIComponent(externalId)}`;
-      console.info("[PendingConfirmListener] →", target);
-      router.push(target);
+      console.info("[PendingConfirmListener] open →", externalId);
+      openPendingConfirmation(externalId);
     }
 
     let stopRetries = false;
@@ -92,7 +90,7 @@ export function PendingConfirmListener() {
         | null;
       if (!data || data.type !== "sally:pending-confirm") return;
       if (!data.externalId) return;
-      navigateOnce(data.externalId, data.path);
+      navigateOnce(data.externalId);
     }
 
     function onVisible() {
@@ -122,7 +120,7 @@ export function PendingConfirmListener() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
     };
-  }, [router]);
+  }, []);
 
   return null;
 }

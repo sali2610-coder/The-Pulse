@@ -52,9 +52,9 @@ export function GlassPopup({
             <DialogPrimitive.Popup
               render={
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.92, y: -14 }}
+                  initial={{ opacity: 0, scale: 0.94, y: -18 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.94, y: -10 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -12 }}
                   transition={SPRING_SOFT}
                   drag="y"
                   dragConstraints={{ top: 0, bottom: 0 }}
@@ -65,36 +65,43 @@ export function GlassPopup({
                     }
                   }}
                   className={cn(
-                    // Floats horizontally centered, adapts width.
-                    "fixed inset-x-0 z-50 mx-auto flex w-[min(92vw,320px)] flex-col px-2",
+                    // Floats horizontally centered, adapts width across
+                    // iPhone mini → tablet. Mobile-first clamp.
+                    "fixed inset-x-0 z-50 mx-auto flex w-[min(94vw,360px)] flex-col px-2",
+                    "max-h-[calc(100vh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)]",
                     className,
                   )}
                   style={{
-                    top: "max(env(safe-area-inset-top), 8px)",
+                    top: "max(env(safe-area-inset-top), 0.5rem)",
                   }}
                 />
               }
             >
               <div
                 className={cn(
-                  // Capsule glass body.
-                  "relative overflow-hidden rounded-[34px] border border-white/12",
-                  "bg-gradient-to-b from-white/[0.08] to-white/[0.025]",
-                  "backdrop-blur-xl",
-                  // Softer inset highlight + neon-tinted ambient glow.
-                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_18px_56px_-18px_rgba(0,229,255,0.22),0_36px_90px_-30px_rgba(0,0,0,0.70)]",
+                  // Rectangular floating card body. Slightly less round
+                  // than the Dynamic Island capsule so longer content
+                  // (merchant + amount + category + actions) breathes.
+                  "relative flex flex-col overflow-hidden rounded-[28px] border border-white/14",
+                  // Deeper glass — visible through to the dimmed dashboard.
+                  "bg-gradient-to-b from-white/[0.10] to-white/[0.03]",
+                  "backdrop-blur-2xl backdrop-saturate-150",
+                  // Inset highlight + ambient + crisp shadow for native iOS feel.
+                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_64px_-22px_rgba(0,229,255,0.24),0_44px_120px_-36px_rgba(0,0,0,0.75)]",
                 )}
               >
                 {/* Slim drag handle */}
                 <div className="flex justify-center pt-1.5">
-                  <div className="h-[3px] w-7 rounded-full bg-white/22" />
+                  <div className="h-[3px] w-9 rounded-full bg-white/22" />
                 </div>
                 {title && (
                   <DialogPrimitive.Title className="sr-only">
                     {title}
                   </DialogPrimitive.Title>
                 )}
-                <div className="flex flex-col gap-2.5 px-3.5 pb-3.5 pt-1">
+                {/* Inner content scrolls if it overflows — popup stays
+                    bounded by max-h above. */}
+                <div className="flex max-h-full flex-col gap-2.5 overflow-y-auto px-3.5 pb-[max(env(safe-area-inset-bottom),0.875rem)] pt-1">
                   {children}
                 </div>
               </div>

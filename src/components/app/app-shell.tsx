@@ -20,6 +20,7 @@ import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
 import { ErrorBoundary, PageFallback } from "@/components/error-boundary";
 import { PendingConfirmListener } from "@/components/app/pending-confirm-listener";
+import { PendingConfirmOverlay } from "@/components/confirmation/pending-confirm-overlay";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -117,6 +118,7 @@ function AppShellContent() {
 
       <AutoSync />
       <PendingConfirmListener />
+      <PendingConfirmOverlay />
       {isDev ? <SeedPanel /> : null}
     </main>
   );
