@@ -8,6 +8,7 @@ import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildCardPressure } from "@/lib/card-pressure";
 import { projectCardCycle } from "@/lib/card-cycle";
+import { cardUtilization } from "@/lib/card-utilization";
 import { Pill } from "@/components/ui/pill";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
 
@@ -77,6 +78,21 @@ export function CardsPressureCard() {
       <ul className="flex flex-col gap-2">
         {meaningful.map((row, idx) => {
           const cycle = cyclesById.get(row.card.id);
+          const util = cardUtilization({
+            account: row.card,
+            cycleProjection: cycle ?? undefined,
+          });
+          const utilPct = util
+            ? Math.min(100, Math.round(util.ratio * 100))
+            : 0;
+          const utilTone =
+            util?.severity === "alert"
+              ? "#F87171"
+              : util?.severity === "warn"
+                ? "#D4AF37"
+                : util?.severity === "watch"
+                  ? "#FCD34D"
+                  : "#34D399";
           return (
           <motion.li
             key={row.card.id}
@@ -137,6 +153,30 @@ export function CardsPressureCard() {
                       {ILS.format(cycle.projectedAmount)}
                     </span>
                   </span>
+                </div>
+              ) : null}
+              {util ? (
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground/85">
+                    <span>ניצול מסגרת</span>
+                    <span
+                      data-mono="true"
+                      dir="ltr"
+                      style={{ color: utilTone }}
+                    >
+                      {utilPct}% · {ILS.format(util.used)} /{" "}
+                      {ILS.format(util.limit)}
+                    </span>
+                  </div>
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${utilPct}%`,
+                        background: `linear-gradient(90deg, ${utilTone}, ${utilTone}66)`,
+                      }}
+                    />
+                  </div>
                 </div>
               ) : null}
             </div>
