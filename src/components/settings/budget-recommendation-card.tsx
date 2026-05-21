@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,11 @@ import { useFinanceStore } from "@/lib/store";
 import { recommendBudget } from "@/lib/budget-recommendation";
 import { currentMonthKey } from "@/lib/dates";
 import { success, tap } from "@/lib/haptics";
+import {
+  dismissInsight,
+  isInsightDismissed,
+  pruneExpiredDismissals,
+} from "@/lib/insight-dismiss";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -29,7 +34,11 @@ export function BudgetRecommendationCard() {
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const setMonthlyBudget = useFinanceStore((s) => s.setMonthlyBudget);
 
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedTick, setDismissedTick] = useState(0);
+
+  useEffect(() => {
+    pruneExpiredDismissals();
+  }, []);
 
   const rec = useMemo(() => {
     if (!hydrated) return null;
@@ -38,7 +47,14 @@ export function BudgetRecommendationCard() {
 
   if (!hydrated || !rec || !rec.hasEnoughData) return null;
   if (rec.recommended <= 0) return null;
-  if (dismissed) return null;
+
+  // Key the dismissal on the rounded recommendation so a new
+  // recommendation amount (e.g., user spending pattern shifted)
+  // surfaces a fresh suggestion even if the previous one was
+  // dismissed.
+  const dismissKey = String(rec.recommended);
+  void dismissedTick;
+  if (isInsightDismissed("budget-recommendation", dismissKey)) return null;
 
   const isZero = monthlyBudget <= 0;
   const drift = monthlyBudget > 0
@@ -54,12 +70,14 @@ export function BudgetRecommendationCard() {
     toast.success("יעד התקציב עודכן", {
       description: ILS.format(rec.recommended),
     });
-    setDismissed(true);
+    dismissInsight("budget-recommendation", dismissKey);
+    setDismissedTick((t) => t + 1);
   }
 
   function dismiss() {
     tap();
-    setDismissed(true);
+    dismissInsight("budget-recommendation", dismissKey);
+    setDismissedTick((t) => t + 1);
   }
 
   const headline = isZero ? "הצעת תקציב" : "תקציב לא תואם להוצאות בפועל";

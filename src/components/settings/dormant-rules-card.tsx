@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Moon, Power, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,11 @@ import { useFinanceStore } from "@/lib/store";
 import { detectDormantRules } from "@/lib/rule-dormancy";
 import { currentMonthKey } from "@/lib/dates";
 import { success, tap } from "@/lib/haptics";
+import {
+  dismissInsight,
+  isInsightDismissed,
+  pruneExpiredDismissals,
+} from "@/lib/insight-dismiss";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -49,7 +54,11 @@ export function DormantRulesCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const toggleRule = useFinanceStore((s) => s.toggleRule);
 
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dismissedTick, setDismissedTick] = useState(0);
+
+  useEffect(() => {
+    pruneExpiredDismissals();
+  }, []);
 
   const dormant = useMemo(() => {
     if (!hydrated) return [];
@@ -60,7 +69,12 @@ export function DormantRulesCard() {
     });
   }, [hydrated, rules, statuses]);
 
-  const visible = dormant.filter((d) => !dismissed.has(d.ruleId));
+  const visible = useMemo(() => {
+    void dismissedTick;
+    return dormant.filter(
+      (d) => !isInsightDismissed("dormant-rule", d.ruleId),
+    );
+  }, [dormant, dismissedTick]);
 
   if (!hydrated) return null;
   if (visible.length === 0) return null;
@@ -72,20 +86,14 @@ export function DormantRulesCard() {
     toggleRule(ruleId);
     success();
     toast.success("הוצאה הקבועה הושבתה", { description: label });
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(ruleId);
-      return next;
-    });
+    dismissInsight("dormant-rule", ruleId);
+    setDismissedTick((t) => t + 1);
   }
 
   function dismiss(ruleId: string) {
     tap();
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(ruleId);
-      return next;
-    });
+    dismissInsight("dormant-rule", ruleId);
+    setDismissedTick((t) => t + 1);
   }
 
   return (

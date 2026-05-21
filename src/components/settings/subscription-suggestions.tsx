@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,11 @@ import { useFinanceStore } from "@/lib/store";
 import { detectSubscriptionCandidates } from "@/lib/subscription-detector";
 import { getCategory } from "@/lib/categories";
 import { tap, success } from "@/lib/haptics";
+import {
+  dismissInsight,
+  isInsightDismissed,
+  pruneExpiredDismissals,
+} from "@/lib/insight-dismiss";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -41,14 +46,23 @@ export function SubscriptionSuggestions() {
   const rules = useFinanceStore((s) => s.rules);
   const addRule = useFinanceStore((s) => s.addRule);
 
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dismissedTick, setDismissedTick] = useState(0);
+
+  useEffect(() => {
+    pruneExpiredDismissals();
+  }, []);
 
   const candidates = useMemo(() => {
     if (!hydrated) return [];
     return detectSubscriptionCandidates({ entries, rules });
   }, [hydrated, entries, rules]);
 
-  const visible = candidates.filter((c) => !dismissed.has(c.merchantKey));
+  const visible = useMemo(() => {
+    void dismissedTick;
+    return candidates.filter(
+      (c) => !isInsightDismissed("subscription", c.merchantKey),
+    );
+  }, [candidates, dismissedTick]);
 
   if (!hydrated) return null;
   if (visible.length === 0) return null;
@@ -65,20 +79,14 @@ export function SubscriptionSuggestions() {
     });
     success();
     toast.success("נוצר חוק קבוע", { description: c.displayName });
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(c.merchantKey);
-      return next;
-    });
+    dismissInsight("subscription", c.merchantKey);
+    setDismissedTick((t) => t + 1);
   }
 
   function dismiss(mKey: string) {
     tap();
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(mKey);
-      return next;
-    });
+    dismissInsight("subscription", mKey);
+    setDismissedTick((t) => t + 1);
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown, ArrowUp, Check, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,11 @@ import { useFinanceStore } from "@/lib/store";
 import { detectRuleDrift } from "@/lib/rule-drift";
 import { currentMonthKey } from "@/lib/dates";
 import { success, tap } from "@/lib/haptics";
+import {
+  dismissInsight,
+  isInsightDismissed,
+  pruneExpiredDismissals,
+} from "@/lib/insight-dismiss";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -33,7 +38,11 @@ export function RuleDriftCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const updateRule = useFinanceStore((s) => s.updateRule);
 
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dismissedTick, setDismissedTick] = useState(0);
+
+  useEffect(() => {
+    pruneExpiredDismissals();
+  }, []);
 
   const drifts = useMemo(() => {
     if (!hydrated) return [];
@@ -45,7 +54,10 @@ export function RuleDriftCard() {
     });
   }, [hydrated, rules, entries, statuses]);
 
-  const visible = drifts.filter((d) => !dismissed.has(d.ruleId));
+  const visible = useMemo(() => {
+    void dismissedTick;
+    return drifts.filter((d) => !isInsightDismissed("rule-drift", d.ruleId));
+  }, [drifts, dismissedTick]);
 
   if (!hydrated) return null;
   if (visible.length === 0) return null;
@@ -57,20 +69,14 @@ export function RuleDriftCard() {
     toast.success("האומדן עודכן", {
       description: `${d.label} → ${ILS.format(d.suggestedEstimate)}`,
     });
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(d.ruleId);
-      return next;
-    });
+    dismissInsight("rule-drift", d.ruleId);
+    setDismissedTick((t) => t + 1);
   }
 
   function dismiss(ruleId: string) {
     tap();
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      next.add(ruleId);
-      return next;
-    });
+    dismissInsight("rule-drift", ruleId);
+    setDismissedTick((t) => t + 1);
   }
 
   return (
