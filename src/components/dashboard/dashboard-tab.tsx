@@ -204,6 +204,12 @@ const NetWorthCard = lazy(() =>
   })),
 );
 
+const BillingCalendarCard = lazy(() =>
+  import("@/components/dashboard/billing-calendar-card").then((m) => ({
+    default: m.BillingCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -244,6 +250,11 @@ export function DashboardTab() {
       {/* NET WORTH — assets minus debts snapshot. */}
       <div className="sm:col-span-6">
         <Safe name="NetWorthCard"><NetWorthCard /></Safe>
+      </div>
+
+      {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
+      <div className="sm:col-span-6">
+        <Safe name="BillingCalendarCard"><BillingCalendarCard /></Safe>
       </div>
 
       {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
