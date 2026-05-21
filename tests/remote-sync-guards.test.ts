@@ -159,4 +159,36 @@ describe("remote-state-sync richness guards", () => {
     });
     expect(out.apply).toBe(true);
   });
+
+  // ── Force-apply bypass (explicit restore) ─────────────────────────
+  // When the user triggers Restore the next GET must NOT apply
+  // richness guards — restore is the one case where shrinking is
+  // intentional. Mirror of the bypass branch in remote-state-sync.
+  function decideForceApply(args: {
+    forceApply: boolean;
+    hasBlob: boolean;
+  }): Decision {
+    if (args.forceApply && args.hasBlob) {
+      return { apply: true, reason: "remote-newer-or-empty-local" };
+    }
+    return { apply: false, reason: "no-force-apply" };
+  }
+
+  it("force-apply: applies remote unconditionally when flag set", () => {
+    expect(decideForceApply({ forceApply: true, hasBlob: true }).apply).toBe(
+      true,
+    );
+  });
+
+  it("force-apply: no-op without blob", () => {
+    expect(decideForceApply({ forceApply: true, hasBlob: false }).apply).toBe(
+      false,
+    );
+  });
+
+  it("force-apply: no-op when flag absent", () => {
+    expect(decideForceApply({ forceApply: false, hasBlob: true }).apply).toBe(
+      false,
+    );
+  });
 });

@@ -25,7 +25,9 @@ import { tap } from "@/lib/haptics";
  * safety net, not a hard barrier between the user and their session
  * controls.
  */
-async function safeBackupBeforeNav(): Promise<void> {
+async function safeBackupBeforeNav(
+  reason: "pre-sign-in" | "pre-sign-out" | "pre-account-switch" = "pre-sign-out",
+): Promise<void> {
   if (typeof window === "undefined") return;
   // 1) ALWAYS capture a local safety snapshot first. This survives
   //    identity changes, network failures, and Zustand re-hydration.
@@ -35,7 +37,7 @@ async function safeBackupBeforeNav(): Promise<void> {
     );
     const { useFinanceStore } = await import("@/lib/store");
     const s = useFinanceStore.getState();
-    captureSafetyBackup("pre-sign-out", {
+    captureSafetyBackup(reason, {
       entries: s.entries,
       rules: s.rules,
       statuses: s.statuses,
@@ -188,15 +190,22 @@ export function AuthCard() {
               </div>
             </div>
           </div>
-          <motion.a
+          <motion.button
+            type="button"
             whileTap={{ scale: 0.96 }}
-            href="/api/auth/signin?callbackUrl=/"
-            onClick={() => tap()}
+            onClick={async () => {
+              tap();
+              toast.message("יוצרים גיבוי לפני התחברות…", {
+                duration: 2000,
+              });
+              await safeBackupBeforeNav("pre-sign-in");
+              window.location.href = "/api/auth/signin?callbackUrl=/";
+            }}
             className="flex items-center gap-1.5 rounded-full border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-4 py-2 text-xs font-medium text-[color:var(--neon)] transition-colors hover:bg-[color:var(--neon)]/15"
           >
             <LogIn className="size-3.5" />
             התחבר עם Google
-          </motion.a>
+          </motion.button>
         </div>
       </section>
     );
@@ -233,7 +242,7 @@ export function AuthCard() {
                 toast.message("יוצרים גיבוי לפני החלפת חשבון…", {
                   duration: 2500,
                 });
-                await safeBackupBeforeNav();
+                await safeBackupBeforeNav("pre-account-switch");
                 window.location.href = "/api/auth/signout?callbackUrl=/";
               }}
               className="flex items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-[color:var(--neon)]/40 hover:text-[color:var(--neon)]"

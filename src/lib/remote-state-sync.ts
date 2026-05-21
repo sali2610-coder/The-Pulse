@@ -5,6 +5,7 @@ import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import {
   captureSafetyBackup,
+  consumeForceApplyNext,
   richness,
   type SafetyPayload,
   type SafetyReason,
@@ -239,6 +240,18 @@ export function useRemoteStateSync(): void {
           );
         }
         const remoteR = remoteRichness(remoteState);
+
+        // ── Explicit-restore bypass ─────────────────────────────────
+        // The user just clicked Restore. Honor remote unconditionally
+        // for THIS pull so a restore-to-smaller-state isn't blocked by
+        // the richness guards. Flag is single-use (localStorage,
+        // consumed on read).
+        const forceApply = consumeForceApplyNext();
+        if (forceApply && data?.blob) {
+          safetyBackup("pre-remote-apply");
+          applyRemote(data.blob.state);
+          return;
+        }
 
         // ── Apply / preserve policy — every destructive branch must
         //     take a safety snapshot first AND refuse to apply an

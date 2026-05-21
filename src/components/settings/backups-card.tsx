@@ -29,6 +29,10 @@ import {
   isEncryptedEnvelope,
 } from "@/lib/backup-crypto";
 import { recommendBackup } from "@/lib/backup-recommender";
+import {
+  recordRestoreResult,
+  setForceApplyNext,
+} from "@/lib/local-safety-snapshots";
 import { DeviceRecoveryCard } from "@/components/settings/device-recovery-card";
 import { SafetyDiagnostics } from "@/components/settings/safety-diagnostics";
 
@@ -232,6 +236,20 @@ export function BackupsCard() {
       }
       if (res.ok && data.ok) {
         success();
+        // Tell the next remote-state-sync GET to apply the cloud blob
+        // even if it's smaller than the current local store — restore
+        // intentionally replaces local with the chosen backup.
+        setForceApplyNext("cloud-restore");
+        const expectedRichness = data.targetSummary?.richness ?? 0;
+        const beforeRichness = data.liveSummary?.richness ?? 0;
+        recordRestoreResult({
+          at: Date.now(),
+          source: "cloud",
+          ok: true,
+          beforeRichness,
+          expectedRichness,
+          afterRichness: -1, // will be filled on next page load
+        });
         toast.success("הגיבוי שוחזר", {
           description:
             "טען את הדף מחדש כדי לראות את הנתונים על המכשיר.",

@@ -8,8 +8,14 @@ import { toast } from "sonner";
 import { useFinanceStore } from "@/lib/store";
 import {
   captureSafetyBackup,
+  listRecoverableSnapshots,
   listSafetyBackups,
+  readLastRestoreResult,
+  recordRestoreResult,
   richness,
+  summarizePayload,
+  verifyRestore,
+  type RestoreResult,
   type SafetyPayload,
   type SafetySnapshot,
 } from "@/lib/local-safety-snapshots";
@@ -71,6 +77,7 @@ export function SafetyDiagnostics() {
   const [session, setSession] = useState<Session>(null);
   const [deviceId, setDeviceId] = useState<string>("");
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
+  const [lastRestore, setLastRestore] = useState<RestoreResult | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +86,7 @@ export function SafetyDiagnostics() {
       setDeviceId(getOrCreateDeviceId());
       setSnapshots(listSafetyBackups());
       setBlockedReason(readLastBlockedReason());
+      setLastRestore(readLastRestoreResult());
       void fetch("/api/auth/session", { cache: "no-store" })
         .then((r) => r.json())
         .then((j) => {
@@ -105,7 +113,14 @@ export function SafetyDiagnostics() {
   function refresh() {
     setSnapshots(listSafetyBackups());
     setBlockedReason(readLastBlockedReason());
+    setLastRestore(readLastRestoreResult());
   }
+
+  const recoverable = listRecoverableSnapshots();
+  const richest = recoverable[0] ?? null;
+  const storageScope = session?.user?.id
+    ? `user:${session.user.id.slice(0, 8)}`
+    : `device:${deviceId.slice(0, 10)}`;
 
   function manualCapture() {
     tap();
@@ -125,9 +140,11 @@ export function SafetyDiagnostics() {
     ) {
       return;
     }
-    // Always snapshot the CURRENT live state before applying so
-    // the recovery itself is reversible.
-    captureSafetyBackup("pre-restore", localPayload());
+    // Capture the current live state so restore is reversible.
+    const livePayload = localPayload();
+    const liveBefore = summarizePayload(livePayload);
+    captureSafetyBackup("pre-restore", livePayload);
+
     const api = useFinanceStore.setState as (
       partial: Partial<ReturnType<typeof useFinanceStore.getState>>,
     ) => void;
@@ -141,6 +158,49 @@ export function SafetyDiagnostics() {
       monthlyBudget: snap.payload.monthlyBudget,
       lastSyncedAt: snap.payload.lastSyncedAt,
       audioEnabled: snap.payload.audioEnabled,
+    });
+
+    // Verify counts in the live store match the snapshot. If not,
+    // rollback to pre-restore and surface the mismatch.
+    const liveAfter = summarizePayload(localPayload());
+    const verify = verifyRestore({
+      expected: snap.counts,
+      actual: liveAfter,
+    });
+    if (!verify.ok) {
+      api({
+        entries: livePayload.entries,
+        rules: livePayload.rules,
+        statuses: livePayload.statuses,
+        accounts: livePayload.accounts,
+        loans: livePayload.loans,
+        incomes: livePayload.incomes,
+        monthlyBudget: livePayload.monthlyBudget,
+        lastSyncedAt: livePayload.lastSyncedAt,
+        audioEnabled: livePayload.audioEnabled,
+      });
+      recordRestoreResult({
+        at: Date.now(),
+        source: "local-safety",
+        ok: false,
+        reason: verify.mismatch,
+        beforeRichness: liveBefore.richness,
+        expectedRichness: snap.counts.richness,
+        afterRichness: liveAfter.richness,
+        rolledBack: true,
+      });
+      toast.error(`השחזור נכשל: ${verify.mismatch}. המצב הקודם הוחזר.`);
+      refresh();
+      return;
+    }
+
+    recordRestoreResult({
+      at: Date.now(),
+      source: "local-safety",
+      ok: true,
+      beforeRichness: liveBefore.richness,
+      expectedRichness: snap.counts.richness,
+      afterRichness: liveAfter.richness,
     });
     success();
     toast.success("גיבוי בטיחות שוחזר");
@@ -165,6 +225,7 @@ export function SafetyDiagnostics() {
           {session?.user?.id ? session.user.id.slice(0, 8) + "…" : "—"}
         </Dt>
         <Dt label="מזהה מכשיר">{deviceId.slice(0, 10) + "…"}</Dt>
+        <Dt label="storage scope">{storageScope}</Dt>
         <Dt label="פריטים נוכחיים">{localRichness}</Dt>
         <Dt label="חיובים">{entries.length}</Dt>
         <Dt label="חשבונות">{accounts.length}</Dt>
@@ -172,7 +233,49 @@ export function SafetyDiagnostics() {
         <Dt label="קבועים">{rules.length}</Dt>
         <Dt label="הכנסות">{incomes.length}</Dt>
         <Dt label="גיבויי בטיחות">{snapshots.length}</Dt>
+        <Dt label="גיבוי עשיר ביותר">
+          {richest ? `${richest.counts.richness}` : "—"}
+        </Dt>
       </dl>
+
+      {richest && richest.counts.richness > localRichness ? (
+        <div className="rounded-lg border border-[#34D399]/30 bg-[#34D399]/5 p-2 text-[10.5px] text-[#34D399]">
+          <div className="font-medium">גיבוי עשיר יותר זמין</div>
+          <div className="text-foreground/80">
+            {richest.counts.richness} פריטים · {fmtTime(richest.capturedAt)} · {richest.reason}
+          </div>
+          <button
+            type="button"
+            onClick={() => restoreSnap(richest)}
+            className="mt-1 rounded-md border border-[#34D399]/40 bg-[#34D399]/10 px-2 py-0.5 text-[10px] text-[#34D399] hover:bg-[#34D399]/20"
+          >
+            שחזר את הגיבוי העשיר ביותר
+          </button>
+        </div>
+      ) : null}
+
+      {lastRestore ? (
+        <div
+          className={`rounded-lg border p-2 text-[10px] ${
+            lastRestore.ok
+              ? "border-white/10 bg-black/30 text-muted-foreground"
+              : "border-[#F87171]/30 bg-[#F87171]/5 text-destructive"
+          }`}
+        >
+          <div className="font-medium">
+            שחזור אחרון · {lastRestore.ok ? "הצליח" : "נכשל"}
+          </div>
+          <div dir="ltr" data-mono="true">
+            {fmtTime(lastRestore.at)} · {lastRestore.source} · before={lastRestore.beforeRichness} → expected={lastRestore.expectedRichness} → after={lastRestore.afterRichness}
+            {lastRestore.rolledBack ? " · ROLLED BACK" : ""}
+          </div>
+          {lastRestore.reason ? (
+            <pre className="overflow-x-auto whitespace-pre-wrap" dir="ltr">
+              {lastRestore.reason}
+            </pre>
+          ) : null}
+        </div>
+      ) : null}
 
       {blockedReason ? (
         <div className="rounded-lg border border-[#F87171]/30 bg-black/30 p-2 text-[10px] text-destructive">

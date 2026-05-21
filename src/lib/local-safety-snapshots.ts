@@ -24,6 +24,8 @@ import type {
 } from "@/types/finance";
 
 const STORAGE_KEY = "sally.safety.snapshots.v1";
+const FORCE_APPLY_KEY = "sally.safety.forceApplyNextGet";
+const LAST_RESTORE_KEY = "sally.safety.lastRestore";
 const MAX_ENTRIES = 20;
 
 export type SafetyPayload = {
@@ -186,4 +188,127 @@ export function clearSafetyBackups(): void {
   } catch {
     /* ignore */
   }
+}
+
+// ── Force-apply-next flag ─────────────────────────────────────────────
+// When the user explicitly initiates a restore (server-side or local),
+// the very next remote-state-sync GET must bypass the richness guards —
+// otherwise a restore-to-smaller-state legitimately gets blocked. The
+// flag is consumed on first read so it only suppresses ONE apply.
+
+export function setForceApplyNext(reason: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      FORCE_APPLY_KEY,
+      JSON.stringify({ reason, setAt: Date.now() }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function consumeForceApplyNext(): { reason: string; setAt: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FORCE_APPLY_KEY);
+    if (!raw) return null;
+    window.localStorage.removeItem(FORCE_APPLY_KEY);
+    return JSON.parse(raw) as { reason: string; setAt: number };
+  } catch {
+    return null;
+  }
+}
+
+// ── Last-restore diagnostic record ────────────────────────────────────
+
+export type RestoreResult = {
+  at: number;
+  source: "local-safety" | "cloud" | "device-recovery";
+  ok: boolean;
+  reason?: string;
+  beforeRichness: number;
+  afterRichness: number;
+  expectedRichness: number;
+  rolledBack?: boolean;
+};
+
+export function recordRestoreResult(result: RestoreResult): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LAST_RESTORE_KEY, JSON.stringify(result));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readLastRestoreResult(): RestoreResult | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_RESTORE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as RestoreResult;
+  } catch {
+    return null;
+  }
+}
+
+// ── Multi-scope recoverable snapshot search ───────────────────────────
+// Phase 151: when an account swap leaves the user with apparently-empty
+// state, the richest available local snapshot is the recovery path —
+// regardless of which reason captured it. This returns the full list
+// sorted by richness DESC then capturedAt DESC, so callers can offer a
+// "use this one" CTA pointing at the heaviest candidate.
+
+export function listRecoverableSnapshots(): SafetySnapshot[] {
+  return readAll()
+    .slice()
+    .sort((a, b) => {
+      if (b.counts.richness !== a.counts.richness) {
+        return b.counts.richness - a.counts.richness;
+      }
+      return b.capturedAt - a.capturedAt;
+    });
+}
+
+// ── Restore verification ──────────────────────────────────────────────
+// After applying a payload via Zustand setState, verify that the live
+// store's entity counts match the snapshot we just tried to write. The
+// caller passes BOTH the expected (snapshot) and observed (live store)
+// counts; we return ok plus a human-readable mismatch reason for the
+// diagnostic surface.
+
+export type VerifyRestoreInput = {
+  expected: SafetyCounts;
+  actual: SafetyCounts;
+};
+
+export function verifyRestore(input: VerifyRestoreInput): {
+  ok: boolean;
+  mismatch?: string;
+} {
+  const { expected, actual } = input;
+  const keys: Array<keyof Omit<SafetyCounts, "richness" | "monthlyBudget">> = [
+    "entries",
+    "rules",
+    "statuses",
+    "accounts",
+    "loans",
+    "incomes",
+  ];
+  for (const k of keys) {
+    if (expected[k] !== actual[k]) {
+      return {
+        ok: false,
+        mismatch: `${k}: expected ${expected[k]}, got ${actual[k]}`,
+      };
+    }
+  }
+  if (expected.monthlyBudget !== actual.monthlyBudget) {
+    return {
+      ok: false,
+      mismatch: `monthlyBudget: expected ${expected.monthlyBudget}, got ${actual.monthlyBudget}`,
+    };
+  }
+  return { ok: true };
 }
