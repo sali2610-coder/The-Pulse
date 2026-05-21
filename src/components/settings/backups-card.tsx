@@ -7,6 +7,7 @@ import {
   CloudUpload,
   Download,
   History,
+  Lock,
   RefreshCcw,
   RotateCcw,
   ShieldCheck,
@@ -22,6 +23,11 @@ import {
   downloadEnvelope,
   parseEnvelope,
 } from "@/lib/backup-export";
+import {
+  decryptEnvelope,
+  encryptPayload,
+  isEncryptedEnvelope,
+} from "@/lib/backup-crypto";
 import { recommendBackup } from "@/lib/backup-recommender";
 
 type Summary = {
@@ -236,27 +242,65 @@ export function BackupsCard() {
     }
   }
 
+  function snapshotPayload() {
+    const store = useFinanceStore.getState();
+    return {
+      entries: store.entries,
+      rules: store.rules,
+      statuses: store.statuses,
+      accounts: store.accounts,
+      loans: store.loans,
+      incomes: store.incomes,
+      monthlyBudget: store.monthlyBudget,
+      lastSyncedAt: store.lastSyncedAt,
+      audioEnabled: store.audioEnabled,
+    };
+  }
+
   function exportLocal() {
     tap();
-    const store = useFinanceStore.getState();
     const env = buildEnvelope({
-      payload: {
-        entries: store.entries,
-        rules: store.rules,
-        statuses: store.statuses,
-        accounts: store.accounts,
-        loans: store.loans,
-        incomes: store.incomes,
-        monthlyBudget: store.monthlyBudget,
-        lastSyncedAt: store.lastSyncedAt,
-        audioEnabled: store.audioEnabled,
-      },
+      payload: snapshotPayload(),
       schemaVersion: 1,
-      source: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+      source:
+        typeof navigator !== "undefined" ? navigator.userAgent : undefined,
     });
     downloadEnvelope(env);
     success();
     toast.success("גיבוי JSON הורד");
+  }
+
+  async function exportEncrypted() {
+    tap();
+    if (typeof window === "undefined") return;
+    const passphrase = window.prompt(
+      "הזן סיסמה לגיבוי המוצפן (לפחות 4 תווים).\nהסיסמה אינה ניתנת לשחזור — שמור אותה במקום בטוח.",
+    );
+    if (!passphrase || passphrase.length < 4) {
+      toast.error("הסיסמה קצרה מדי");
+      return;
+    }
+    try {
+      const env = await encryptPayload(snapshotPayload(), passphrase);
+      const blob = new Blob([JSON.stringify(env, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date(env.exportedAt)
+        .toISOString()
+        .replace(/[:.]/g, "-");
+      a.href = url;
+      a.download = `sally-backup-encrypted-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      success();
+      toast.success("גיבוי מוצפן הורד");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "ההצפנה נכשלה");
+    }
   }
 
   function triggerImport() {
@@ -268,7 +312,43 @@ export function BackupsCard() {
     setBusy(true);
     try {
       const text = await file.text();
-      const parsed = parseEnvelope(text);
+      // Detect encrypted envelope. If present, prompt for passphrase
+      // and decrypt before falling through to the regular parser.
+      let plainText = text;
+      try {
+        const maybeEnc = JSON.parse(text) as unknown;
+        if (isEncryptedEnvelope(maybeEnc)) {
+          const passphrase =
+            typeof window === "undefined"
+              ? null
+              : window.prompt("הזן את הסיסמה לקובץ המוצפן");
+          if (!passphrase) {
+            toast.warning("ייבוא בוטל");
+            return;
+          }
+          const result = await decryptEnvelope(maybeEnc, passphrase);
+          if (!result.ok) {
+            toast.error(
+              result.reason === "wrong_passphrase"
+                ? "סיסמה שגויה"
+                : "הקובץ פגום",
+            );
+            return;
+          }
+          // After decrypt we hold the inner plaintext payload — wrap
+          // it as if it had been a regular envelope so parseEnvelope
+          // accepts it.
+          const reWrapped = buildEnvelope({
+            payload: result.payload,
+            schemaVersion: 1,
+            source: "decrypted",
+          });
+          plainText = JSON.stringify(reWrapped);
+        }
+      } catch {
+        /* not encrypted — let parseEnvelope handle parsing */
+      }
+      const parsed = parseEnvelope(plainText);
       if (!parsed.ok) {
         toast.error(`הקובץ אינו תקף · ${parsed.reason}`);
         return;
@@ -434,6 +514,17 @@ export function BackupsCard() {
         >
           <Download className="size-3.5" />
           ייצוא JSON
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            void exportEncrypted();
+          }}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-3 py-2 text-[12px] font-medium text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20 disabled:opacity-50"
+        >
+          <Lock className="size-3.5" />
+          ייצוא מוצפן
         </button>
         <button
           type="button"
