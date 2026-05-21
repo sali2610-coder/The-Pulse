@@ -108,6 +108,15 @@ function AppShellContent() {
     }).total;
   }, [hydrated, entries, rules, statuses, accounts, incomes, monthlyBudget]);
 
+  const pendingCount = useMemo(() => {
+    if (!hydrated) return 0;
+    let n = 0;
+    for (const e of entries) {
+      if (e.needsConfirmation && !e.confirmedAt) n += 1;
+    }
+    return n;
+  }, [hydrated, entries]);
+
   return (
     <main
       data-danger={isOverBudget ? "true" : undefined}
@@ -156,7 +165,21 @@ function AppShellContent() {
           }}
         >
           <TabsList className="w-full bg-surface/60 backdrop-blur-md">
-            <TabsTrigger value="dashboard">לוח</TabsTrigger>
+            <TabsTrigger value="dashboard">
+              <span className="relative inline-flex items-center gap-1">
+                לוח
+                {pendingCount > 0 ? (
+                  <span
+                    aria-label={`${pendingCount} חיובים ממתינים לאישור`}
+                    className="inline-flex min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-bold text-[#050505] tabular-nums leading-none"
+                    style={{ height: 16 }}
+                    data-mono="true"
+                  >
+                    {pendingCount > 9 ? "9+" : pendingCount}
+                  </span>
+                ) : null}
+              </span>
+            </TabsTrigger>
             <TabsTrigger value="analytics">ניתוח</TabsTrigger>
             <TabsTrigger value="history">היסטוריה</TabsTrigger>
             <TabsTrigger value="setup">מדריך</TabsTrigger>
