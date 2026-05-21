@@ -168,6 +168,12 @@ const MonthDeltaCard = lazy(() =>
   })),
 );
 
+const UpcomingDebitsBanner = lazy(() =>
+  import("@/components/dashboard/upcoming-debits-banner").then((m) => ({
+    default: m.UpcomingDebitsBanner as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -188,6 +194,11 @@ export function DashboardTab() {
       {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
+      </div>
+
+      {/* UPCOMING CARD DEBITS — heads-up before the bank pulls. */}
+      <div className="sm:col-span-6">
+        <Safe name="UpcomingDebitsBanner"><UpcomingDebitsBanner /></Safe>
       </div>
 
       {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
