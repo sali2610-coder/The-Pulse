@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { CalendarClock, CreditCard, Repeat2 } from "lucide-react";
+import { CalendarClock, ChevronLeft, CreditCard, Repeat2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
@@ -11,6 +11,9 @@ import { projectCardCycle } from "@/lib/card-cycle";
 import { cardUtilization } from "@/lib/card-utilization";
 import { Pill } from "@/components/ui/pill";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
+import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
+import { tap } from "@/lib/haptics";
+import type { CardCycleProjection } from "@/lib/card-cycle";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -64,6 +67,15 @@ export function CardsPressureCard() {
     return map;
   }, [hydrated, rows, entries]);
 
+  const [drilldown, setDrilldown] = useState<
+    | {
+        accountId: string;
+        label: string;
+        cycle?: CardCycleProjection;
+      }
+    | null
+  >(null);
+
   if (!hydrated) return null;
   const meaningful = rows.filter((r) => r.totalThisMonth > 0);
   if (meaningful.length === 0) return null;
@@ -103,7 +115,29 @@ export function CardsPressureCard() {
               duration: 0.3,
               ease: EASE_OUT_EXPO,
             }}
-            className="flex items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3"
+            whileTap={{ scale: 0.99 }}
+            onClick={() => {
+              tap();
+              setDrilldown({
+                accountId: row.card.id,
+                label: row.card.label,
+                cycle: cycle ?? undefined,
+              });
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                tap();
+                setDrilldown({
+                  accountId: row.card.id,
+                  label: row.card.label,
+                  cycle: cycle ?? undefined,
+                });
+              }
+            }}
+            className="flex cursor-pointer items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3 outline-none transition-colors hover:border-white/14 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[color:var(--neon)]/14 text-[color:var(--neon)]">
               <CreditCard className="size-4" strokeWidth={1.8} />
@@ -180,7 +214,7 @@ export function CardsPressureCard() {
                 </div>
               ) : null}
             </div>
-            <div className="flex shrink-0 flex-col items-end leading-tight">
+            <div className="flex shrink-0 flex-col items-end gap-1 leading-tight">
               <span
                 data-mono="true"
                 dir="ltr"
@@ -188,9 +222,10 @@ export function CardsPressureCard() {
               >
                 −{ILS.format(row.totalThisMonth)}
               </span>
-              <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-                החודש
-              </span>
+              <div className="flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+                <span>החודש</span>
+                <ChevronLeft className="size-2.5" />
+              </div>
             </div>
           </motion.li>
           );
@@ -201,6 +236,29 @@ export function CardsPressureCard() {
         מחושב מהוצאות קבועות מקושרות לכרטיס + תשלומים + חיובים שכבר נכנסו
         השבוע.
       </p>
+
+      <TransactionsDrilldown
+        open={drilldown !== null}
+        onOpenChange={(o) => {
+          if (!o) setDrilldown(null);
+        }}
+        title={drilldown ? `${drilldown.label} — מחזור נוכחי` : ""}
+        subtitle={
+          drilldown?.cycle
+            ? `חלון חיוב נסגר עוד ${drilldown.cycle.daysUntilClose} ימים`
+            : "כל חיובי הכרטיס החודש"
+        }
+        filter="all-this-month"
+        accountFilter={drilldown?.accountId}
+        dateWindow={
+          drilldown?.cycle
+            ? {
+                start: drilldown.cycle.cycleStart,
+                end: drilldown.cycle.cycleEnd,
+              }
+            : undefined
+        }
+      />
     </section>
   );
 }

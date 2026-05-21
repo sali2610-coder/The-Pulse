@@ -13,7 +13,7 @@ import {
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useFinanceStore } from "@/lib/store";
 import { getCategory, type CategoryId } from "@/lib/categories";
-import { currentMonthKey } from "@/lib/dates";
+import { currentMonthKey, monthKeyOf } from "@/lib/dates";
 import { sliceForMonth } from "@/lib/projections";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -27,6 +27,12 @@ type Props = {
   filter: FilterKind;
   /** Optional narrowing — only show entries in this category. */
   categoryFilter?: CategoryId;
+  /** Optional narrowing — only show entries bound to this Account.id. */
+  accountFilter?: string;
+  /** Optional override — when present, show slices whose chargeDate
+   *  falls in this absolute window instead of the current calendar
+   *  month. Used for card billing-cycle drilldowns that span months. */
+  dateWindow?: { start: Date; end: Date };
 };
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -57,6 +63,8 @@ export function TransactionsDrilldown({
   subtitle,
   filter,
   categoryFilter,
+  accountFilter,
+  dateWindow,
 }: Props) {
   const entries = useFinanceStore((s) => s.entries);
   const deleteExpense = useFinanceStore((s) => s.deleteExpense);
@@ -70,11 +78,37 @@ export function TransactionsDrilldown({
       sliceAmount: number;
       chargeDate: Date;
     }> = [];
+
+    // Determine which monthKeys to scan: default = current month;
+    // when a dateWindow is supplied, scan every month the window
+    // touches (typically 1 or 2 for a billing cycle).
+    const monthsToScan = new Set<string>();
+    if (dateWindow) {
+      monthsToScan.add(monthKeyOf(dateWindow.start));
+      monthsToScan.add(monthKeyOf(dateWindow.end));
+    } else {
+      monthsToScan.add(monthKey);
+    }
+    const startMs = dateWindow ? dateWindow.start.getTime() : null;
+    const endMs = dateWindow ? dateWindow.end.getTime() : null;
+
     for (const e of entries) {
       if (e.needsConfirmation) continue;
       if (e.bankPending) continue;
       if (categoryFilter && e.category !== categoryFilter) continue;
-      const slice = sliceForMonth(e, monthKey);
+      if (accountFilter && e.accountId !== accountFilter) continue;
+
+      let slice: { amount: number; chargeDate: Date } | undefined;
+      for (const mk of monthsToScan) {
+        const candidate = sliceForMonth(e, mk);
+        if (!candidate) continue;
+        if (startMs !== null && endMs !== null) {
+          const ms = candidate.chargeDate.getTime();
+          if (ms < startMs || ms > endMs) continue;
+        }
+        slice = candidate;
+        break;
+      }
       if (!slice) continue;
 
       if (filter === "actual-this-month") {
@@ -96,7 +130,14 @@ export function TransactionsDrilldown({
     return out.sort(
       (a, b) => b.chargeDate.getTime() - a.chargeDate.getTime(),
     );
-  }, [entries, monthKey, filter, categoryFilter]);
+  }, [
+    entries,
+    monthKey,
+    filter,
+    categoryFilter,
+    accountFilter,
+    dateWindow,
+  ]);
 
   const total = rows.reduce((sum, r) => sum + r.sliceAmount, 0);
 
