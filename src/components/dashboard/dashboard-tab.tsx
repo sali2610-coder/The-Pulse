@@ -180,6 +180,12 @@ const CashflowTrendCard = lazy(() =>
   })),
 );
 
+const SmartInsightsCard = lazy(() =>
+  import("@/components/dashboard/smart-insights-card").then((m) => ({
+    default: m.SmartInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -220,6 +226,11 @@ export function DashboardTab() {
       {/* CASHFLOW TREND — 6-month income-vs-expense sparkline. */}
       <div className="sm:col-span-6">
         <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
+      </div>
+
+      {/* SMART INSIGHTS DIGEST — chip strip of pending detectors. */}
+      <div className="sm:col-span-6">
+        <Safe name="SmartInsightsCard"><SmartInsightsCard /></Safe>
       </div>
 
       {/* COPILOT — forward-looking proactive insights */}
