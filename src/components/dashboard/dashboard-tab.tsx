@@ -216,6 +216,12 @@ const StaleAnchorsBanner = lazy(() =>
   })),
 );
 
+const FixedCostRatioCard = lazy(() =>
+  import("@/components/dashboard/fixed-cost-ratio-card").then((m) => ({
+    default: m.FixedCostRatioCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -261,6 +267,11 @@ export function DashboardTab() {
       {/* NET WORTH — assets minus debts snapshot. */}
       <div className="sm:col-span-6">
         <Safe name="NetWorthCard"><NetWorthCard /></Safe>
+      </div>
+
+      {/* FIXED-COST RATIO — committed % of monthly income. */}
+      <div className="sm:col-span-6">
+        <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
       </div>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
