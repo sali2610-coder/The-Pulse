@@ -162,6 +162,12 @@ const AnomalyBanner = lazy(() =>
   })),
 );
 
+const MonthDeltaCard = lazy(() =>
+  import("@/components/dashboard/month-delta-card").then((m) => ({
+    default: m.MonthDeltaCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -187,6 +193,11 @@ export function DashboardTab() {
       {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
       <div className="sm:col-span-6">
         <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
+      </div>
+
+      {/* MONTH-OVER-MONTH DELTA — net change + top grew/shrunk. */}
+      <div className="sm:col-span-6">
+        <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
       </div>
 
       {/* COPILOT — forward-looking proactive insights */}
