@@ -321,9 +321,13 @@ export function LoansPanel() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 8 }}
                   className={`overflow-hidden rounded-2xl border p-3 ${
-                    loan.active
-                      ? "border-border/60 bg-surface/60"
-                      : "border-border/40 bg-surface/30 opacity-60"
+                    !loan.active
+                      ? "border-border/40 bg-surface/30 opacity-60"
+                      : sched.isComplete
+                        ? "border-[#34D399]/30 bg-surface/40 opacity-75"
+                        : sched.isFuture
+                          ? "border-border/40 bg-surface/40 opacity-80"
+                          : "border-border/60 bg-surface/60"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -344,6 +348,15 @@ export function LoansPanel() {
                         </span>
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                        {sched.isComplete ? (
+                          <span className="rounded-full bg-[#34D399]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#34D399]">
+                            הושלם
+                          </span>
+                        ) : sched.isFuture ? (
+                          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            טרם החל
+                          </span>
+                        ) : null}
                         {total && paid > 0 ? (
                           <span data-mono="true">
                             תשלום {paid}/{total}

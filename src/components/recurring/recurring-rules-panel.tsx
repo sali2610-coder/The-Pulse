@@ -66,7 +66,12 @@ export function RecurringRulesPanel() {
               ? "cash"
               : "unknown";
       buckets[key].rules.push(r);
-      if (r.active) buckets[key].total += r.estimatedAmount;
+      // Bucket totals reflect what actually fires THIS month — a past-end
+      // installment plan or a not-yet-started one is "active=true" on the
+      // record but doesn't bill, so it must not inflate the group total.
+      if (r.active && ruleSchedule(r, monthKey).active) {
+        buckets[key].total += r.estimatedAmount;
+      }
     }
     // Stable order: installments first, then by total desc.
     const ordered: (typeof buckets)[GroupKey][] = [];
@@ -78,7 +83,7 @@ export function RecurringRulesPanel() {
       .filter((b) => b.rules.length > 0)
       .sort((a, b) => b.total - a.total);
     return [...ordered, ...rest];
-  }, [rules]);
+  }, [rules, monthKey]);
 
   const [collapsed, setCollapsed] = useState<Set<GroupKey>>(new Set());
   const toggleGroup = (key: GroupKey) => {
@@ -180,9 +185,13 @@ export function RecurringRulesPanel() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: 8 }}
                     className={`rounded-2xl border p-3 ${
-                      rule.active
-                        ? "border-border/60 bg-surface/60"
-                        : "border-border/40 bg-surface/30 opacity-60"
+                      !rule.active
+                        ? "border-border/40 bg-surface/30 opacity-60"
+                        : sched.isComplete
+                          ? "border-[#34D399]/30 bg-surface/40 opacity-75"
+                          : sched.isFuture
+                            ? "border-border/40 bg-surface/40 opacity-80"
+                            : "border-border/60 bg-surface/60"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -232,9 +241,13 @@ export function RecurringRulesPanel() {
                           >
                             {paid
                               ? "שולם החודש"
-                              : rule.active
-                                ? "ממתין"
-                                : "כבוי"}
+                              : sched.isComplete
+                                ? "הושלם"
+                                : sched.isFuture
+                                  ? "טרם החל"
+                                  : rule.active
+                                    ? "ממתין"
+                                    : "כבוי"}
                           </span>
                           {rule.paymentSource && rule.paymentSource !== "unknown" ? (
                             <>
