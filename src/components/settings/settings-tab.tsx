@@ -14,12 +14,14 @@ import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-pane
 import { SubscriptionSuggestions } from "./subscription-suggestions";
 import { RuleDriftCard } from "./rule-drift-card";
 import { DormantRulesCard } from "./dormant-rules-card";
+import { BudgetRecommendationCard } from "./budget-recommendation-card";
 
 export function SettingsTab() {
   return (
     <div className="flex flex-col gap-4">
       <AuthCard />
       <DeviceRecoveryCard />
+      <BudgetRecommendationCard />
       <BudgetInput />
       <IntegrationInfo />
       <PushToggle />
