@@ -14,6 +14,7 @@ import { tap } from "@/lib/haptics";
 import { RuleForm } from "./rule-form";
 import { buildRuleInstallmentSummary } from "@/lib/installment-summary";
 import { InstallmentSummaryBlock } from "./installment-summary-block";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const formatILS = (value: number) =>
   new Intl.NumberFormat("he-IL", {
@@ -324,14 +325,30 @@ export function RecurringRulesPanel() {
       ) : null}
 
       {mode.kind === "new" ? (
-        <RuleForm
-          submitLabel="הוסף"
-          onCancel={() => setMode({ kind: "list" })}
-          onSubmit={(values) => {
-            addRule(values);
-            setMode({ kind: "list" });
-          }}
-        />
+        <ErrorBoundary
+          name="RuleForm:new"
+          fallback={
+            <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[12px] text-destructive">
+              לא ניתן לטעון את הטופס. נסה לרענן את הדף או לפתוח שוב.
+              <button
+                type="button"
+                onClick={() => setMode({ kind: "list" })}
+                className="mt-2 block rounded-lg border border-destructive/40 px-3 py-1 text-[11px]"
+              >
+                חזרה לרשימה
+              </button>
+            </div>
+          }
+        >
+          <RuleForm
+            submitLabel="הוסף"
+            onCancel={() => setMode({ kind: "list" })}
+            onSubmit={(values) => {
+              addRule(values);
+              setMode({ kind: "list" });
+            }}
+          />
+        </ErrorBoundary>
       ) : null}
 
       {mode.kind === "edit"
@@ -342,15 +359,31 @@ export function RecurringRulesPanel() {
               return null;
             }
             return (
-              <RuleForm
-                initial={rule}
-                submitLabel="שמור שינויים"
-                onCancel={() => setMode({ kind: "list" })}
-                onSubmit={(values) => {
-                  updateRule(rule.id, values);
-                  setMode({ kind: "list" });
-                }}
-              />
+              <ErrorBoundary
+                name="RuleForm:edit"
+                fallback={
+                  <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[12px] text-destructive">
+                    לא ניתן לטעון את הטופס. חזרה לרשימה.
+                    <button
+                      type="button"
+                      onClick={() => setMode({ kind: "list" })}
+                      className="mt-2 block rounded-lg border border-destructive/40 px-3 py-1 text-[11px]"
+                    >
+                      חזרה לרשימה
+                    </button>
+                  </div>
+                }
+              >
+                <RuleForm
+                  initial={rule}
+                  submitLabel="שמור שינויים"
+                  onCancel={() => setMode({ kind: "list" })}
+                  onSubmit={(values) => {
+                    updateRule(rule.id, values);
+                    setMode({ kind: "list" });
+                  }}
+                />
+              </ErrorBoundary>
             );
           })()
         : null}

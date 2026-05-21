@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
@@ -113,12 +113,29 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
     onSubmit(payload);
   });
 
+  // Scroll the form into view as soon as it mounts. Without this,
+  // tapping "+חדשה" deep inside Settings would mount the form below
+  // the user's current scroll position — they'd see only the
+  // surrounding chrome and assume the action did nothing.
+  const formRef = useRef<HTMLFormElement | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      formRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 80);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <motion.form
+      ref={formRef}
       onSubmit={submit}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4 rounded-2xl border border-border/60 bg-surface/60 p-4"
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="relative z-10 space-y-4 rounded-2xl border border-border/60 bg-surface/60 p-4"
     >
       {/* Mode toggle */}
       <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/8 bg-background/40 p-1">
