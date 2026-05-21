@@ -192,6 +192,12 @@ const UpcomingOutflowsCard = lazy(() =>
   })),
 );
 
+const LoanSummaryCard = lazy(() =>
+  import("@/components/dashboard/loan-summary-card").then((m) => ({
+    default: m.LoanSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -222,6 +228,11 @@ export function DashboardTab() {
       {/* 7-DAY OUTFLOW DIGEST — entries + rules + loans coming up. */}
       <div className="sm:col-span-6">
         <Safe name="UpcomingOutflowsCard"><UpcomingOutflowsCard /></Safe>
+      </div>
+
+      {/* LOAN BURDEN — aggregate across all active loans. */}
+      <div className="sm:col-span-6">
+        <Safe name="LoanSummaryCard"><LoanSummaryCard /></Safe>
       </div>
 
       {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
