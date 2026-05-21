@@ -12,9 +12,11 @@ import {
   aggregateCardUtilization,
   cardUtilization,
 } from "@/lib/card-utilization";
+import { detectIncompleteCards } from "@/lib/incomplete-cards";
 import { Pill } from "@/components/ui/pill";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
 import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
+import { navigateToTab } from "@/lib/tab-nav";
 import { tap } from "@/lib/haptics";
 import type { CardCycleProjection } from "@/lib/card-cycle";
 
@@ -78,6 +80,11 @@ export function CardsPressureCard() {
     });
   }, [hydrated, accounts, cyclesById]);
 
+  const incompleteCount = useMemo(() => {
+    if (!hydrated) return 0;
+    return detectIncompleteCards({ accounts }).length;
+  }, [hydrated, accounts]);
+
   const [drilldown, setDrilldown] = useState<
     | {
         accountId: string;
@@ -111,18 +118,33 @@ export function CardsPressureCard() {
           <CreditCard className="size-3 text-[color:var(--neon)]" />
           עומס לפי כרטיס
         </span>
-        {aggregate ? (
-          <span
-            className="rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em]"
-            style={{
-              background: `${aggregateTone}22`,
-              color: aggregateTone,
-            }}
-            dir="ltr"
-          >
-            ניצול {aggregatePct}% · {aggregate.cardCount} כרטיסים
-          </span>
-        ) : null}
+        <div className="flex items-center gap-1.5">
+          {aggregate ? (
+            <span
+              className="rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em]"
+              style={{
+                background: `${aggregateTone}22`,
+                color: aggregateTone,
+              }}
+              dir="ltr"
+            >
+              ניצול {aggregatePct}% · {aggregate.cardCount} כרטיסים
+            </span>
+          ) : null}
+          {incompleteCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                navigateToTab("settings", "accounts");
+              }}
+              className="rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em] text-[#D4AF37] transition-colors hover:bg-[#D4AF37]/20"
+              aria-label={`השלם הגדרות עבור ${incompleteCount} כרטיסים`}
+            >
+              השלם הגדרות · {incompleteCount}
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <ul className="flex flex-col gap-2">
