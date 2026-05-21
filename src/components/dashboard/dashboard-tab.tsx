@@ -228,6 +228,12 @@ const FxSummaryCard = lazy(() =>
   })),
 );
 
+const RefundSummaryCard = lazy(() =>
+  import("@/components/dashboard/refund-summary-card").then((m) => ({
+    default: m.RefundSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -283,6 +289,11 @@ export function DashboardTab() {
       {/* FX OUTFLOWS — foreign-currency totals (informational). */}
       <div className="sm:col-span-6">
         <Safe name="FxSummaryCard"><FxSummaryCard /></Safe>
+      </div>
+
+      {/* REFUNDS — credit-backs this month (positive flow). */}
+      <div className="sm:col-span-6">
+        <Safe name="RefundSummaryCard"><RefundSummaryCard /></Safe>
       </div>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
