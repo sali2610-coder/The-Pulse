@@ -186,6 +186,12 @@ const SmartInsightsCard = lazy(() =>
   })),
 );
 
+const UpcomingOutflowsCard = lazy(() =>
+  import("@/components/dashboard/upcoming-outflows-card").then((m) => ({
+    default: m.UpcomingOutflowsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -211,6 +217,11 @@ export function DashboardTab() {
       {/* UPCOMING CARD DEBITS — heads-up before the bank pulls. */}
       <div className="sm:col-span-6">
         <Safe name="UpcomingDebitsBanner"><UpcomingDebitsBanner /></Safe>
+      </div>
+
+      {/* 7-DAY OUTFLOW DIGEST — entries + rules + loans coming up. */}
+      <div className="sm:col-span-6">
+        <Safe name="UpcomingOutflowsCard"><UpcomingOutflowsCard /></Safe>
       </div>
 
       {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
