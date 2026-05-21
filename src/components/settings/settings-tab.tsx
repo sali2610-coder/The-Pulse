@@ -13,6 +13,7 @@ import { IncomePanel } from "@/components/income/income-panel";
 import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-panel";
 import { SubscriptionSuggestions } from "./subscription-suggestions";
 import { RuleDriftCard } from "./rule-drift-card";
+import { DormantRulesCard } from "./dormant-rules-card";
 
 export function SettingsTab() {
   return (
@@ -28,6 +29,7 @@ export function SettingsTab() {
       </Section>
       <SubscriptionSuggestions />
       <RuleDriftCard />
+      <DormantRulesCard />
       <Section title="הוצאות וחיובים קבועים">
         <RecurringRulesPanel />
       </Section>
