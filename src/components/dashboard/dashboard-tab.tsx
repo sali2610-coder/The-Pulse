@@ -240,6 +240,12 @@ const TrackingStreakCard = lazy(() =>
   })),
 );
 
+const LargestChargeCard = lazy(() =>
+  import("@/components/dashboard/largest-charge-card").then((m) => ({
+    default: m.LargestChargeCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -305,6 +311,11 @@ export function DashboardTab() {
       {/* TRACKING STREAK — habit-formation flame. */}
       <div className="sm:col-span-6">
         <Safe name="TrackingStreakCard"><TrackingStreakCard /></Safe>
+      </div>
+
+      {/* LARGEST CHARGE — biggest single expense spotlight. */}
+      <div className="sm:col-span-6">
+        <Safe name="LargestChargeCard"><LargestChargeCard /></Safe>
       </div>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
