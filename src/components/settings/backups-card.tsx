@@ -30,6 +30,7 @@ import {
 } from "@/lib/backup-crypto";
 import { recommendBackup } from "@/lib/backup-recommender";
 import { DeviceRecoveryCard } from "@/components/settings/device-recovery-card";
+import { SafetyDiagnostics } from "@/components/settings/safety-diagnostics";
 
 type Summary = {
   entries: number;
@@ -679,6 +680,7 @@ export function BackupsCard() {
                 ייבוא מקובץ
               </button>
             </div>
+            <SafetyDiagnostics />
             <div className="mt-3">
               <DeviceRecoveryCard />
             </div>

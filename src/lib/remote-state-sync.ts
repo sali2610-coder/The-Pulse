@@ -3,6 +3,47 @@
 import { useEffect, useRef } from "react";
 import { useFinanceStore } from "@/lib/store";
 import { getOrCreateDeviceId } from "@/lib/device-id";
+import {
+  captureSafetyBackup,
+  richness,
+  type SafetyPayload,
+  type SafetyReason,
+} from "@/lib/local-safety-snapshots";
+
+function snapshotLocal(): SafetyPayload {
+  const s = useFinanceStore.getState();
+  return {
+    entries: s.entries,
+    rules: s.rules,
+    statuses: s.statuses,
+    accounts: s.accounts,
+    loans: s.loans,
+    incomes: s.incomes,
+    monthlyBudget: s.monthlyBudget,
+    lastSyncedAt: s.lastSyncedAt,
+    audioEnabled: s.audioEnabled,
+  };
+}
+
+function safetyBackup(reason: SafetyReason): void {
+  try {
+    captureSafetyBackup(reason, snapshotLocal());
+  } catch (err) {
+    console.warn("[remote-state-sync] safety backup failed", err);
+  }
+}
+
+/** Last reason a destructive overwrite was blocked. Surfaced in the
+ *  diagnostics panel so a user can see why their data didn't drop. */
+let lastBlockedReason: string | null = null;
+export function readLastBlockedReason(): string | null {
+  return lastBlockedReason;
+}
+
+function blockOverwrite(reason: string): void {
+  lastBlockedReason = `${new Date().toISOString()} · ${reason}`;
+  console.warn(`[remote-state-sync] blocked overwrite — ${reason}`);
+}
 
 // Bridges the local Zustand store to the server-side state route.
 //
@@ -169,40 +210,100 @@ export function useRemoteStateSync(): void {
 
         const local = useFinanceStore.getState();
         const localEmpty = isLocalEmpty(local);
+        const localRichness = richness({
+          entries: local.entries.length,
+          rules: local.rules.length,
+          accounts: local.accounts.length,
+          loans: local.loans.length,
+          incomes: local.incomes.length,
+          monthlyBudget: local.monthlyBudget,
+        });
+        const remoteState =
+          data?.blob && typeof data.blob === "object"
+            ? (data.blob.state as Record<string, unknown> | null) ?? null
+            : null;
+        function remoteRichness(state: Record<string, unknown> | null): number {
+          if (!state) return 0;
+          const arr = (k: string) =>
+            Array.isArray(state[k]) ? (state[k] as unknown[]).length : 0;
+          const mb = typeof state.monthlyBudget === "number"
+            ? (state.monthlyBudget as number)
+            : 0;
+          return (
+            arr("entries") +
+            arr("rules") +
+            arr("accounts") +
+            arr("loans") +
+            arr("incomes") +
+            (mb > 0 ? 1 : 0)
+          );
+        }
+        const remoteR = remoteRichness(remoteState);
 
-        // ── Apply / preserve policy ─────────────────────────────────
+        // ── Apply / preserve policy — every destructive branch must
+        //     take a safety snapshot first AND refuse to apply an
+        //     empty remote on top of a rich local state. The
+        //     captureSafetyBackup writes to a localStorage namespace
+        //     that survives identity changes, so a wrong call can
+        //     always be undone via the BackupsCard advanced surface.
         if (isUserSwap) {
-          // Account swap. The previous local data belongs to a DIFFERENT
-          // user — never push it under the new user's scope. Blank and
-          // apply whatever the new user has (which may be nothing).
-          if (data?.blob) {
+          safetyBackup("pre-account-switch");
+          if (data?.blob && remoteR > 0) {
             applyRemote(data.blob.state);
+          } else if (localRichness === 0) {
+            // Local is also empty → safe to blank to remote.
+            applyRemote(remoteState ?? {});
           } else {
-            applyRemote({});
+            // Rich local + empty/missing remote on a NEW user scope.
+            // Do NOT wipe — the new user-scope blob will receive a
+            // PUT from this device once the user touches something.
+            // The safety snapshot above guarantees rollback.
+            blockOverwrite(
+              `user-swap: remote richness ${remoteR} would overwrite local richness ${localRichness}`,
+            );
           }
           return;
         }
 
         if (isDeviceToUser) {
-          // The server-side claim above already merged our device blob
-          // into the user blob. The GET we just made will return that
-          // merged result. Apply it so local matches the canonical copy.
-          if (data?.blob) {
+          safetyBackup("pre-account-switch");
+          if (data?.blob && remoteR >= localRichness) {
             applyRemote(data.blob.state);
+            return;
           }
-          // If for some reason the GET returned no blob (claim 503'd
-          // for example), we deliberately DO NOT blank local — the
-          // local data is the user's own data on this device and the
-          // PUT loop will save it under the user scope on the next
-          // change.
+          if (data?.blob && remoteR > 0 && remoteR < localRichness) {
+            blockOverwrite(
+              `device→user: remote richness ${remoteR} < local richness ${localRichness} — keeping local`,
+            );
+            return;
+          }
+          // No remote OR remote empty + rich local → keep local.
           return;
         }
 
         if (isFirstEver || isSameIdentity) {
           if (!data?.ok || !data.blob) return;
+          // Critical guard: never let an empty remote blob overwrite
+          // a rich local store, regardless of remote's updatedAt.
+          if (remoteR === 0 && localRichness > 0) {
+            blockOverwrite(
+              `same-identity: empty remote would overwrite local richness ${localRichness}`,
+            );
+            return;
+          }
+          // Don't shrink a rich local with a strictly poorer remote.
+          if (remoteR > 0 && remoteR < localRichness / 2 && !localEmpty) {
+            blockOverwrite(
+              `same-identity: remote richness ${remoteR} much smaller than local ${localRichness}`,
+            );
+            return;
+          }
           const remoteWins =
             localEmpty || data.blob.updatedAt > (local.lastSyncedAt ?? 0);
-          if (remoteWins) applyRemote(data.blob.state);
+          if (remoteWins) {
+            safetyBackup("pre-remote-apply");
+            applyRemote(data.blob.state);
+          }
           return;
         }
 

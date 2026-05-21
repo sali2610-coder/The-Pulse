@@ -27,6 +27,30 @@ import { tap } from "@/lib/haptics";
  */
 async function safeBackupBeforeNav(): Promise<void> {
   if (typeof window === "undefined") return;
+  // 1) ALWAYS capture a local safety snapshot first. This survives
+  //    identity changes, network failures, and Zustand re-hydration.
+  try {
+    const { captureSafetyBackup } = await import(
+      "@/lib/local-safety-snapshots"
+    );
+    const { useFinanceStore } = await import("@/lib/store");
+    const s = useFinanceStore.getState();
+    captureSafetyBackup("pre-sign-out", {
+      entries: s.entries,
+      rules: s.rules,
+      statuses: s.statuses,
+      accounts: s.accounts,
+      loans: s.loans,
+      incomes: s.incomes,
+      monthlyBudget: s.monthlyBudget,
+      lastSyncedAt: s.lastSyncedAt,
+      audioEnabled: s.audioEnabled,
+    });
+  } catch {
+    /* local-only — never block nav */
+  }
+  // 2) Best-effort cloud backup. 3s cap so a slow network never
+  //    holds the user hostage.
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
