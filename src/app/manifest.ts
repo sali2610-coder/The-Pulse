@@ -28,5 +28,18 @@ export default function manifest(): MetadataRoute.Manifest {
       },
     ],
     categories: ["finance", "productivity"],
+    // PWA app-shortcuts surface on long-press of the home-screen icon
+    // on iOS 16.4+ and Android. "Quick capture" launches the
+    // dedicated /quick-add route — bypasses the dashboard entirely so
+    // logging an expense is one tap → 3 seconds.
+    shortcuts: [
+      {
+        name: "תיעוד הוצאה",
+        short_name: "הוצאה",
+        description: "תיעוד הוצאה מהיר בלי לפתוח את הדשבורד",
+        url: "/quick-add",
+        icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
+      },
+    ],
   };
 }
