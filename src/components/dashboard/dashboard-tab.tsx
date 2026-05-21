@@ -222,6 +222,12 @@ const FixedCostRatioCard = lazy(() =>
   })),
 );
 
+const FxSummaryCard = lazy(() =>
+  import("@/components/dashboard/fx-summary-card").then((m) => ({
+    default: m.FxSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -272,6 +278,11 @@ export function DashboardTab() {
       {/* FIXED-COST RATIO — committed % of monthly income. */}
       <div className="sm:col-span-6">
         <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
+      </div>
+
+      {/* FX OUTFLOWS — foreign-currency totals (informational). */}
+      <div className="sm:col-span-6">
+        <Safe name="FxSummaryCard"><FxSummaryCard /></Safe>
       </div>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
