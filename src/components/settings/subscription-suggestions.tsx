@@ -82,7 +82,10 @@ export function SubscriptionSuggestions() {
   }
 
   return (
-    <section className="rounded-2xl border border-neon/30 bg-surface/50 p-5 backdrop-blur-md">
+    <section
+      data-section="subscription-suggestions"
+      className="rounded-2xl border border-neon/30 bg-surface/50 p-5 backdrop-blur-md"
+    >
       <header className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-neon" />

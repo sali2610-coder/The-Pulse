@@ -28,16 +28,29 @@ export function isTabId(value: string): value is TabId {
   return TAB_IDS.has(value as TabId);
 }
 
-export function navigateToTab(tab: TabId): void {
+/** Optional deep-link payload — section id to scroll into view once
+ *  the destination tab has rendered. */
+export type TabNavPayload = { tab: TabId; section?: string };
+
+export function navigateToTab(tab: TabId, section?: string): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: tab }));
+  window.dispatchEvent(
+    new CustomEvent(EVENT_NAME, { detail: { tab, section } }),
+  );
 }
 
-export function subscribeTabNav(fn: (tab: TabId) => void): () => void {
+export function subscribeTabNav(
+  fn: (payload: TabNavPayload) => void,
+): () => void {
   if (typeof window === "undefined") return () => undefined;
   const handler = (event: Event) => {
-    const detail = (event as CustomEvent<TabId>).detail;
-    if (detail && isTabId(detail)) fn(detail);
+    const detail = (event as CustomEvent<TabNavPayload | TabId>).detail;
+    // Back-compat: older call sites may have passed just a TabId.
+    if (typeof detail === "string") {
+      if (isTabId(detail)) fn({ tab: detail });
+      return;
+    }
+    if (detail && isTabId(detail.tab)) fn(detail);
   };
   window.addEventListener(EVENT_NAME, handler);
   return () => window.removeEventListener(EVENT_NAME, handler);

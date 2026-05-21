@@ -72,6 +72,7 @@ export function BudgetRecommendationCard() {
       layout
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
+      data-section="budget-recommendation"
       className="rounded-2xl border border-neon/30 bg-surface/50 p-5 backdrop-blur-md"
     >
       <header className="mb-3 flex items-center justify-between gap-3">

@@ -18,6 +18,8 @@ import { tap } from "@/lib/haptics";
 
 type Chip = {
   key: string;
+  /** Settings-section data-section id to scroll to. */
+  section: string;
   label: string;
   count: number;
   tone: string;
@@ -59,6 +61,7 @@ export function SmartInsightsCard() {
   const chips: Chip[] = [
     {
       key: "subs",
+      section: "subscription-suggestions",
       label: "מנויים לזיהוי",
       count: insights.subscriptionCount,
       tone: "#00E5FF",
@@ -66,6 +69,7 @@ export function SmartInsightsCard() {
     },
     {
       key: "drift",
+      section: "rule-drift",
       label: "אומדנים לעדכון",
       count: insights.ruleDriftCount,
       tone: "#D4AF37",
@@ -73,6 +77,7 @@ export function SmartInsightsCard() {
     },
     {
       key: "dormant",
+      section: "dormant-rules",
       label: "קבועים רדומים",
       count: insights.dormantCount,
       tone: "#A1A1AA",
@@ -80,6 +85,7 @@ export function SmartInsightsCard() {
     },
     {
       key: "budget",
+      section: "budget-recommendation",
       label: "תקציב חדש",
       count: insights.budgetRecommendationAvailable ? 1 : 0,
       tone: "#34D399",
@@ -87,9 +93,9 @@ export function SmartInsightsCard() {
     },
   ].filter((c) => c.count > 0);
 
-  function openSettings() {
+  function openSettings(section?: string) {
     tap();
-    navigateToTab("settings");
+    navigateToTab("settings", section);
   }
 
   return (
@@ -117,7 +123,7 @@ export function SmartInsightsCard() {
         </div>
         <button
           type="button"
-          onClick={openSettings}
+          onClick={() => openSettings()}
           className="flex items-center gap-1 rounded-full border border-white/12 bg-background/40 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:border-neon/40 hover:text-foreground"
         >
           לטאב הגדרות
@@ -132,7 +138,7 @@ export function SmartInsightsCard() {
             <button
               type="button"
               key={chip.key}
-              onClick={openSettings}
+              onClick={() => openSettings(chip.section)}
               className="flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] transition-transform active:scale-[0.97]"
               style={{
                 borderColor: `${chip.tone}66`,

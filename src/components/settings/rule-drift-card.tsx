@@ -74,7 +74,10 @@ export function RuleDriftCard() {
   }
 
   return (
-    <section className="rounded-2xl border border-[#D4AF37]/30 bg-surface/50 p-5 backdrop-blur-md">
+    <section
+      data-section="rule-drift"
+      className="rounded-2xl border border-[#D4AF37]/30 bg-surface/50 p-5 backdrop-blur-md"
+    >
       <header className="mb-3 flex items-center gap-2">
         <Wand2 className="size-4 text-gold" />
         <div>

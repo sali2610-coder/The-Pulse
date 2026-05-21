@@ -89,7 +89,10 @@ export function DormantRulesCard() {
   }
 
   return (
-    <section className="rounded-2xl border border-white/20 bg-surface/50 p-5 backdrop-blur-md">
+    <section
+      data-section="dormant-rules"
+      className="rounded-2xl border border-white/20 bg-surface/50 p-5 backdrop-blur-md"
+    >
       <header className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Moon className="size-4 text-muted-foreground" />

@@ -64,7 +64,7 @@ function AppShellContent() {
       if (next) setActiveTab(next);
     };
     window.addEventListener("hashchange", onHashChange);
-    const unsubNav = subscribeTabNav((next) => {
+    const unsubNav = subscribeTabNav(({ tab: next, section }) => {
       setActiveTab(next);
       if (next === "dashboard") {
         if (window.location.hash) {
@@ -76,6 +76,22 @@ function AppShellContent() {
         }
       } else if (window.location.hash !== `#${next}`) {
         window.history.replaceState(null, "", `#${next}`);
+      }
+      if (section) {
+        // Tab content mounts on the next tick — give it a frame, then
+        // scroll the named card into view. Smooth-behavior so the user
+        // visually traces the source of the navigation.
+        requestAnimationFrame(() => {
+          const el = document.querySelector(
+            `[data-section="${section}"]`,
+          );
+          if (el && "scrollIntoView" in el) {
+            (el as HTMLElement).scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        });
       }
     });
     return () => {
