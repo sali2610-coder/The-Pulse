@@ -1,16 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Banknote,
   CalendarDays,
+  ChevronLeft,
   Receipt,
   Repeat2,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { upcomingOutflows } from "@/lib/upcoming-outflows";
+import { ExpenseEditSheet } from "@/components/dashboard/expense-edit-sheet";
+import { navigateToTab } from "@/lib/tab-nav";
+import { tap } from "@/lib/haptics";
+import type { ExpenseEntry } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -49,6 +54,8 @@ export function UpcomingOutflowsCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const loans = useFinanceStore((s) => s.loans);
 
+  const [editEntry, setEditEntry] = useState<ExpenseEntry | null>(null);
+
   const outflows = useMemo(() => {
     if (!hydrated) return [];
     return upcomingOutflows({
@@ -64,6 +71,22 @@ export function UpcomingOutflowsCard() {
   if (outflows.length === 0) return null;
 
   const total = outflows.reduce((s, o) => s + o.amount, 0);
+
+  function activate(kind: "entry" | "rule" | "loan", id: string) {
+    tap();
+    if (kind === "rule") {
+      navigateToTab("settings", "recurring-rules");
+      return;
+    }
+    if (kind === "loan") {
+      navigateToTab("settings", "loans");
+      return;
+    }
+    // entry — `id` is the synthetic outflow id "e:<entryId>:<monthKey>".
+    const entryId = id.split(":")[1];
+    const entry = entries.find((e) => e.id === entryId);
+    if (entry) setEditEntry(entry);
+  }
 
   return (
     <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
@@ -100,7 +123,17 @@ export function UpcomingOutflowsCard() {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.04, duration: 0.22 }}
-              className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-2.5"
+              whileTap={{ scale: 0.99 }}
+              role="button"
+              tabIndex={0}
+              onClick={() => activate(o.kind, o.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  activate(o.kind, o.id);
+                }
+              }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-2.5 outline-none transition-colors hover:border-white/14 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
             >
               <span
                 className="flex size-8 shrink-0 items-center justify-center rounded-lg"
@@ -130,6 +163,7 @@ export function UpcomingOutflowsCard() {
               >
                 −{ILS.format(o.amount)}
               </span>
+              <ChevronLeft className="size-3 shrink-0 text-muted-foreground/70" />
             </motion.li>
           );
         })}
@@ -140,6 +174,15 @@ export function UpcomingOutflowsCard() {
           ועוד {outflows.length - 6} פריטים בשבוע
         </p>
       ) : null}
+
+      <ExpenseEditSheet
+        key={editEntry?.id ?? "none"}
+        open={editEntry !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditEntry(null);
+        }}
+        entry={editEntry}
+      />
     </section>
   );
 }

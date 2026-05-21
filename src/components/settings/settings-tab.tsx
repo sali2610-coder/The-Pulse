@@ -32,13 +32,13 @@ export function SettingsTab() {
       <SubscriptionSuggestions />
       <RuleDriftCard />
       <DormantRulesCard />
-      <Section title="הוצאות וחיובים קבועים">
+      <Section title="הוצאות וחיובים קבועים" section="recurring-rules">
         <RecurringRulesPanel />
       </Section>
-      <Section title="הלוואות">
+      <Section title="הלוואות" section="loans">
         <LoansPanel />
       </Section>
-      <Section title="הכנסות">
+      <Section title="הכנסות" section="incomes">
         <IncomePanel />
       </Section>
       <StatementImport />
@@ -48,13 +48,18 @@ export function SettingsTab() {
 
 function Section({
   title,
+  section,
   children,
 }: {
   title: string;
+  section?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">
+    <section
+      data-section={section}
+      className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md"
+    >
       <header className="mb-4">
         <div className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
           {title}
