@@ -1,14 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ChevronLeft, Bell, CheckCheck } from "lucide-react";
+import {
+  AlarmClock,
+  Sparkles,
+  ChevronLeft,
+  Bell,
+  CheckCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useFinanceStore } from "@/lib/store";
 import { getCategory } from "@/lib/categories";
 import { tap, success } from "@/lib/haptics";
 import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet";
+import { detectStalePending } from "@/lib/stale-pending";
 import type { ExpenseEntry } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -38,6 +45,11 @@ export function PendingTray() {
   const confirmExpense = useFinanceStore((s) => s.confirmExpense);
 
   const [active, setActive] = useState<ExpenseEntry | null>(null);
+
+  const staleCount = useMemo(
+    () => detectStalePending({ entries: pending }).length,
+    [pending],
+  );
 
   if (!hydrated || pending.length === 0) return null;
 
@@ -82,10 +94,19 @@ export function PendingTray() {
               <span className="text-xs uppercase tracking-[0.24em] text-[color:var(--neon)]">
                 ממתינים לאישור
               </span>
-              <span className="text-lg font-semibold text-foreground">
+              <span className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
                 {pending.length === 1
                   ? "חיוב חדש"
                   : `${pending.length} חיובים חדשים`}
+                {staleCount > 0 ? (
+                  <span
+                    className="flex items-center gap-1 rounded-full bg-[#F87171]/15 px-1.5 py-0.5 text-[9px] font-medium text-[#F87171]"
+                    aria-label={`${staleCount} חיובים ישנים מ־3 ימים`}
+                  >
+                    <AlarmClock className="size-2.5" />
+                    {staleCount} ישנים
+                  </span>
+                ) : null}
               </span>
             </div>
           </div>
