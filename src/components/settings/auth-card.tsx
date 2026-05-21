@@ -10,9 +10,38 @@ import {
   ShieldAlert,
   User,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { tap } from "@/lib/haptics";
+
+/**
+ * Fire a manual cloud backup, wait up to 3s for the response, then
+ * resolve regardless. Used before sign-out / account-swap so the
+ * user always has a fresh restore point in their own user scope
+ * before NextAuth tears down the session.
+ *
+ * Failures are logged but never block the navigation — backup is a
+ * safety net, not a hard barrier between the user and their session
+ * controls.
+ */
+async function safeBackupBeforeNav(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    await fetch("/api/backups", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "manual" }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+  } catch {
+    /* timeout / offline / 4xx — proceed anyway */
+  }
+}
 
 type Status = {
   loading: boolean;
@@ -172,25 +201,39 @@ export function AuthCard() {
             {status.email}
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <motion.a
+            <motion.button
+              type="button"
               whileTap={{ scale: 0.96 }}
-              href="/api/auth/signout?callbackUrl=/"
-              onClick={() => tap()}
+              onClick={async () => {
+                tap();
+                toast.message("יוצרים גיבוי לפני החלפת חשבון…", {
+                  duration: 2500,
+                });
+                await safeBackupBeforeNav();
+                window.location.href = "/api/auth/signout?callbackUrl=/";
+              }}
               className="flex items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-[color:var(--neon)]/40 hover:text-[color:var(--neon)]"
               title="התנתק וחזור לבחור חשבון Google אחר"
             >
               <RefreshCw className="size-3" />
               החלף חשבון Google
-            </motion.a>
-            <motion.a
+            </motion.button>
+            <motion.button
+              type="button"
               whileTap={{ scale: 0.96 }}
-              href="/api/auth/signout?callbackUrl=/"
-              onClick={() => tap()}
+              onClick={async () => {
+                tap();
+                toast.message("יוצרים גיבוי לפני התנתקות…", {
+                  duration: 2500,
+                });
+                await safeBackupBeforeNav();
+                window.location.href = "/api/auth/signout?callbackUrl=/";
+              }}
               className="flex items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
             >
               <LogOut className="size-3" />
               התנתק
-            </motion.a>
+            </motion.button>
           </div>
         </div>
       </div>
