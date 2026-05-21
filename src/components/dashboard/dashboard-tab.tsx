@@ -198,6 +198,12 @@ const LoanSummaryCard = lazy(() =>
   })),
 );
 
+const NetWorthCard = lazy(() =>
+  import("@/components/dashboard/net-worth-card").then((m) => ({
+    default: m.NetWorthCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -233,6 +239,11 @@ export function DashboardTab() {
       {/* LOAN BURDEN — aggregate across all active loans. */}
       <div className="sm:col-span-6">
         <Safe name="LoanSummaryCard"><LoanSummaryCard /></Safe>
+      </div>
+
+      {/* NET WORTH — assets minus debts snapshot. */}
+      <div className="sm:col-span-6">
+        <Safe name="NetWorthCard"><NetWorthCard /></Safe>
       </div>
 
       {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
