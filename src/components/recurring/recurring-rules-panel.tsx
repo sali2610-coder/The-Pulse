@@ -327,18 +327,25 @@ export function RecurringRulesPanel() {
       {mode.kind === "new" ? (
         <ErrorBoundary
           name="RuleForm:new"
-          fallback={
-            <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[12px] text-destructive">
-              לא ניתן לטעון את הטופס. נסה לרענן את הדף או לפתוח שוב.
+          fallback={(err) => (
+            <div className="space-y-2 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-[12px] text-destructive">
+              <div className="font-medium">לא ניתן לטעון את הטופס.</div>
+              <pre
+                dir="ltr"
+                style={{ whiteSpace: "pre-wrap" }}
+                className="max-h-40 overflow-auto rounded-lg bg-black/40 px-2 py-1 text-[10px] text-destructive/90"
+              >
+                {err.message}
+              </pre>
               <button
                 type="button"
                 onClick={() => setMode({ kind: "list" })}
-                className="mt-2 block rounded-lg border border-destructive/40 px-3 py-1 text-[11px]"
+                className="rounded-lg border border-destructive/40 px-3 py-1 text-[11px]"
               >
                 חזרה לרשימה
               </button>
             </div>
-          }
+          )}
         >
           <RuleForm
             submitLabel="הוסף"

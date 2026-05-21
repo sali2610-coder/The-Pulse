@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
@@ -67,8 +67,17 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
   const [linkedCardId, setLinkedCardId] = useState<string | undefined>(
     initial?.linkedCardId,
   );
-  const cards = useFinanceStore((s) =>
-    s.accounts.filter((a) => a.kind === "card" && a.active),
+  // CRITICAL: subscribe to the raw accounts array, then derive the
+  // card subset via useMemo. Subscribing to `s.accounts.filter(...)`
+  // returns a fresh array on every store read — Zustand v5 + React 19
+  // treats that as a continuous state change which throws
+  // "Maximum update depth exceeded" once the form mounts inside the
+  // settings card. This pattern is the same one used by
+  // ExpenseEditSheet (Phase 92) which works correctly.
+  const accounts = useFinanceStore((s) => s.accounts);
+  const cards = useMemo(
+    () => accounts.filter((a) => a.kind === "card" && a.active),
+    [accounts],
   );
   const now = new Date();
 

@@ -4,8 +4,9 @@ import { Component, type ReactNode } from "react";
 
 type Props = {
   children: ReactNode;
-  /** Renders when a descendant throws. If omitted, renders `null`. */
-  fallback?: ReactNode;
+  /** Renders when a descendant throws. If omitted, renders `null`.
+   *  Can be a ReactNode or a render function that receives the error. */
+  fallback?: ReactNode | ((error: Error) => ReactNode);
   /** Optional label used in console logs to identify the offending area. */
   name?: string;
 };
@@ -35,7 +36,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
-      return this.props.fallback ?? null;
+      const fb = this.props.fallback;
+      if (typeof fb === "function") return fb(this.state.error);
+      return fb ?? null;
     }
     return this.props.children;
   }
