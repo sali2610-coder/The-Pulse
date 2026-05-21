@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { CreditCard, Repeat2 } from "lucide-react";
+import { CalendarClock, CreditCard, Repeat2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildCardPressure } from "@/lib/card-pressure";
+import { projectCardCycle } from "@/lib/card-cycle";
 import { Pill } from "@/components/ui/pill";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
 
@@ -49,6 +50,19 @@ export function CardsPressureCard() {
     });
   }, [hydrated, accounts, rules, entries, statuses]);
 
+  const cyclesById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof projectCardCycle>>();
+    if (!hydrated) return map;
+    for (const row of rows) {
+      const projection = projectCardCycle({
+        account: row.card,
+        entries,
+      });
+      if (projection) map.set(row.card.id, projection);
+    }
+    return map;
+  }, [hydrated, rows, entries]);
+
   if (!hydrated) return null;
   const meaningful = rows.filter((r) => r.totalThisMonth > 0);
   if (meaningful.length === 0) return null;
@@ -61,7 +75,9 @@ export function CardsPressureCard() {
       </header>
 
       <ul className="flex flex-col gap-2">
-        {meaningful.map((row, idx) => (
+        {meaningful.map((row, idx) => {
+          const cycle = cyclesById.get(row.card.id);
+          return (
           <motion.li
             key={row.card.id}
             initial={{ opacity: 0, y: 6 }}
@@ -112,6 +128,17 @@ export function CardsPressureCard() {
                   </>
                 ) : null}
               </div>
+              {cycle ? (
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground/85">
+                  <CalendarClock className="size-2.5 text-gold" />
+                  <span>
+                    מחזור חיוב נסגר עוד {cycle.daysUntilClose} ימים ·{" "}
+                    <span data-mono="true" dir="ltr">
+                      {ILS.format(cycle.projectedAmount)}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div className="flex shrink-0 flex-col items-end leading-tight">
               <span
@@ -126,7 +153,8 @@ export function CardsPressureCard() {
               </span>
             </div>
           </motion.li>
-        ))}
+          );
+        })}
       </ul>
 
       <p className="text-[10px] text-muted-foreground/80">
