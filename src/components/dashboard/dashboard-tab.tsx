@@ -9,6 +9,7 @@ import { PulseBar } from "@/components/pulse/pulse-bar";
 import { FloatingCTA } from "@/components/dashboard/floating-cta";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
+import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
 
 // Every dashboard card except the always-needed PulseBar + NewExpenseButton
 // is dynamically imported with `ssr: false`. iPhone Safari was rejecting `/`
@@ -260,6 +261,29 @@ export function DashboardTab() {
   const [open, setOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const cloudSync = useCloudSyncState();
+
+  // Loading curtain: only show during the brief window between sign-in
+  // and the first cloud pull completing. Outside that window the
+  // local cache renders immediately. The check is guarded on
+  // `authenticated && !hydrated && hydrating` so a signed-out user
+  // (the common case) never sees a curtain.
+  const showCurtain =
+    cloudSync?.configured &&
+    cloudSync.authenticated &&
+    cloudSync.hydrating &&
+    !cloudSync.hydrated;
+
+  if (showCurtain) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
+        <div className="size-10 animate-spin rounded-full border-2 border-[color:var(--neon)] border-t-transparent" />
+        <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          טוען נתונים מהענן
+        </div>
+      </div>
+    );
+  }
 
   return (
    <SnapshotProvider>

@@ -15,6 +15,7 @@ import { gatherSmartInsights } from "@/lib/smart-insights";
 import { subscribeInsightDismissals } from "@/lib/insight-dismiss";
 import { useAutoBackup } from "@/lib/auto-backup";
 import { useStoreMutationBridge } from "@/lib/store-mutation-bridge";
+import { CloudSyncProvider } from "@/lib/supabase/cloud-sync-context";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -39,7 +40,9 @@ const isDev = process.env.NODE_ENV !== "production";
 export function AppShell() {
   return (
     <ErrorBoundary name="AppShell" fallback={<PageFallback />}>
-      <AppShellContent />
+      <CloudSyncProvider>
+        <AppShellContent />
+      </CloudSyncProvider>
     </ErrorBoundary>
   );
 }

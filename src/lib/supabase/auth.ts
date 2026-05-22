@@ -73,6 +73,32 @@ export async function signUpWithPassword(
   };
 }
 
+/** Kick off Google OAuth via Supabase. Supabase redirects to Google,
+ *  Google redirects back to Supabase, Supabase redirects to
+ *  `redirectTo` with the access token in the URL fragment. The
+ *  client-side `supabase()` instance picks it up via
+ *  `detectSessionInUrl: true` (set in client.ts). After the redirect,
+ *  the user has a Supabase session whose `auth.uid()` satisfies the
+ *  RLS policies on every entity table. */
+export async function signInWithGoogle(redirectTo?: string): Promise<AuthResult> {
+  const client = supabase();
+  if (!client) return { ok: false, reason: "not_configured" };
+  const { error } = await client.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo:
+        redirectTo ??
+        (typeof window !== "undefined"
+          ? `${window.location.origin}/`
+          : undefined),
+    },
+  });
+  if (error) return { ok: false, reason: classify(error.message) };
+  // signInWithOAuth navigates away — this resolved value is unreachable
+  // in practice. Returning ok for type completeness.
+  return { ok: true, data: undefined };
+}
+
 export async function signOut(): Promise<AuthResult> {
   const client = supabase();
   if (!client) return { ok: false, reason: "not_configured" };
