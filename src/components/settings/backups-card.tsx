@@ -34,6 +34,7 @@ import {
   setForceApplyNext,
 } from "@/lib/local-safety-snapshots";
 import { captureEvent } from "@/lib/analytics";
+import { downloadEntriesCsv } from "@/lib/csv-export";
 import { DeviceRecoveryCard } from "@/components/settings/device-recovery-card";
 import { SafetyDiagnostics } from "@/components/settings/safety-diagnostics";
 
@@ -285,6 +286,18 @@ export function BackupsCard() {
       lastSyncedAt: store.lastSyncedAt,
       audioEnabled: store.audioEnabled,
     };
+  }
+
+  function exportCsv() {
+    tap();
+    const store = useFinanceStore.getState();
+    const stamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, 19);
+    downloadEntriesCsv(store.entries, `sally-entries-${stamp}.csv`);
+    success();
+    toast.success("ייצוא CSV הורד");
   }
 
   function exportLocal() {
@@ -651,6 +664,15 @@ export function BackupsCard() {
               >
                 <Lock className="size-3.5" />
                 ייצוא מוצפן
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={exportCsv}
+                className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-background/40 px-3 py-2 text-[12px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
+              >
+                <Download className="size-3.5" />
+                ייצוא חיובים ל־CSV
               </button>
               <button
                 type="button"
