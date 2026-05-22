@@ -297,49 +297,129 @@ export function DashboardTab() {
   return (
    <SnapshotProvider>
     <div className="grid grid-cols-1 gap-2.5 pb-28 sm:grid-cols-6 sm:gap-3 sm:pb-32">
-      {/* WELCOME / SETUP — calm onboarding card; vanishes when done. */}
+      {/* ── HERO — always-visible top stack ─────────────────────────
+         Onboarding banner + identity narrative → high-signal alert
+         banners → primary Pulse visualization → primary actions row
+         (pending + activity) → split daily-glance row. No section
+         wrapper because the user must see these every time. */}
       <div className="sm:col-span-6">
         <Safe name="WelcomeSetupCard"><WelcomeSetupCard /></Safe>
       </div>
-
-      {/* SMART SUMMARY — one-line story of the user's financial state. */}
       <div className="sm:col-span-6">
         <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
       </div>
-
-      {/* STALE ANCHORS — bank balance needs refresh. */}
       <div className="sm:col-span-6">
         <Safe name="StaleAnchorsBanner"><StaleAnchorsBanner /></Safe>
       </div>
-
-      {/* UPCOMING CARD DEBITS — heads-up before the bank pulls. */}
       <div className="sm:col-span-6">
         <Safe name="UpcomingDebitsBanner"><UpcomingDebitsBanner /></Safe>
       </div>
-
-      {/* 7-DAY OUTFLOW DIGEST — entries + rules + loans coming up. */}
       <div className="sm:col-span-6">
-        <Safe name="UpcomingOutflowsCard"><UpcomingOutflowsCard /></Safe>
+        <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
+      </div>
+      <div className="sm:col-span-3">
+        <Safe name="DailyAllowance"><DailyAllowance /></Safe>
+      </div>
+      <div className="sm:col-span-3">
+        <Safe name="CfoSummary"><CfoSummary /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="PendingTray"><PendingTray /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="RecentActivity"><RecentActivity /></Safe>
       </div>
 
-      {/* LOAN BURDEN — aggregate across all active loans. */}
-      <div className="sm:col-span-6">
-        <Safe name="LoanSummaryCard"><LoanSummaryCard /></Safe>
-      </div>
+      {/* ── "החודש שלך" — month-status cluster ──────────────────────
+         Snapshot of where the user stands this month. Open by
+         default because every card here is high-signal. */}
+      <DashboardSection
+        storageKey="this-month"
+        title="החודש שלך"
+        subtitle="עומס חודשי, נכסים והתחייבויות"
+      >
+        <div className="sm:col-span-6">
+          <Safe name="CardsPressureCard"><CardsPressureCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="NetWorthCard"><NetWorthCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="LoanSummaryCard"><LoanSummaryCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="HousingCard"><HousingCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="BillingCalendarCard"><BillingCalendarCard /></Safe>
+        </div>
+      </DashboardSection>
 
-      {/* NET WORTH — assets minus debts snapshot. */}
-      <div className="sm:col-span-6">
-        <Safe name="NetWorthCard"><NetWorthCard /></Safe>
-      </div>
+      {/* ── "תזרים עתידי" — forward-looking cluster ─────────────────
+         Pulls obligations, future pressure, active installments,
+         and upcoming expenses up from the advanced drawer so the
+         multi-month picture is one tap below the hero. */}
+      <DashboardSection
+        storageKey="future"
+        title="תזרים עתידי"
+        subtitle="חיובים, תשלומים והוצאות שמגיעות"
+      >
+        <div className="sm:col-span-6">
+          <Safe name="UpcomingOutflowsCard"><UpcomingOutflowsCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="CashflowTimeline"><CashflowTimeline /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="ObligationsTimelineCard">
+            <ObligationsTimelineCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-3">
+          <Safe name="ActiveInstallmentsCard"><ActiveInstallmentsCard /></Safe>
+        </div>
+        <div className="sm:col-span-3">
+          <Safe name="FuturePressureCard"><FuturePressureCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="UpcomingExpenses"><UpcomingExpenses /></Safe>
+        </div>
+      </DashboardSection>
 
-      {/* FIXED-COST RATIO — committed % of monthly income. */}
-      <div className="sm:col-span-6">
-        <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
-      </div>
+      {/* ── "תובנות חכמות" — analysis cluster ──────────────────────
+         AI / trend / anomaly surfaces. MonthlyDigest moved in. */}
+      <DashboardSection
+        storageKey="insights"
+        title="תובנות חכמות"
+        subtitle="חריגות, מגמות ועזרת ה-CFO"
+      >
+        <div className="sm:col-span-6">
+          <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SmartInsightsCard"><SmartInsightsCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="CopilotCard"><CopilotCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
+        </div>
+      </DashboardSection>
 
-      {/* PHASE 156: small recap/summary cards consolidated under one
-         collapsible header so the primary scroll stays focused on
-         actionable surfaces. Each card still self-hides when empty. */}
+      {/* ── "מבט מהיר" — small recap stats, collapsed by default ─── */}
       <DashboardSection
         storageKey="recap"
         title="מבט מהיר"
@@ -362,81 +442,6 @@ export function DashboardTab() {
           <Safe name="TrackingSinceCard"><TrackingSinceCard /></Safe>
         </div>
       </DashboardSection>
-
-      {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
-      <div className="sm:col-span-6">
-        <Safe name="BillingCalendarCard"><BillingCalendarCard /></Safe>
-      </div>
-
-      {/* PHASE 156: insight + trend cards bundled into a single open
-         section. They share the "AI/analysis" feel and benefit from
-         being read together. Default open since this is the
-         high-signal cluster. */}
-      <DashboardSection
-        storageKey="insights"
-        title="תובנות חכמות"
-        subtitle="חריגות, מגמות ועזרת ה-CFO"
-      >
-        <div className="sm:col-span-6">
-          <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SmartInsightsCard"><SmartInsightsCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CopilotCard"><CopilotCard /></Safe>
-        </div>
-      </DashboardSection>
-
-      {/* HERO — primary state + projection */}
-      <div className="sm:col-span-6">
-        <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
-      </div>
-
-      {/* PRIMARY ACTIONS — pending review + live activity feed. */}
-      <div className="sm:col-span-6">
-        <Safe name="PendingTray"><PendingTray /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="RecentActivity"><RecentActivity /></Safe>
-      </div>
-
-      {/* CARDS PRESSURE — per-card monthly load */}
-      <div className="sm:col-span-6">
-        <Safe name="CardsPressureCard"><CardsPressureCard /></Safe>
-      </div>
-
-      {/* HOUSING — living-cost bucket */}
-      <div className="sm:col-span-6">
-        <Safe name="HousingCard"><HousingCard /></Safe>
-      </div>
-
-      {/* CASHFLOW TIMELINE — day-by-day projected events */}
-      <div className="sm:col-span-6">
-        <Safe name="CashflowTimeline"><CashflowTimeline /></Safe>
-      </div>
-
-      {/* QUICK DAILY GLANCE — split row */}
-      <div className="sm:col-span-3">
-        <Safe name="DailyAllowance"><DailyAllowance /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="CfoSummary"><CfoSummary /></Safe>
-      </div>
-
-      {/* MONTHLY DIGEST — narrative summary stays in the main flow */}
-      <div className="sm:col-span-6">
-        <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
-      </div>
 
       {/* Floating CTA — fixed dock, auto-hides on scroll-down. */}
       <FloatingCTA onClick={() => setOpen(true)} />
@@ -499,17 +504,6 @@ export function DashboardTab() {
               <Safe name="SubscriptionRadarCard"><SubscriptionRadarCard /></Safe>
             </div>
             <div className="sm:col-span-3">
-              <Safe name="ActiveInstallmentsCard"><ActiveInstallmentsCard /></Safe>
-            </div>
-            <div className="sm:col-span-3">
-              <Safe name="FuturePressureCard"><FuturePressureCard /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="ObligationsTimelineCard">
-                <ObligationsTimelineCard />
-              </Safe>
-            </div>
-            <div className="sm:col-span-3">
               <Safe name="CategoryDonut"><CategoryDonut /></Safe>
             </div>
             <div className="sm:col-span-3">
@@ -517,9 +511,6 @@ export function DashboardTab() {
             </div>
             <div className="sm:col-span-6">
               <Safe name="TimelineSync"><TimelineSync budget={monthlyBudget} /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="UpcomingExpenses"><UpcomingExpenses /></Safe>
             </div>
           </motion.div>
         ) : null}
