@@ -10,6 +10,7 @@ import { FloatingCTA } from "@/components/dashboard/floating-cta";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
 import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
 
 // Every dashboard card except the always-needed PulseBar + NewExpenseButton
 // is dynamically imported with `ssr: false`. iPhone Safari was rejecting `/`
@@ -336,60 +337,62 @@ export function DashboardTab() {
         <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
       </div>
 
-      {/* FX OUTFLOWS — foreign-currency totals (informational). */}
-      <div className="sm:col-span-6">
-        <Safe name="FxSummaryCard"><FxSummaryCard /></Safe>
-      </div>
-
-      {/* REFUNDS — credit-backs this month (positive flow). */}
-      <div className="sm:col-span-6">
-        <Safe name="RefundSummaryCard"><RefundSummaryCard /></Safe>
-      </div>
-
-      {/* TRACKING STREAK — habit-formation flame. */}
-      <div className="sm:col-span-6">
-        <Safe name="TrackingStreakCard"><TrackingStreakCard /></Safe>
-      </div>
-
-      {/* LARGEST CHARGE — biggest single expense spotlight. */}
-      <div className="sm:col-span-6">
-        <Safe name="LargestChargeCard"><LargestChargeCard /></Safe>
-      </div>
-
-      {/* TRACKING SINCE — anniversary surface. */}
-      <div className="sm:col-span-6">
-        <Safe name="TrackingSinceCard"><TrackingSinceCard /></Safe>
-      </div>
+      {/* PHASE 156: small recap/summary cards consolidated under one
+         collapsible header so the primary scroll stays focused on
+         actionable surfaces. Each card still self-hides when empty. */}
+      <DashboardSection
+        storageKey="recap"
+        title="מבט מהיר"
+        subtitle="סטטיסטיקות חודש קצרות"
+        defaultCollapsed
+      >
+        <div className="sm:col-span-6">
+          <Safe name="FxSummaryCard"><FxSummaryCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="RefundSummaryCard"><RefundSummaryCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="TrackingStreakCard"><TrackingStreakCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="LargestChargeCard"><LargestChargeCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="TrackingSinceCard"><TrackingSinceCard /></Safe>
+        </div>
+      </DashboardSection>
 
       {/* BILLING CALENDAR — day-grid of committed recurring outflows. */}
       <div className="sm:col-span-6">
         <Safe name="BillingCalendarCard"><BillingCalendarCard /></Safe>
       </div>
 
-      {/* ANOMALY BANNER — category spend spikes vs 3-month baseline. */}
-      <div className="sm:col-span-6">
-        <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
-      </div>
-
-      {/* MONTH-OVER-MONTH DELTA — net change + top grew/shrunk. */}
-      <div className="sm:col-span-6">
-        <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
-      </div>
-
-      {/* CASHFLOW TREND — 6-month income-vs-expense sparkline. */}
-      <div className="sm:col-span-6">
-        <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
-      </div>
-
-      {/* SMART INSIGHTS DIGEST — chip strip of pending detectors. */}
-      <div className="sm:col-span-6">
-        <Safe name="SmartInsightsCard"><SmartInsightsCard /></Safe>
-      </div>
-
-      {/* COPILOT — forward-looking proactive insights */}
-      <div className="sm:col-span-6">
-        <Safe name="CopilotCard"><CopilotCard /></Safe>
-      </div>
+      {/* PHASE 156: insight + trend cards bundled into a single open
+         section. They share the "AI/analysis" feel and benefit from
+         being read together. Default open since this is the
+         high-signal cluster. */}
+      <DashboardSection
+        storageKey="insights"
+        title="תובנות חכמות"
+        subtitle="חריגות, מגמות ועזרת ה-CFO"
+      >
+        <div className="sm:col-span-6">
+          <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SmartInsightsCard"><SmartInsightsCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="CopilotCard"><CopilotCard /></Safe>
+        </div>
+      </DashboardSection>
 
       {/* HERO — primary state + projection */}
       <div className="sm:col-span-6">
