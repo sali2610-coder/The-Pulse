@@ -343,6 +343,7 @@ function Row({
       <button
         type="button"
         onClick={onClick}
+        aria-label={label}
         className={`${baseClass} hover:border-white/15 active:scale-[0.99]`}
       >
         {inner}

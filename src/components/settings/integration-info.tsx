@@ -35,6 +35,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
         <button
           type="button"
           onClick={onCopy}
+          aria-label={`העתק ${label}`}
           className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
         >
           <AnimatePresence mode="wait" initial={false}>
