@@ -207,6 +207,98 @@ export async function upsertIncome(i: Income): Promise<Status> {
   return upsertGeneric("incomes", incomeToRow(i, userId));
 }
 
+// ── Single-entity deletes ────────────────────────────────────────────
+// Required so a local delete propagates to Supabase. Without these,
+// removing an account locally would re-appear on next hydration
+// because cloud still held the row.
+
+async function deleteGeneric<T extends keyof Database["public"]["Tables"]>(
+  table: T,
+  id: string,
+): Promise<Status> {
+  const client = supabase();
+  if (!client) return { ok: false, reason: "not_configured" };
+  const userId = await getUserId();
+  if (!userId) return { ok: false, reason: "no_session" };
+  // RLS still enforces auth.uid() = user_id; the eq on user_id below is
+  // belt-and-braces against a misconfigured policy.
+  const builder = client.from(table) as unknown as {
+    delete: () => {
+      eq: (col: string, val: string) => {
+        eq: (col: string, val: string) => Promise<{
+          error: { message: string } | null;
+        }>;
+      };
+    };
+  };
+  const { error } = await builder.delete().eq("id", id).eq("user_id", userId);
+  if (error) return { ok: false, reason: "rls", detail: error.message };
+  return { ok: true };
+}
+
+export const deleteEntry = (id: string) =>
+  deleteGeneric("expense_entries", id);
+export const deleteAccount = (id: string) => deleteGeneric("accounts", id);
+export const deleteRule = (id: string) => deleteGeneric("recurring_rules", id);
+export const deleteLoan = (id: string) => deleteGeneric("loans", id);
+export const deleteIncome = (id: string) => deleteGeneric("incomes", id);
+
+// ── User settings (Phase 152d) ───────────────────────────────────────
+// Single-row scalars (currently just monthlyBudget). Lives in its own
+// table because it doesn't fit the entity-list shape. Upsert is keyed
+// on user_id so writes are always one-row-per-user.
+
+export async function fetchUserSettings(): Promise<
+  | { ok: true; monthlyBudget: number }
+  | { ok: false; reason: "not_configured" | "no_session" | "rls"; detail?: string }
+> {
+  const client = supabase();
+  if (!client) return { ok: false, reason: "not_configured" };
+  const userId = await getUserId();
+  if (!userId) return { ok: false, reason: "no_session" };
+  const builder = client.from("user_settings") as unknown as {
+    select: (cols: string) => {
+      eq: (
+        col: string,
+        val: string,
+      ) => {
+        maybeSingle: () => Promise<{
+          data: { monthly_budget: number } | null;
+          error: { message: string } | null;
+        }>;
+      };
+    };
+  };
+  const { data, error } = await builder
+    .select("monthly_budget")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) return { ok: false, reason: "rls", detail: error.message };
+  return {
+    ok: true,
+    monthlyBudget: data ? Number(data.monthly_budget) : 0,
+  };
+}
+
+export async function upsertUserSettings(monthlyBudget: number): Promise<Status> {
+  const client = supabase();
+  if (!client) return { ok: false, reason: "not_configured" };
+  const userId = await getUserId();
+  if (!userId) return { ok: false, reason: "no_session" };
+  const builder = client.from("user_settings") as unknown as {
+    upsert: (
+      rows: object,
+      opts: { onConflict: string },
+    ) => Promise<{ error: { message: string } | null }>;
+  };
+  const { error } = await builder.upsert(
+    { user_id: userId, monthly_budget: monthlyBudget },
+    { onConflict: "user_id" },
+  );
+  if (error) return { ok: false, reason: "rls", detail: error.message };
+  return { ok: true };
+}
+
 // ── Batch full-state push ────────────────────────────────────────────
 // Used during cloud-write reconciliation when local has rich state but
 // cloud has none (typically right after first sign-in). Uses upsert

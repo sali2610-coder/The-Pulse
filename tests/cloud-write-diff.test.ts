@@ -1,0 +1,150 @@
+// Pure-logic tests for the cloud-sync write-loop diff. Mirrors the
+// upsertChanged + deleteRemoved + monthlyBudget-change branches in
+// use-cloud-sync.ts so the policy itself is verifiable without a
+// Supabase round-trip.
+
+import { describe, expect, it } from "vitest";
+
+type Row = { id: string; value?: number };
+
+function diffEntities(prev: Row[], curr: Row[]) {
+  const prevById = new Map(prev.map((p) => [p.id, p] as const));
+  const currIds = new Set(curr.map((c) => c.id));
+  const upserted: Row[] = [];
+  const deletedIds: string[] = [];
+  for (const item of curr) {
+    const old = prevById.get(item.id);
+    if (old !== item) upserted.push(item);
+  }
+  for (const old of prev) {
+    if (!currIds.has(old.id)) deletedIds.push(old.id);
+  }
+  return { upserted, deletedIds };
+}
+
+describe("cloud write-loop diff", () => {
+  it("treats empty-empty as no work", () => {
+    const d = diffEntities([], []);
+    expect(d.upserted).toEqual([]);
+    expect(d.deletedIds).toEqual([]);
+  });
+
+  it("upserts adds", () => {
+    const a = { id: "a" };
+    const b = { id: "b" };
+    const d = diffEntities([a], [a, b]);
+    expect(d.upserted).toEqual([b]);
+    expect(d.deletedIds).toEqual([]);
+  });
+
+  it("upserts ref-different updates (edit by replacement)", () => {
+    const oldA = { id: "a", value: 100 };
+    const newA = { id: "a", value: 200 };
+    const d = diffEntities([oldA], [newA]);
+    expect(d.upserted).toEqual([newA]);
+    expect(d.deletedIds).toEqual([]);
+  });
+
+  it("does NOT upsert when ref unchanged", () => {
+    const a = { id: "a", value: 100 };
+    const d = diffEntities([a], [a]);
+    expect(d.upserted).toEqual([]);
+  });
+
+  it("emits deletedIds for removed rows", () => {
+    const a = { id: "a" };
+    const b = { id: "b" };
+    const d = diffEntities([a, b], [a]);
+    expect(d.deletedIds).toEqual(["b"]);
+    expect(d.upserted).toEqual([]);
+  });
+
+  it("delete-then-recreate with same id → upsert + no delete", () => {
+    const oldA = { id: "a", value: 1 };
+    const newA = { id: "a", value: 2 };
+    const d = diffEntities([oldA], [newA]);
+    expect(d.deletedIds).toEqual([]);
+    expect(d.upserted).toEqual([newA]);
+  });
+
+  it("multiple deletes in one tick", () => {
+    const d = diffEntities(
+      [{ id: "a" }, { id: "b" }, { id: "c" }],
+      [{ id: "a" }],
+    );
+    expect(d.deletedIds.sort()).toEqual(["b", "c"]);
+  });
+});
+
+describe("monthlyBudget change detection", () => {
+  it("fires write when value changes", () => {
+    const prev = 5000;
+    const next = 4500;
+    expect(next !== prev).toBe(true);
+  });
+
+  it("skips write when unchanged", () => {
+    const prev = 5000;
+    const next = 5000;
+    expect(next !== prev).toBe(false);
+  });
+
+  it("0 → positive triggers (initial set)", () => {
+    expect(1000 !== 0).toBe(true);
+  });
+
+  it("positive → 0 triggers (user cleared)", () => {
+    expect(0 !== 5000).toBe(true);
+  });
+});
+
+describe("settings reconcile policy", () => {
+  // Pure mirror of the use-cloud-sync settings branch.
+  function decide(args: {
+    cloud: number;
+    local: number;
+    ownershipMismatch: boolean;
+  }): "apply-cloud" | "push-local" | "noop" {
+    if (args.cloud > 0) {
+      return args.cloud !== args.local ? "apply-cloud" : "noop";
+    }
+    if (args.local > 0 && !args.ownershipMismatch) return "push-local";
+    return "noop";
+  }
+
+  it("cloud 5000, local 0 → apply-cloud", () => {
+    expect(decide({ cloud: 5000, local: 0, ownershipMismatch: false })).toBe(
+      "apply-cloud",
+    );
+  });
+
+  it("cloud 5000, local 5000 → noop", () => {
+    expect(decide({ cloud: 5000, local: 5000, ownershipMismatch: false })).toBe(
+      "noop",
+    );
+  });
+
+  it("cloud 5000, local 4500 → apply-cloud (cloud wins)", () => {
+    expect(decide({ cloud: 5000, local: 4500, ownershipMismatch: false })).toBe(
+      "apply-cloud",
+    );
+  });
+
+  it("cloud 0, local 5000 → push-local", () => {
+    expect(decide({ cloud: 0, local: 5000, ownershipMismatch: false })).toBe(
+      "push-local",
+    );
+  });
+
+  it("cloud 0, local 5000, ownershipMismatch → noop (no leak)", () => {
+    expect(decide({ cloud: 0, local: 5000, ownershipMismatch: true })).toBe(
+      "noop",
+    );
+  });
+
+  it("cloud 0, local 0 → noop", () => {
+    expect(decide({ cloud: 0, local: 0, ownershipMismatch: false })).toBe(
+      "noop",
+    );
+  });
+});

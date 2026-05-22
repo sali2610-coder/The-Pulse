@@ -109,6 +109,12 @@ export type DbIncome = {
   updated_at: string;
 };
 
+export type DbUserSettings = {
+  user_id: string;
+  monthly_budget: number;
+  updated_at: string;
+};
+
 export type DbBackup = {
   id: string;
   user_id: string;
@@ -176,6 +182,13 @@ export type Database = {
         Row: DbBackup;
         Insert: Omit<DbBackup, "user_id"> & { user_id?: string };
         Update: Partial<DbBackup>;
+      };
+      user_settings: {
+        Row: DbUserSettings;
+        Insert: Omit<DbUserSettings, "updated_at"> & {
+          updated_at?: string;
+        };
+        Update: Partial<DbUserSettings>;
       };
       sync_mutations: {
         Row: DbSyncMutation;

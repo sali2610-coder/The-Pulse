@@ -38,13 +38,20 @@ import {
   type SafetyPayload,
 } from "@/lib/local-safety-snapshots";
 import {
+  deleteAccount,
+  deleteEntry,
+  deleteIncome,
+  deleteLoan,
+  deleteRule,
   fetchAllEntities,
+  fetchUserSettings,
   pushAllEntities,
   upsertAccount,
   upsertEntry,
   upsertIncome,
   upsertLoan,
   upsertRule,
+  upsertUserSettings,
   verifyCloudAccess,
 } from "./cloud-store";
 import { getCurrentSession, onAuthStateChange } from "./auth";
@@ -303,6 +310,39 @@ export function useCloudSync(): CloudSyncState {
       });
       const localR = localEntityRichness();
 
+      // 2b. Pull user-level settings (currently just monthlyBudget).
+      //    Settings are reconciled separately because they aren't part
+      //    of the entity richness math. Rule:
+      //      - cloud > 0, local 0   → apply cloud
+      //      - cloud > 0, local > 0 → cloud wins (last-writer wins
+      //        and cloud was the last accepted value)
+      //      - cloud 0, local > 0   → push local up
+      //      - cloud 0, local 0     → noop
+      //    Push-local is suppressed when ownershipMismatch is true
+      //    (foreign cache shouldn't write into the new user's row).
+      try {
+        const settingsRes = await fetchUserSettings();
+        if (!cancelled && settingsRes.ok) {
+          const cloudBudget = settingsRes.monthlyBudget;
+          const localBudget = useFinanceStore.getState().monthlyBudget;
+          if (cloudBudget > 0) {
+            // Cloud has a value — apply it. Don't overwrite when local
+            // already matches (avoids triggering the subscribe handler).
+            if (cloudBudget !== localBudget) {
+              const api = useFinanceStore.setState as (
+                partial: Partial<ReturnType<typeof useFinanceStore.getState>>,
+              ) => void;
+              api({ monthlyBudget: cloudBudget });
+            }
+          } else if (localBudget > 0 && !ownershipMismatchRef.current) {
+            // Local has a value, cloud doesn't — push up.
+            await upsertUserSettings(localBudget);
+          }
+        }
+      } catch (err) {
+        console.warn("[cloud-sync] fetchUserSettings failed:", err);
+      }
+
       // 3. Reconcile.
       // When ownershipMismatch is true we just wiped the local store
       // because the cache belonged to a different user. In that case
@@ -385,6 +425,7 @@ export function useCloudSync(): CloudSyncState {
       accounts: useFinanceStore.getState().accounts,
       loans: useFinanceStore.getState().loans,
       incomes: useFinanceStore.getState().incomes,
+      monthlyBudget: useFinanceStore.getState().monthlyBudget,
     };
 
     const unsub = useFinanceStore.subscribe((s) => {
@@ -396,6 +437,7 @@ export function useCloudSync(): CloudSyncState {
           accounts: s.accounts,
           loans: s.loans,
           incomes: s.incomes,
+          monthlyBudget: s.monthlyBudget,
         };
 
         // Compute added/updated rows by reference-inequality on each
@@ -414,12 +456,38 @@ export function useCloudSync(): CloudSyncState {
             }
           }
         };
+        // Compute removed ids. Without this, a local delete would
+        // re-appear on next hydration because cloud still held the row.
+        const deleteRemoved = async <T extends { id: string }>(
+          prev: T[],
+          curr: T[],
+          fn: (id: string) => Promise<unknown>,
+        ) => {
+          const currIds = new Set(curr.map((c) => c.id));
+          for (const old of prev) {
+            if (!currIds.has(old.id)) await fn(old.id);
+          }
+        };
         try {
+          // Order: deletes first (free up unique constraints), then
+          // upserts. Within each pass, accounts before entries because
+          // entries can reference an account_id.
+          await deleteRemoved(lastSnap.accounts, next.accounts, deleteAccount);
+          await deleteRemoved(lastSnap.rules, next.rules, deleteRule);
+          await deleteRemoved(lastSnap.loans, next.loans, deleteLoan);
+          await deleteRemoved(lastSnap.incomes, next.incomes, deleteIncome);
+          await deleteRemoved(lastSnap.entries, next.entries, deleteEntry);
+
           await upsertChanged(lastSnap.accounts, next.accounts, upsertAccount);
           await upsertChanged(lastSnap.rules, next.rules, upsertRule);
           await upsertChanged(lastSnap.loans, next.loans, upsertLoan);
           await upsertChanged(lastSnap.incomes, next.incomes, upsertIncome);
           await upsertChanged(lastSnap.entries, next.entries, upsertEntry);
+
+          // monthlyBudget scalar — push when the value actually changed.
+          if (next.monthlyBudget !== lastSnap.monthlyBudget) {
+            await upsertUserSettings(next.monthlyBudget);
+          }
           lastSnap = next;
           setState((cur) => ({ ...cur, lastSyncAt: Date.now() }));
         } catch (err) {

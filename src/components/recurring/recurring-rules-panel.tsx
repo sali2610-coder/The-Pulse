@@ -57,15 +57,22 @@ export function RecurringRulesPanel() {
       unknown: { key: "unknown", label: "ללא קישור", rules: [], total: 0 },
     };
     for (const r of rules) {
-      const key: GroupKey = r.installmentTotal
-        ? "installments"
-        : r.paymentSource === "card"
+      // Phase 152d: paymentSource OUTRANKS installmentTotal. A card-
+      // linked installment plan belongs in the card's pressure group,
+      // not in a separate "installments" bucket — otherwise card
+      // pressure / utilization / net-worth math under-counts the
+      // committed monthly debt. The legacy "installments" group only
+      // catches plans with no payment source attached.
+      const key: GroupKey =
+        r.paymentSource === "card"
           ? "card"
           : r.paymentSource === "bank"
             ? "bank"
             : r.paymentSource === "cash"
               ? "cash"
-              : "unknown";
+              : r.installmentTotal
+                ? "installments"
+                : "unknown";
       buckets[key].rules.push(r);
       // Bucket totals reflect what actually fires THIS month — a past-end
       // installment plan or a not-yet-started one is "active=true" on the
