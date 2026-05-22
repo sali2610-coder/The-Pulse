@@ -116,6 +116,11 @@ const WhatIfSimulatorCard = lazy(() =>
     default: m.WhatIfSimulatorCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const RecurringCalendarCard = lazy(() =>
+  import("@/components/dashboard/recurring-calendar-card").then((m) => ({
+    default: m.RecurringCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const SavingsRateCard = lazy(() =>
   import("@/components/dashboard/savings-rate-card").then((m) => ({
     default: m.SavingsRateCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -422,6 +427,11 @@ export function DashboardTab() {
         <div className="sm:col-span-6">
           <Safe name="WhatIfSimulatorCard">
             <WhatIfSimulatorCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="RecurringCalendarCard">
+            <RecurringCalendarCard />
           </Safe>
         </div>
         <div className="sm:col-span-3">
