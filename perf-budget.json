@@ -1,0 +1,6 @@
+{
+  "_comment": "Performance budget seeded at Phase 164 baseline + ~10% headroom. Update intentionally when a feature legitimately needs more bundle. Checked in CI via `npm run perf:budget`.",
+  "totalKB": 2640,
+  "biggestKB": 940,
+  "fileCount": 80
+}

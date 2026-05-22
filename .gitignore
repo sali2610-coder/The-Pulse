@@ -48,3 +48,6 @@ playwright-report/
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# Phase 164: perf-budget snapshot is per-build, not checked in.
+perf-budget.snapshot.json

@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "perf:snapshot": "node scripts/perf-budget.mjs snapshot",
+    "perf:budget": "node scripts/perf-budget.mjs check"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
