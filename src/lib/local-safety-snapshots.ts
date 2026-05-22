@@ -26,6 +26,11 @@ import type {
 const STORAGE_KEY = "sally.safety.snapshots.v1";
 const FORCE_APPLY_KEY = "sally.safety.forceApplyNextGet";
 const LAST_RESTORE_KEY = "sally.safety.lastRestore";
+/** Records which Supabase user the LOCAL Zustand cache belongs to.
+ *  Read/written by use-cloud-sync so a different Google account
+ *  signing in on the same device wipes the cache instead of showing
+ *  the prior user's data. */
+const CACHE_OWNER_KEY = "sally.cache.claimedByUserId";
 const MAX_ENTRIES = 20;
 
 export type SafetyPayload = {
@@ -250,6 +255,33 @@ export function readLastRestoreResult(): RestoreResult | null {
     return JSON.parse(raw) as RestoreResult;
   } catch {
     return null;
+  }
+}
+
+// ── Cache-owner tracking (multi-user isolation) ────────────────────────
+// Read on sign-in; mismatched ownership wipes the local cache before
+// any cloud data is fetched. Prevents USER_A's data from briefly
+// rendering on USER_B's screen after a Google account switch.
+
+export function readCacheOwner(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(CACHE_OWNER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeCacheOwner(userId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (userId === null) {
+      window.localStorage.removeItem(CACHE_OWNER_KEY);
+    } else {
+      window.localStorage.setItem(CACHE_OWNER_KEY, userId);
+    }
+  } catch {
+    /* ignore */
   }
 }
 

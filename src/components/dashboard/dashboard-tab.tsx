@@ -263,16 +263,19 @@ export function DashboardTab() {
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const cloudSync = useCloudSyncState();
 
-  // Loading curtain: only show during the brief window between sign-in
-  // and the first cloud pull completing. Outside that window the
-  // local cache renders immediately. The check is guarded on
-  // `authenticated && !hydrated && hydrating` so a signed-out user
-  // (the common case) never sees a curtain.
-  const showCurtain =
+  // Loading curtain. Covers three windows where rendering the local
+  // cache would be wrong:
+  //   1. Pre-verify: useCloudSync hasn't determined who's signed in
+  //      yet. Could be USER_A's cache on USER_B's session — wait.
+  //   2. Authenticated + hydrating: waiting on the cloud pull.
+  //   3. Ownership mismatch detected: foreign cache, wiping in
+  //      progress. Show curtain until hydration completes so we
+  //      never render the previous user's data even for one frame.
+  const showCurtain = Boolean(
     cloudSync?.configured &&
-    cloudSync.authenticated &&
-    cloudSync.hydrating &&
-    !cloudSync.hydrated;
+      (!cloudSync.verified ||
+        (cloudSync.authenticated && !cloudSync.hydrated)),
+  );
 
   if (showCurtain) {
     return (

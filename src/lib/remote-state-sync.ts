@@ -260,21 +260,16 @@ export function useRemoteStateSync(): void {
         //     that survives identity changes, so a wrong call can
         //     always be undone via the BackupsCard advanced surface.
         if (isUserSwap) {
+          // Phase 152b multi-user isolation: the previous Phase 149
+          // behaviour preserved local on rich-local-vs-empty-remote
+          // because both belonged to the same person. Under single
+          // Supabase Auth, an isUserSwap signal means DIFFERENT human.
+          // Preserving local would leak USER_A's data onto USER_B's
+          // screen. We MUST apply remote (even when remote is empty)
+          // and reset the local cache. The safety snapshot guarantees
+          // rollback if the swap was accidental.
           safetyBackup("pre-account-switch");
-          if (data?.blob && remoteR > 0) {
-            applyRemote(data.blob.state);
-          } else if (localRichness === 0) {
-            // Local is also empty → safe to blank to remote.
-            applyRemote(remoteState ?? {});
-          } else {
-            // Rich local + empty/missing remote on a NEW user scope.
-            // Do NOT wipe — the new user-scope blob will receive a
-            // PUT from this device once the user touches something.
-            // The safety snapshot above guarantees rollback.
-            blockOverwrite(
-              `user-swap: remote richness ${remoteR} would overwrite local richness ${localRichness}`,
-            );
-          }
+          applyRemote(remoteState ?? {});
           return;
         }
 
