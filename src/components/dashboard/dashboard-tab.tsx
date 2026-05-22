@@ -111,6 +111,11 @@ const CommitmentBurdenCard = lazy(() =>
     default: m.CommitmentBurdenCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const SavingsRateCard = lazy(() =>
+  import("@/components/dashboard/savings-rate-card").then((m) => ({
+    default: m.SavingsRateCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const SubscriptionRadarCard = lazy(() =>
   import("@/components/dashboard/subscription-radar-card").then((m) => ({
     default: m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -418,6 +423,9 @@ export function DashboardTab() {
         </div>
         <div className="sm:col-span-6">
           <Safe name="WeeklyReviewCard"><WeeklyReviewCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SavingsRateCard"><SavingsRateCard /></Safe>
         </div>
         <div className="sm:col-span-6">
           <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
