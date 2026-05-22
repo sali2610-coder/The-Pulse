@@ -130,13 +130,26 @@ export function useCloudSync(): CloudSyncState {
       }));
     })();
     const unsub = onAuthStateChange((session) => {
-      setState((s) => ({
-        ...s,
-        authenticated: Boolean(session),
-        cloudUserId: session?.userId ?? null,
-        // Reset hydration ref so a fresh sign-in re-pulls.
-        hydrated: session ? s.hydrated : false,
-      }));
+      console.info(
+        "[cloud-sync] auth state change:",
+        session ? `signed in as ${session.userId.slice(0, 8)}` : "signed out",
+      );
+      setState((s) => {
+        // If the cloud user id changed (different user signed in),
+        // force a fresh hydration so we never serve USER_A's screen
+        // to USER_B.
+        const userChanged =
+          session?.userId &&
+          s.cloudUserId &&
+          session.userId !== s.cloudUserId;
+        if (userChanged) hydrationRanRef.current = false;
+        return {
+          ...s,
+          authenticated: Boolean(session),
+          cloudUserId: session?.userId ?? null,
+          hydrated: session && !userChanged ? s.hydrated : false,
+        };
+      });
       if (!session) hydrationRanRef.current = false;
     });
     return () => {
@@ -154,10 +167,19 @@ export function useCloudSync(): CloudSyncState {
 
     let cancelled = false;
     (async () => {
+      console.info("[cloud-sync] hydration: start");
       setState((s) => ({ ...s, hydrating: true, lastError: null }));
       // 1. Verify schema + RLS.
       const health = await verifyCloudAccess();
       if (cancelled) return;
+      console.info("[cloud-sync] verifyCloudAccess →", {
+        configured: health.configured,
+        authenticated: health.authenticated,
+        allOk: health.allOk,
+        failing: Object.entries(health.tables)
+          .filter(([, v]) => !v.ok)
+          .map(([k, v]) => `${k}: ${v.error ?? "?"}`),
+      });
       if (!health.allOk) {
         setState((s) => ({
           ...s,
@@ -173,6 +195,7 @@ export function useCloudSync(): CloudSyncState {
       const result = await fetchAllEntities();
       if (cancelled) return;
       if (!result.ok) {
+        console.warn("[cloud-sync] fetchAllEntities failed:", result);
         setState((s) => ({
           ...s,
           hydrating: false,
@@ -181,6 +204,16 @@ export function useCloudSync(): CloudSyncState {
         return;
       }
       const cloud = result.data;
+      console.info("[cloud-sync] fetchAllEntities ok:", {
+        userId: result.userId,
+        counts: {
+          entries: cloud.entries.length,
+          accounts: cloud.accounts.length,
+          rules: cloud.rules.length,
+          loans: cloud.loans.length,
+          incomes: cloud.incomes.length,
+        },
+      });
       const cloudR = richness({
         entries: cloud.entries.length,
         rules: cloud.rules.length,
@@ -192,6 +225,16 @@ export function useCloudSync(): CloudSyncState {
       const localR = localEntityRichness();
 
       // 3. Reconcile.
+      console.info("[cloud-sync] reconcile:", {
+        cloudR,
+        localR,
+        decision:
+          cloudR > localR
+            ? "apply-cloud"
+            : cloudR < localR
+              ? "push-local"
+              : "noop",
+      });
       if (cloudR > localR) {
         // Cloud richer → apply over local, but capture safety first.
         captureSafetyBackup("pre-remote-apply", snapshotLocal());
