@@ -58,44 +58,106 @@ Same query against the other entity tables → same parity.
 
 PASS criteria — every write reached cloud via RLS.
 
-## 3. Refresh app
+## 3. iPhone PWA lifecycle
 
-While signed in as USER_A, with data added in step 2:
+iPhone standalone PWA has no refresh button. Real acceptance is the
+iOS lifecycle itself. Run every sub-step on a physical iPhone with
+The Pulse installed via "Add to Home Screen".
 
-- [ ] Hard refresh (Cmd+R / pull-to-refresh on iOS standalone).
-- [ ] Dashboard renders with EXACTLY the same accounts, card, recurring
-      rule, entries, income, loan as before refresh. No "empty" flash.
-- [ ] During the brief hydration window the loading curtain "טוען
-      נתונים מהענן" may appear, then dismisses. Never longer than ~2s.
-- [ ] Sync card again shows `מסונכרן` with matching ענן/מקומי counts.
+### 3a. Cold relaunch from app switcher
 
-PASS criteria — refresh preserves every entity. No manual restore
-needed.
+- [ ] After step 2, swipe up from the home indicator to open the app
+      switcher.
+- [ ] Swipe the Pulse card up off the top — kills the WebKit
+      process entirely.
+- [ ] Tap the Pulse icon on the home screen.
+- [ ] App launches fresh. Dashboard hydrates with EXACTLY the same
+      data added in step 2 — accounts, card, recurring rule, entries,
+      income, loan.
+- [ ] Loading curtain "טוען נתונים מהענן" may flash briefly, then
+      dismisses. Never longer than ~2s.
+- [ ] Sync card shows `מסונכרן` with matching ענן/מקומי counts.
 
-## 4. Logout / login
+### 3b. Lock screen round-trip
+
+- [ ] With Pulse open in the foreground, press the side button to
+      lock the phone.
+- [ ] Wait ~30 seconds.
+- [ ] Unlock the phone (Face ID / passcode). Pulse is in front again.
+- [ ] No "empty" flash, no curtain. Data is identical to before lock.
+- [ ] Sync card timestamp updates within ~2s of unlock (visibilitychange
+      triggers a re-sync).
+
+### 3c. App switch round-trip
+
+- [ ] Swipe up halfway to expose the app switcher (don't kill the app).
+- [ ] Open Messages / Safari / any other app. Stay there for ~60s.
+- [ ] Swipe up and return to Pulse.
+- [ ] No empty flash, no curtain. Data unchanged.
+- [ ] Sync card `עדכון אחרון` ticks within ~2s of return.
+
+### 3d. Background + add data on another device
+
+- [ ] Send Pulse to background (home indicator swipe).
+- [ ] On a SECOND device signed in as USER_A, add one expense.
+- [ ] Wait ~3s for the second device to push to Supabase.
+- [ ] Return to Pulse on the iPhone (foreground).
+- [ ] The new expense appears within ~2s without any manual action.
+
+PASS criteria — iPhone PWA preserves data across every iOS lifecycle
+transition AND pulls fresh cloud data on resume.
+
+## 4. Sign out / sign in (same Google)
+
+On the iPhone PWA:
 
 - [ ] Settings → "סנכרון ענן" card → "נתק" button.
 - [ ] Card reverts to the "חבר את Google" CTA state.
 - [ ] Settings → AuthCard NextAuth "התנתק" button (separate flow).
-- [ ] Open a fresh private window (or different device).
-- [ ] Tap "חבר את Google לסנכרון ענן" → sign in as USER_A.
-- [ ] Dashboard hydrates with the same data as before logout — every
+- [ ] Kill Pulse from the app switcher.
+- [ ] Reopen Pulse from the home-screen icon.
+- [ ] Welcome / sign-in surface renders.
+- [ ] Tap "חבר את Google לסנכרון ענן" → pick the SAME USER_A account.
+- [ ] Dashboard hydrates with the same data added in step 2 — every
       account, every entry, the recurring rule, all of it.
 - [ ] No manual restore button tapped. No "מצב ריק" warning.
 
 PASS criteria — data follows the Google identity, not the device.
 
-## 5. Cloud auto-hydrate (cross-device)
+## 5. PWA reinstall (cloud auto-hydrate from zero)
 
-- [ ] On a SECOND device / browser, open the app fresh.
+The hardest case — local cache is gone, only Supabase remembers the
+user.
+
+- [ ] On the iPhone, long-press the Pulse home-screen icon → "Remove
+      from Home Screen" → confirm.
+- [ ] Verify the icon is gone. Open Safari, browse anywhere to confirm
+      no Pulse session is lingering.
+- [ ] Reopen the production URL in Safari.
+- [ ] Add the app back to the home screen (Share → "Add to Home
+      Screen").
+- [ ] Launch from the new home-screen icon.
 - [ ] Sign in to Supabase as USER_A.
+- [ ] Dashboard hydrates with the FULL dataset added in step 2 within
+      ~2 seconds. Loading curtain may flash, then dismisses.
+- [ ] Sync card cloud counts equal the local counts.
+- [ ] No restore button tapped. No "מצב ריק" warning.
+
+PASS criteria — cloud truth survives a complete local wipe. The user
+recovers everything by signing in.
+
+## 5b. Cross-device convergence
+
+- [ ] On a SECOND device (browser or second iPhone), sign in to
+      Supabase as USER_A.
 - [ ] Dashboard hydrates with the same data as device #1.
 - [ ] Add one expense on device #2 (e.g. `קופיקס`, 18, food, cash).
 - [ ] Wait ~3 seconds.
-- [ ] Switch to device #1 and hard refresh.
-- [ ] The new `קופיקס` expense appears on device #1.
+- [ ] On device #1: send Pulse to background, then return to it.
+- [ ] The new `קופיקס` expense appears on device #1 within ~2s.
 
-PASS criteria — cloud is canonical, devices converge.
+PASS criteria — cloud is canonical, devices converge without manual
+intervention.
 
 ## 6. No manual restore needed
 
