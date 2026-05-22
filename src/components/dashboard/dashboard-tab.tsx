@@ -101,6 +101,11 @@ const WeeklyReviewCard = lazy(() =>
     default: m.WeeklyReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const RiskWarningsCard = lazy(() =>
+  import("@/components/dashboard/risk-warnings-card").then((m) => ({
+    default: m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const SubscriptionRadarCard = lazy(() =>
   import("@/components/dashboard/subscription-radar-card").then((m) => ({
     default: m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -398,6 +403,9 @@ export function DashboardTab() {
         title="תובנות חכמות"
         subtitle="חריגות, מגמות ועזרת ה-CFO"
       >
+        <div className="sm:col-span-6">
+          <Safe name="RiskWarningsCard"><RiskWarningsCard /></Safe>
+        </div>
         <div className="sm:col-span-6">
           <Safe name="WeeklyReviewCard"><WeeklyReviewCard /></Safe>
         </div>
