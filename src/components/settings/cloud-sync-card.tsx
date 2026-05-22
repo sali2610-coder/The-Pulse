@@ -155,20 +155,26 @@ export function CloudSyncCard() {
     cloud.loans === localCounts.loans &&
     cloud.incomes === localCounts.incomes;
 
-  const tone = state.hydrating
-    ? "#FCD34D"
-    : state.lastError
-      ? "#F87171"
-      : inSync && state.hydrated
-        ? "#34D399"
-        : "#FCD34D";
-  const label = state.hydrating
-    ? "מסנכרן"
-    : state.lastError
-      ? "שגיאה"
-      : inSync && state.hydrated
-        ? "מסונכרן"
-        : "ממתין";
+  const tone = !state.online
+    ? "#A1A1AA"
+    : state.hydrating
+      ? "#FCD34D"
+      : state.lastError || state.pendingRetries > 0
+        ? "#F87171"
+        : inSync && state.hydrated
+          ? "#34D399"
+          : "#FCD34D";
+  const label = !state.online
+    ? "במצב לא־מקוון"
+    : state.hydrating
+      ? "מסנכרן"
+      : state.pendingRetries > 0
+        ? `ממתין · ${state.pendingRetries}`
+        : state.lastError
+          ? "שגיאה"
+          : inSync && state.hydrated
+            ? "מסונכרן"
+            : "ממתין";
 
   return (
     <section className="rounded-3xl border border-[color:#34D399]/40 bg-surface/60 p-5">
@@ -233,6 +239,8 @@ export function CloudSyncCard() {
           {cloud.loans + cloud.incomes} / {localCounts.loans + localCounts.incomes}
         </Dt>
         <Dt label="RLS">{state.rlsOk === true ? "תקין" : state.rlsOk === false ? "נכשל" : "—"}</Dt>
+        <Dt label="מצב רשת">{state.online ? "מקוון" : "לא־מקוון"}</Dt>
+        <Dt label="כתיבות ממתינות">{state.pendingRetries}</Dt>
         <Dt label="שגיאה אחרונה">{state.lastError ?? "—"}</Dt>
       </dl>
     </section>

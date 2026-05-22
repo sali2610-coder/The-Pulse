@@ -81,6 +81,17 @@ export type CloudSyncState = {
   /** When true, the next hydration MUST apply cloud unconditionally
    *  (don't push local up — local belongs to a previous owner). */
   ownershipMismatch: boolean;
+  /** Tracks navigator.onLine. False suppresses cloud writes (the
+   *  failed-write queue stores them for retry on reconnect). */
+  online: boolean;
+  /** Counter incremented on every online/visible event. The hydration
+   *  effect depends on this so a reconnect or foreground-after-
+   *  background re-pulls fresh cloud state — proxy for cross-device
+   *  convergence without a realtime channel. */
+  reconnectTick: number;
+  /** Count of writes currently held in the retry queue (visible in
+   *  CloudSyncCard so the user sees pending uploads). */
+  pendingRetries: number;
 };
 
 const INITIAL: CloudSyncState = {
@@ -95,6 +106,9 @@ const INITIAL: CloudSyncState = {
   lastError: null,
   rlsOk: null,
   ownershipMismatch: false,
+  online: true,
+  reconnectTick: 0,
+  pendingRetries: 0,
 };
 
 function snapshotLocal(): SafetyPayload {
@@ -147,6 +161,43 @@ function wipeLocalStoreToEmpty(): void {
   });
 }
 
+// ── Failed-write retry queue ─────────────────────────────────────────
+// Holds writes that failed mid-flight (offline, transient 5xx, RLS
+// glitch). Drained when:
+//   - the next debounced subscribe flush fires
+//   - an online event fires
+//   - hydration completes
+// Bounded at 200 to avoid unbounded growth. Newest-first dropoff so a
+// long offline session never throws away the LATEST write.
+
+type RetryKind = "entry" | "account" | "rule" | "loan" | "income" | "settings";
+type RetryOp = "upsert" | "delete";
+type RetryItem =
+  | { kind: "entry"; op: "upsert"; payload: import("@/types/finance").ExpenseEntry }
+  | { kind: "entry"; op: "delete"; id: string }
+  | { kind: "account"; op: "upsert"; payload: import("@/types/finance").Account }
+  | { kind: "account"; op: "delete"; id: string }
+  | { kind: "rule"; op: "upsert"; payload: import("@/types/finance").RecurringRule }
+  | { kind: "rule"; op: "delete"; id: string }
+  | { kind: "loan"; op: "upsert"; payload: import("@/types/finance").Loan }
+  | { kind: "loan"; op: "delete"; id: string }
+  | { kind: "income"; op: "upsert"; payload: import("@/types/finance").Income }
+  | { kind: "income"; op: "delete"; id: string }
+  | { kind: "settings"; op: "upsert"; monthlyBudget: number };
+
+const RETRY_MAX = 200;
+const retryQueue: RetryItem[] = [];
+
+function enqueueRetry(item: RetryItem): void {
+  retryQueue.push(item);
+  if (retryQueue.length > RETRY_MAX) {
+    retryQueue.splice(0, retryQueue.length - RETRY_MAX);
+  }
+}
+
+void ({} as RetryKind);
+void ({} as RetryOp);
+
 export function useCloudSync(): CloudSyncState {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const [state, setState] = useState<CloudSyncState>(INITIAL);
@@ -155,6 +206,43 @@ export function useCloudSync(): CloudSyncState {
   // the latest value without taking a dependency on it — keeping it in
   // the dep array would re-fire the effect on every reconcile.
   const ownershipMismatchRef = useRef(false);
+
+  // ── Online + visibility listeners ─────────────────────────────────
+  // Bumps `reconnectTick` on transition events so the hydration
+  // effect's dep array picks up the change and re-pulls. Acts as the
+  // proxy for cross-device convergence: foreground/online → re-pull.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const setOnline = (online: boolean) => {
+      setState((s) => ({
+        ...s,
+        online,
+        // Reset hydration flag so the next online tick re-pulls.
+        ...(online
+          ? { reconnectTick: s.reconnectTick + 1 }
+          : {}),
+      }));
+      if (online) hydrationRanRef.current = false;
+    };
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setState((s) => ({ ...s, reconnectTick: s.reconnectTick + 1 }));
+        hydrationRanRef.current = false;
+      }
+    };
+    // Seed initial value.
+    setState((s) => ({ ...s, online: navigator.onLine }));
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   // ── Authentication watch + cache-ownership enforcement ────────────
   //
@@ -409,7 +497,7 @@ export function useCloudSync(): CloudSyncState {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, state.configured, state.authenticated]);
+  }, [hydrated, state.configured, state.authenticated, state.reconnectTick]);
 
   // ── Write loop: push store mutations up ────────────────────────────
   // Subscribes once after hydration. Fires on every store change
@@ -428,6 +516,78 @@ export function useCloudSync(): CloudSyncState {
       monthlyBudget: useFinanceStore.getState().monthlyBudget,
     };
 
+    // Apply a single cloud write. On failure (offline, RLS glitch,
+    // network), enqueue for retry. Status return type lets us avoid
+    // throwing from the helper functions.
+    const tryWrite = async (
+      op: () => Promise<{ ok: true } | { ok: false; reason: string; detail?: string }>,
+      retryItem: RetryItem,
+    ): Promise<boolean> => {
+      try {
+        const r = await op();
+        if (!r.ok) {
+          enqueueRetry(retryItem);
+          setState((cur) => ({
+            ...cur,
+            lastError: r.detail ?? r.reason,
+            pendingRetries: retryQueue.length,
+          }));
+          return false;
+        }
+        return true;
+      } catch (err) {
+        enqueueRetry(retryItem);
+        setState((cur) => ({
+          ...cur,
+          lastError: err instanceof Error ? err.message : "sync_failed",
+          pendingRetries: retryQueue.length,
+        }));
+        return false;
+      }
+    };
+
+    // Drain the retry queue. Stops on first failure so a still-down
+    // backend doesn't burn the whole queue on the same error. Updates
+    // pendingRetries count after the pass.
+    const drainRetryQueue = async () => {
+      if (retryQueue.length === 0) return;
+      while (retryQueue.length > 0) {
+        const item = retryQueue[0];
+        let ok = false;
+        if (item.kind === "entry") {
+          ok =
+            item.op === "upsert"
+              ? (await upsertEntry(item.payload)).ok
+              : (await deleteEntry(item.id)).ok;
+        } else if (item.kind === "account") {
+          ok =
+            item.op === "upsert"
+              ? (await upsertAccount(item.payload)).ok
+              : (await deleteAccount(item.id)).ok;
+        } else if (item.kind === "rule") {
+          ok =
+            item.op === "upsert"
+              ? (await upsertRule(item.payload)).ok
+              : (await deleteRule(item.id)).ok;
+        } else if (item.kind === "loan") {
+          ok =
+            item.op === "upsert"
+              ? (await upsertLoan(item.payload)).ok
+              : (await deleteLoan(item.id)).ok;
+        } else if (item.kind === "income") {
+          ok =
+            item.op === "upsert"
+              ? (await upsertIncome(item.payload)).ok
+              : (await deleteIncome(item.id)).ok;
+        } else if (item.kind === "settings") {
+          ok = (await upsertUserSettings(item.monthlyBudget)).ok;
+        }
+        if (!ok) break;
+        retryQueue.shift();
+      }
+      setState((cur) => ({ ...cur, pendingRetries: retryQueue.length }));
+    };
+
     const unsub = useFinanceStore.subscribe((s) => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
@@ -440,69 +600,91 @@ export function useCloudSync(): CloudSyncState {
           monthlyBudget: s.monthlyBudget,
         };
 
+        // Drain anything that previously failed BEFORE pushing the new
+        // diff — preserves causal order so an edit doesn't overwrite a
+        // queued delete.
+        await drainRetryQueue();
+
         // Compute added/updated rows by reference-inequality on each
         // entity. New ids OR updated row identities trigger an upsert.
-        const upsertChanged = async <T extends { id: string }>(
+        const upsertChangedSafe = async <
+          T extends { id: string },
+          K extends RetryItem["kind"],
+        >(
           prev: T[],
           curr: T[],
-          fn: (item: T) => Promise<unknown>,
+          fn: (item: T) => Promise<{ ok: true } | { ok: false; reason: string; detail?: string }>,
+          kind: K,
         ) => {
           const prevById = new Map(prev.map((p) => [p.id, p] as const));
           for (const item of curr) {
             const old = prevById.get(item.id);
             if (old !== item) {
-              // Includes both add (no prev) and update (different ref).
-              await fn(item);
+              await tryWrite(
+                () => fn(item),
+                { kind, op: "upsert", payload: item } as unknown as RetryItem,
+              );
             }
           }
         };
-        // Compute removed ids. Without this, a local delete would
-        // re-appear on next hydration because cloud still held the row.
-        const deleteRemoved = async <T extends { id: string }>(
+        const deleteRemovedSafe = async <
+          T extends { id: string },
+          K extends RetryItem["kind"],
+        >(
           prev: T[],
           curr: T[],
-          fn: (id: string) => Promise<unknown>,
+          fn: (id: string) => Promise<{ ok: true } | { ok: false; reason: string; detail?: string }>,
+          kind: K,
         ) => {
           const currIds = new Set(curr.map((c) => c.id));
           for (const old of prev) {
-            if (!currIds.has(old.id)) await fn(old.id);
+            if (!currIds.has(old.id)) {
+              await tryWrite(
+                () => fn(old.id),
+                { kind, op: "delete", id: old.id } as RetryItem,
+              );
+            }
           }
         };
-        try {
-          // Order: deletes first (free up unique constraints), then
-          // upserts. Within each pass, accounts before entries because
-          // entries can reference an account_id.
-          await deleteRemoved(lastSnap.accounts, next.accounts, deleteAccount);
-          await deleteRemoved(lastSnap.rules, next.rules, deleteRule);
-          await deleteRemoved(lastSnap.loans, next.loans, deleteLoan);
-          await deleteRemoved(lastSnap.incomes, next.incomes, deleteIncome);
-          await deleteRemoved(lastSnap.entries, next.entries, deleteEntry);
 
-          await upsertChanged(lastSnap.accounts, next.accounts, upsertAccount);
-          await upsertChanged(lastSnap.rules, next.rules, upsertRule);
-          await upsertChanged(lastSnap.loans, next.loans, upsertLoan);
-          await upsertChanged(lastSnap.incomes, next.incomes, upsertIncome);
-          await upsertChanged(lastSnap.entries, next.entries, upsertEntry);
+        // Order: deletes first (free up unique constraints), then
+        // upserts. Within each pass, accounts before entries because
+        // entries can reference an account_id.
+        await deleteRemovedSafe(lastSnap.accounts, next.accounts, deleteAccount, "account");
+        await deleteRemovedSafe(lastSnap.rules, next.rules, deleteRule, "rule");
+        await deleteRemovedSafe(lastSnap.loans, next.loans, deleteLoan, "loan");
+        await deleteRemovedSafe(lastSnap.incomes, next.incomes, deleteIncome, "income");
+        await deleteRemovedSafe(lastSnap.entries, next.entries, deleteEntry, "entry");
 
-          // monthlyBudget scalar — push when the value actually changed.
-          if (next.monthlyBudget !== lastSnap.monthlyBudget) {
-            await upsertUserSettings(next.monthlyBudget);
-          }
-          lastSnap = next;
-          setState((cur) => ({ ...cur, lastSyncAt: Date.now() }));
-        } catch (err) {
-          setState((cur) => ({
-            ...cur,
-            lastError: err instanceof Error ? err.message : "sync_failed",
-          }));
+        await upsertChangedSafe(lastSnap.accounts, next.accounts, upsertAccount, "account");
+        await upsertChangedSafe(lastSnap.rules, next.rules, upsertRule, "rule");
+        await upsertChangedSafe(lastSnap.loans, next.loans, upsertLoan, "loan");
+        await upsertChangedSafe(lastSnap.incomes, next.incomes, upsertIncome, "income");
+        await upsertChangedSafe(lastSnap.entries, next.entries, upsertEntry, "entry");
+
+        if (next.monthlyBudget !== lastSnap.monthlyBudget) {
+          await tryWrite(
+            () => upsertUserSettings(next.monthlyBudget),
+            { kind: "settings", op: "upsert", monthlyBudget: next.monthlyBudget },
+          );
         }
+        lastSnap = next;
+        setState((cur) => ({
+          ...cur,
+          lastSyncAt: Date.now(),
+          pendingRetries: retryQueue.length,
+        }));
       }, 1500);
     });
+
+    // Drain on reconnect/foreground ticks too.
+    void drainRetryQueue();
+
     return () => {
       unsub();
       if (timer) clearTimeout(timer);
     };
-  }, [state.hydrated, state.authenticated]);
+  }, [state.hydrated, state.authenticated, state.reconnectTick]);
 
   return state;
 }
