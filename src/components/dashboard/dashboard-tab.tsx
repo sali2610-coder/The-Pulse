@@ -89,6 +89,11 @@ const FuturePressureCard = lazy(() =>
     default: m.FuturePressureCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const ObligationsTimelineCard = lazy(() =>
+  import("@/components/dashboard/obligations-timeline-card").then((m) => ({
+    default: m.ObligationsTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const SubscriptionRadarCard = lazy(() =>
   import("@/components/dashboard/subscription-radar-card").then((m) => ({
     default: m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -495,6 +500,11 @@ export function DashboardTab() {
             </div>
             <div className="sm:col-span-3">
               <Safe name="FuturePressureCard"><FuturePressureCard /></Safe>
+            </div>
+            <div className="sm:col-span-6">
+              <Safe name="ObligationsTimelineCard">
+                <ObligationsTimelineCard />
+              </Safe>
             </div>
             <div className="sm:col-span-3">
               <Safe name="CategoryDonut"><CategoryDonut /></Safe>
