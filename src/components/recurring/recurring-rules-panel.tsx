@@ -2,12 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Plus, Pencil, Trash2, Power } from "lucide-react";
+import {
+  ChevronDown,
+  Plus,
+  Pencil,
+  Trash2,
+  Power,
+  SkipForward,
+  Undo2,
+} from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { getCategory } from "@/lib/categories";
 import { currentMonthKey } from "@/lib/dates";
-import { buildStatusMap } from "@/lib/projections";
+import { buildStatusMap, isSkippedStatus } from "@/lib/projections";
 import { ruleSchedule } from "@/lib/installment-schedule";
 import { tap } from "@/lib/haptics";
 
@@ -30,6 +38,12 @@ export function RecurringRulesPanel() {
   const updateRule = useFinanceStore((s) => s.updateRule);
   const deleteRule = useFinanceStore((s) => s.deleteRule);
   const toggleRule = useFinanceStore((s) => s.toggleRule);
+  const skipRecurringForMonth = useFinanceStore(
+    (s) => s.skipRecurringForMonth,
+  );
+  const unskipRecurringForMonth = useFinanceStore(
+    (s) => s.unskipRecurringForMonth,
+  );
 
   const [mode, setMode] = useState<
     { kind: "list" } | { kind: "new" } | { kind: "edit"; id: string }
@@ -182,7 +196,8 @@ export function RecurringRulesPanel() {
                 const cat = getCategory(rule.category);
                 const Icon = cat.icon;
                 const status = statusMap.get(`${rule.id}__${monthKey}`);
-                const paid = status?.status === "paid";
+                const skipped = isSkippedStatus(status);
+                const paid = status?.status === "paid" && !skipped;
                 const sched = ruleSchedule(rule, monthKey);
                 const isInstallment = Boolean(rule.installmentTotal);
                 return (
@@ -244,18 +259,24 @@ export function RecurringRulesPanel() {
                           <span>·</span>
                           <span
                             className={
-                              paid ? "text-gold" : "text-muted-foreground"
+                              skipped
+                                ? "text-[#A1A1AA]"
+                                : paid
+                                  ? "text-gold"
+                                  : "text-muted-foreground"
                             }
                           >
-                            {paid
-                              ? "שולם החודש"
-                              : sched.isComplete
-                                ? "הושלם"
-                                : sched.isFuture
-                                  ? "טרם החל"
-                                  : rule.active
-                                    ? "ממתין"
-                                    : "כבוי"}
+                            {skipped
+                              ? "דולג החודש"
+                              : paid
+                                ? "שולם החודש"
+                                : sched.isComplete
+                                  ? "הושלם"
+                                  : sched.isFuture
+                                    ? "טרם החל"
+                                    : rule.active
+                                      ? "ממתין"
+                                      : "כבוי"}
                           </span>
                           {rule.paymentSource && rule.paymentSource !== "unknown" ? (
                             <>
@@ -303,6 +324,34 @@ export function RecurringRulesPanel() {
                             <Power className="size-3" />
                             {rule.active ? "כבה" : "הפעל"}
                           </button>
+                          {/* Skip / un-skip only makes sense for an
+                             active rule that isn't already matched to
+                             a real payment this month. */}
+                          {rule.active && !paid && !sched.isComplete && !sched.isFuture ? (
+                            skipped ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  unskipRecurringForMonth(rule.id, monthKey)
+                                }
+                                className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                              >
+                                <Undo2 className="size-3" />
+                                בטל דילוג
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  skipRecurringForMonth(rule.id, monthKey)
+                                }
+                                className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                              >
+                                <SkipForward className="size-3" />
+                                דלג החודש
+                              </button>
+                            )
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => {

@@ -136,6 +136,18 @@ export function getRuleStatus(
   return buildStatusMap(statuses).get(statusKey(ruleId, monthKey));
 }
 
+/** True when a status was produced by `skipRecurringForMonth`. The
+ *  signature is status=paid + actualAmount=0 + matchedExpenseId
+ *  absent — a real payment always has a matchedExpenseId. */
+export function isSkippedStatus(s: RecurringStatus | undefined): boolean {
+  if (!s) return false;
+  return (
+    s.status === "paid" &&
+    s.actualAmount === 0 &&
+    s.matchedExpenseId === undefined
+  );
+}
+
 export function projectMonth(args: {
   entries: ExpenseEntry[];
   rules: RecurringRule[];

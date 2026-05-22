@@ -10,6 +10,7 @@ import type {
   Income,
   Issuer,
   Loan,
+  MonthKey,
   PaymentMethod,
   RecurringRule,
   RecurringStatus,
@@ -158,6 +159,14 @@ type Actions = {
   updateRule: (id: string, patch: Partial<AddRuleInput>) => void;
   deleteRule: (id: string) => void;
   toggleRule: (id: string) => void;
+  /** Mark a recurring rule as "skipped" for a single month without
+   *  disabling the rule itself. Stored as status=paid + actualAmount=0
+   *  + no matchedExpenseId so every aggregation that already filters
+   *  on status=paid transparently excludes it. */
+  skipRecurringForMonth: (ruleId: string, monthKey: MonthKey) => void;
+  /** Inverse of skipRecurringForMonth — only safe to call on a status
+   *  produced by skipRecurringForMonth (matchedExpenseId === undefined). */
+  unskipRecurringForMonth: (ruleId: string, monthKey: MonthKey) => void;
 
   addAccount: (input: AddAccountInput) => Account;
   updateAccount: (id: string, patch: Partial<AddAccountInput>) => void;
@@ -633,6 +642,34 @@ export const useFinanceStore = create<State & Actions>()(
         set((state) => ({
           rules: state.rules.map((r) =>
             r.id === id ? { ...r, active: !r.active } : r,
+          ),
+        }));
+      },
+
+      skipRecurringForMonth: (ruleId, monthKey) => {
+        set((state) => ({
+          statuses: upsertStatus(state.statuses, {
+            ruleId,
+            monthKey,
+            status: "paid",
+            actualAmount: 0,
+            // matchedExpenseId left undefined — the marker that
+            // distinguishes "skipped" from a real matched payment.
+          }),
+        }));
+      },
+
+      unskipRecurringForMonth: (ruleId, monthKey) => {
+        set((state) => ({
+          statuses: state.statuses.filter(
+            (s) =>
+              !(
+                s.ruleId === ruleId &&
+                s.monthKey === monthKey &&
+                s.status === "paid" &&
+                s.actualAmount === 0 &&
+                s.matchedExpenseId === undefined
+              ),
           ),
         }));
       },
