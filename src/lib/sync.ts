@@ -7,6 +7,11 @@ import { getOrCreateDeviceId } from "@/lib/device-id";
 import { playSyncChime } from "@/lib/chime";
 import type { CategoryId } from "@/lib/categories";
 import type { Issuer, PaymentMethod } from "@/types/finance";
+import {
+  buildMerchantMemory,
+  predictCategory,
+  shouldAutoApply,
+} from "@/lib/merchant-memory";
 type FinanceStoreApi = typeof useFinanceStore;
 
 type SyncedTx = {
@@ -106,11 +111,23 @@ export function useAutoSync(): void {
 
         if (out.kind !== "ok") return;
 
+        // Phase 4.2 — apply merchant-memory overrides on top of the
+        // static webhook categorize() result. Builds the memory ONCE
+        // per sync batch from the current store state so we don't
+        // re-scan entries for every transaction.
+        const memory = buildMerchantMemory(useFinanceStore.getState().entries);
+
         let added = 0;
         for (const tx of out.data.transactions) {
+          const memHit = tx.merchant
+            ? predictCategory(memory, tx.merchant)
+            : null;
+          const finalCategory: CategoryId = shouldAutoApply(memHit)
+            ? (memHit!.category as CategoryId)
+            : (tx.category as CategoryId);
           const result = addExpense({
             amount: tx.amount,
-            category: tx.category as CategoryId,
+            category: finalCategory,
             note: tx.note,
             installments: Math.max(1, tx.installments),
             paymentMethod: tx.paymentMethod,
