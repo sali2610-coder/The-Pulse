@@ -33,6 +33,7 @@ import {
   recordRestoreResult,
   setForceApplyNext,
 } from "@/lib/local-safety-snapshots";
+import { captureEvent } from "@/lib/analytics";
 import { DeviceRecoveryCard } from "@/components/settings/device-recovery-card";
 import { SafetyDiagnostics } from "@/components/settings/safety-diagnostics";
 
@@ -249,6 +250,15 @@ export function BackupsCard() {
           expectedRichness,
           afterRichness: -1, // will be filled on next page load
         });
+        try {
+          captureEvent("backup_restored", {
+            source: "cloud",
+            beforeRichness,
+            expectedRichness,
+          });
+        } catch {
+          /* analytics never blocks restore */
+        }
         toast.success("הגיבוי שוחזר", {
           description:
             "טען את הדף מחדש כדי לראות את הנתונים על המכשיר.",

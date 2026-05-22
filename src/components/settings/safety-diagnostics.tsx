@@ -27,6 +27,11 @@ import {
   listErrors,
   type LoggedError,
 } from "@/lib/error-log";
+import {
+  clearEvents,
+  listEvents,
+  type AnalyticsEvent,
+} from "@/lib/analytics";
 
 const TIME_FMT = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "medium",
@@ -84,6 +89,7 @@ export function SafetyDiagnostics() {
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
   const [lastRestore, setLastRestore] = useState<RestoreResult | null>(null);
   const [errors, setErrors] = useState<LoggedError[]>([]);
+  const [events, setEvents] = useState<AnalyticsEvent[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,6 +100,7 @@ export function SafetyDiagnostics() {
       setBlockedReason(readLastBlockedReason());
       setLastRestore(readLastRestoreResult());
       setErrors(listErrors());
+      setEvents(listEvents());
       void fetch("/api/auth/session", { cache: "no-store" })
         .then((r) => r.json())
         .then((j) => {
@@ -293,6 +300,38 @@ export function SafetyDiagnostics() {
           >
             {blockedReason}
           </pre>
+        </div>
+      ) : null}
+
+      {events.length > 0 ? (
+        <div className="rounded-lg border border-white/10 bg-black/30 p-2 text-[10px]">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="font-medium text-muted-foreground">
+              אירועים אחרונים · {events.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                clearEvents();
+                setEvents([]);
+              }}
+              className="rounded-md border border-white/15 bg-background/40 px-2 py-0.5 text-[9px] text-muted-foreground hover:text-foreground"
+            >
+              נקה
+            </button>
+          </div>
+          <ul className="flex flex-col gap-0.5" dir="ltr" data-mono="true">
+            {events.slice(0, 6).map((ev) => (
+              <li
+                key={ev.id}
+                className="flex items-center justify-between gap-2 text-[9.5px]"
+              >
+                <span className="text-foreground/85">{ev.name}</span>
+                <span className="text-muted-foreground">{fmtTime(ev.at)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

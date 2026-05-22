@@ -37,6 +37,7 @@ import {
   writeCacheOwner,
   type SafetyPayload,
 } from "@/lib/local-safety-snapshots";
+import { captureEvent } from "@/lib/analytics";
 import {
   deleteAccount,
   deleteEntry,
@@ -324,6 +325,11 @@ export function useCloudSync(): CloudSyncState {
         "[cloud-sync] auth state change:",
         session ? `signed in as ${session.userId.slice(0, 8)}` : "signed out",
       );
+      try {
+        captureEvent(session ? "auth_signed_in" : "auth_signed_out");
+      } catch {
+        /* analytics never blocks auth flow */
+      }
       handleSession(session?.userId ?? null, session?.email ?? null);
     });
     return () => {

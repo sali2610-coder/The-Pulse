@@ -20,6 +20,7 @@ import { findMatchingRule } from "@/lib/match";
 import { findFuzzyDuplicate, findMergeTarget } from "@/lib/dedup";
 import { sanitizeMerchant } from "@/lib/sanitize";
 import { monthKeyOf } from "@/lib/dates";
+import { captureEvent } from "@/lib/analytics";
 
 type AddExpenseInput = {
   amount: number;
@@ -363,6 +364,19 @@ export const useFinanceStore = create<State & Actions>()(
             statuses: nextStatuses,
           };
         });
+
+        try {
+          captureEvent("expense_added", {
+            source: finalEntry.source,
+            category: finalEntry.category,
+            installments: finalEntry.installments,
+            paymentMethod: finalEntry.paymentMethod,
+            hasMerchant: Boolean(finalEntry.merchant),
+            matched: Boolean(matched),
+          });
+        } catch {
+          /* analytics never throws into the store */
+        }
 
         return {
           entry: finalEntry,
