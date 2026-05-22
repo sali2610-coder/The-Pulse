@@ -77,24 +77,27 @@ describe("cloud write-loop diff", () => {
 });
 
 describe("monthlyBudget change detection", () => {
+  // Cast through `as number` so TS doesn't narrow to literal types and
+  // complain about no-overlap comparisons. The runtime check is what
+  // we care about.
+  function changed(prev: number, next: number): boolean {
+    return next !== prev;
+  }
+
   it("fires write when value changes", () => {
-    const prev = 5000;
-    const next = 4500;
-    expect(next !== prev).toBe(true);
+    expect(changed(5000, 4500)).toBe(true);
   });
 
   it("skips write when unchanged", () => {
-    const prev = 5000;
-    const next = 5000;
-    expect(next !== prev).toBe(false);
+    expect(changed(5000, 5000)).toBe(false);
   });
 
   it("0 → positive triggers (initial set)", () => {
-    expect(1000 !== 0).toBe(true);
+    expect(changed(0, 1000)).toBe(true);
   });
 
   it("positive → 0 triggers (user cleared)", () => {
-    expect(0 !== 5000).toBe(true);
+    expect(changed(5000, 0)).toBe(true);
   });
 });
 

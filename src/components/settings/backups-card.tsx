@@ -102,7 +102,6 @@ export function BackupsCard() {
   >("loading");
   const [current, setCurrent] = useState<Summary | null>(null);
   const [backups, setBackups] = useState<Backup[]>([]);
-  const [open, setOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -468,8 +467,20 @@ export function BackupsCard() {
 
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">
-      {/* Calm primary header — protection status. */}
-      <header className="mb-3 flex items-center justify-between gap-3">
+      {/* Phase 152e: Cloud sync is the canonical source of truth. This
+         entire surface is demoted to "כלי שחזור חירום" — collapsed by
+         default. Manual backup / restore / export / import / device
+         recovery all live INSIDE the drawer below. The drawer header
+         is the only thing the user sees on the main settings screen.
+       */}
+      <button
+        type="button"
+        onClick={() => {
+          tap();
+          setAdvancedOpen((v) => !v);
+        }}
+        className="flex w-full items-center justify-between gap-3"
+      >
         <div className="flex items-center gap-2">
           <ShieldCheck
             className={`size-5 ${
@@ -478,182 +489,17 @@ export function BackupsCard() {
                 : "text-neon"
             }`}
           />
-          <div className="flex flex-col leading-tight">
+          <div className="flex flex-col items-start leading-tight">
             <div className="text-[11px] uppercase tracking-[0.25em] text-neon">
-              גיבוי ושחזור
+              כלי שחזור חירום
             </div>
-            <div className="text-[11.5px] text-foreground/90">
-              {authStatus === "ready" && current
-                ? `המידע שלך מגובה · עודכן ${fmtTime(current.updatedAt)}`
-                : authStatus === "no-session"
-                  ? "התחבר עם Google להפעלת גיבוי ענן"
-                  : authStatus === "kv-unavailable"
-                    ? "ענן לא מוגדר — ייצוא/ייבוא מקומי זמין"
-                    : "ממתין לגיבוי ראשון"}
+            <div className="text-[11px] text-muted-foreground">
+              גיבוי / שחזור / ייצוא — לשימוש חירום בלבד
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            tap();
-            void refresh();
-          }}
-          aria-label="רענן"
-          className="flex size-8 items-center justify-center rounded-lg border border-white/12 bg-background/40 text-muted-foreground transition-colors hover:border-white/30 hover:text-foreground"
-        >
-          <RefreshCcw className="size-3.5" />
-        </button>
-      </header>
-
-      {/* Calm summary — counts only when there's data. */}
-      {current && (current.entries > 0 || current.accounts > 0) ? (
-        <div className="mb-3 rounded-2xl border border-white/8 bg-black/25 p-2.5">
-          <SummaryRow s={current} />
-        </div>
-      ) : null}
-
-      {/* Primary actions — only the 3 most likely user intents. */}
-      <div className="mb-3 flex flex-col gap-2">
-        <button
-          type="button"
-          disabled={busy || authStatus !== "ready"}
-          onClick={manualBackup}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-neon/40 bg-neon/10 px-3 py-2.5 text-[13px] font-medium text-neon transition-colors hover:bg-neon/20 disabled:opacity-50"
-        >
-          <CloudUpload className="size-3.5" />
-          שמור גיבוי עכשיו
-        </button>
-
-        {recommended && authStatus === "ready" ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const target = backups.find(
-                (b) => b.capturedAt === recommended.capturedAt,
-              );
-              if (target) void restore(target);
-            }}
-            className="flex items-center justify-between gap-2 rounded-xl border border-[#34D399]/40 bg-[#34D399]/10 px-3 py-2.5 text-[#34D399] transition-colors hover:bg-[#34D399]/20 disabled:opacity-50"
-          >
-            <span className="flex items-center gap-1.5 text-[13px] font-medium">
-              <Sparkles className="size-3.5" />
-              שחזור מומלץ
-            </span>
-            <span
-              className="text-[10px] text-[#34D399]/80"
-              dir="ltr"
-              data-mono="true"
-            >
-              {fmtTime(recommended.capturedAt)} · {recommended.richness} פריטים
-            </span>
-          </button>
-        ) : null}
-
-        {backups.length > 0 && authStatus === "ready" ? (
-          <button
-            type="button"
-            onClick={() => {
-              tap();
-              setOpen((v) => !v);
-            }}
-            className="flex items-center justify-between gap-2 rounded-xl border border-white/12 bg-background/40 px-3 py-2.5 text-[13px] text-foreground transition-colors hover:border-white/30"
-          >
-            <span className="flex items-center gap-1.5">
-              <CloudDownload className="size-3.5" />
-              שחזור מגיבוי ענן
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              {open ? "סגור" : `${backups.length} גיבויים`}
-            </span>
-          </button>
-        ) : null}
-      </div>
-
-      {/* Backup list — only when "restore from cloud" opens it. */}
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="mb-3 overflow-hidden"
-          >
-            {backups.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border/40 px-3 py-6 text-center text-[11px] text-muted-foreground">
-                אין עדיין גיבויים שמורים בענן.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {backups.map((b) => {
-                  const tone = REASON_TONE[b.reason] ?? "#A1A1AA";
-                  const isRecommended =
-                    recommended?.capturedAt === b.capturedAt;
-                  return (
-                    <li
-                      key={b.capturedAt}
-                      className="flex flex-col gap-1.5 rounded-2xl border border-white/8 bg-black/30 p-3"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
-                            style={{
-                              background: `${tone}22`,
-                              color: tone,
-                            }}
-                          >
-                            {REASON_LABEL[b.reason]}
-                          </span>
-                          {isRecommended ? (
-                            <span className="rounded-full bg-[#34D399]/22 px-1.5 py-0.5 text-[9px] font-semibold text-[#34D399]">
-                              מומלץ
-                            </span>
-                          ) : null}
-                          <span
-                            data-mono="true"
-                            dir="ltr"
-                            className="text-[11px] text-muted-foreground"
-                          >
-                            {fmtTime(b.capturedAt)}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void restore(b)}
-                          className="flex items-center gap-1 rounded-lg border border-white/15 bg-background/40 px-2.5 py-1 text-[11px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
-                        >
-                          <RotateCcw className="size-3" />
-                          שחזר
-                        </button>
-                      </div>
-                      <SummaryRow s={b} />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      {/* Advanced — export / import / device recovery. Collapsed by default. */}
-      <button
-        type="button"
-        onClick={() => {
-          tap();
-          setAdvancedOpen((v) => !v);
-        }}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/8 bg-transparent px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
-      >
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           <History className="size-3.5" />
-          אפשרויות מתקדמות
-        </span>
-        <span className="text-[10px]">
           {advancedOpen ? "סגור" : "פתח"}
         </span>
       </button>
@@ -665,8 +511,116 @@ export function BackupsCard() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="mt-3 overflow-hidden"
+            className="mt-4 flex flex-col gap-3 overflow-hidden"
           >
+            {/* Cloud-backup status + manual snapshot. Cloud-sync is
+               canonical; this is the manual emergency snapshot button. */}
+            {current && (current.entries > 0 || current.accounts > 0) ? (
+              <div className="rounded-2xl border border-white/8 bg-black/25 p-2.5">
+                <div className="mb-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  גיבוי ענן אחרון · {fmtTime(current.updatedAt)}
+                </div>
+                <SummaryRow s={current} />
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={busy || authStatus !== "ready"}
+                onClick={manualBackup}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-neon/40 bg-neon/10 px-3 py-2.5 text-[13px] font-medium text-neon transition-colors hover:bg-neon/20 disabled:opacity-50"
+              >
+                <CloudUpload className="size-3.5" />
+                שמור גיבוי חירום
+              </button>
+
+              {recommended && authStatus === "ready" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const target = backups.find(
+                      (b) => b.capturedAt === recommended.capturedAt,
+                    );
+                    if (target) void restore(target);
+                  }}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-[#34D399]/40 bg-[#34D399]/10 px-3 py-2.5 text-[#34D399] transition-colors hover:bg-[#34D399]/20 disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-1.5 text-[13px] font-medium">
+                    <Sparkles className="size-3.5" />
+                    שחזור מומלץ
+                  </span>
+                  <span
+                    className="text-[10px] text-[#34D399]/80"
+                    dir="ltr"
+                    data-mono="true"
+                  >
+                    {fmtTime(recommended.capturedAt)} ·{" "}
+                    {recommended.richness} פריטים
+                  </span>
+                </button>
+              ) : null}
+            </div>
+
+            {backups.length > 0 && authStatus === "ready" ? (
+              <div className="flex flex-col gap-2">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  <CloudDownload className="me-1 inline size-3" />
+                  גיבויי ענן · {backups.length}
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {backups.map((b) => {
+                    const tone = REASON_TONE[b.reason] ?? "#A1A1AA";
+                    const isRecommended =
+                      recommended?.capturedAt === b.capturedAt;
+                    return (
+                      <li
+                        key={b.capturedAt}
+                        className="flex flex-col gap-1.5 rounded-2xl border border-white/8 bg-black/30 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                              style={{
+                                background: `${tone}22`,
+                                color: tone,
+                              }}
+                            >
+                              {REASON_LABEL[b.reason]}
+                            </span>
+                            {isRecommended ? (
+                              <span className="rounded-full bg-[#34D399]/22 px-1.5 py-0.5 text-[9px] font-semibold text-[#34D399]">
+                                מומלץ
+                              </span>
+                            ) : null}
+                            <span
+                              data-mono="true"
+                              dir="ltr"
+                              className="text-[11px] text-muted-foreground"
+                            >
+                              {fmtTime(b.capturedAt)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void restore(b)}
+                            className="flex items-center gap-1 rounded-lg border border-white/15 bg-background/40 px-2.5 py-1 text-[11px] text-foreground transition-colors hover:border-white/30 disabled:opacity-50"
+                          >
+                            <RotateCcw className="size-3" />
+                            שחזר
+                          </button>
+                        </div>
+                        <SummaryRow s={b} />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -696,6 +650,17 @@ export function BackupsCard() {
               >
                 <Upload className="size-3.5" />
                 ייבוא מקובץ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  tap();
+                  void refresh();
+                }}
+                className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-background/30 px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+              >
+                <RefreshCcw className="size-3" />
+                רענן רשימת גיבויים
               </button>
             </div>
             <SafetyDiagnostics />
