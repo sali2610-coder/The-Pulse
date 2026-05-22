@@ -1,20 +1,15 @@
-// Supabase client factory.
+// Supabase browser client.
 //
-// Reads `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-// from the environment. When either is missing the client is
-// reported as unconfigured and every downstream consumer is expected
-// to degrade gracefully — sync becomes a no-op, auth UI hides the
-// Supabase sign-in surface, and the existing local-first flows keep
-// working.
+// Uses `createBrowserClient` from @supabase/ssr so the session lives
+// in cookies — readable by middleware + route handlers. This is what
+// makes a single sign-in flow propagate from the browser to server
+// components without any custom token-passing logic.
 //
-// Production-foundation mandate compliance:
-//   ✓ Zero impact on existing flows when env is unset.
-//   ✓ No secrets shipped to the client — only the anon key (which
-//     is RLS-gated by definition).
-//   ✓ Singleton client per browser tab to avoid duplicate websocket
-//     subscriptions on hot reload.
+// Anon key only. RLS protects every row. Service-role is NEVER used
+// anywhere in this codebase.
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "./types";
 
@@ -38,8 +33,6 @@ function readEnv(): SupabaseClientStatus & { anonKey: string | null } {
   };
 }
 
-/** True when both env vars are present. UI can use this to decide
- *  whether to expose Supabase sign-in vs the existing Google flow. */
 export function isSupabaseConfigured(): boolean {
   return readEnv().configured;
 }
@@ -49,25 +42,16 @@ export function getSupabaseStatus(): SupabaseClientStatus {
   return { configured: env.configured, url: env.url };
 }
 
-/** Lazy singleton. Returns null when unconfigured so callers can
- *  early-return rather than throw on a missing env var. */
+/** Lazy singleton browser client. Cookies-backed session. Returns
+ *  null when unconfigured so callers can gracefully degrade. */
 export function supabase(): SupabaseClient<Database> | null {
   if (cached) return cached;
   const env = readEnv();
   if (!env.configured || !env.url || !env.anonKey) return null;
-  cached = createClient<Database>(env.url, env.anonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: "sally.supabase.session",
-    },
-  });
+  cached = createBrowserClient<Database>(env.url, env.anonKey);
   return cached;
 }
 
-/** Test/dev helper — resets the singleton so a re-configured env
- *  takes effect without a page reload. */
 export function _resetSupabaseClientForTests(): void {
   cached = null;
 }

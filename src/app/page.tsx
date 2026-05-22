@@ -1,36 +1,38 @@
-// Root entry — server-side auth gate.
+// Root entry — Supabase-gated.
 //
-// When Google OAuth is configured (`AUTH_GOOGLE_ID/SECRET` present) and the
-// caller has no NextAuth session, we render the premium welcome screen
-// *instead of* the dashboard. This means an unauthenticated visitor never
-// sees the financial UI at all — no flash, no flicker, no exposure of cached
-// private data while the client decides what to do.
+// Supabase Auth (Google OAuth) is the sole identity system. When the
+// caller has no Supabase session we render the welcome screen
+// instead of the dashboard — no flash, no cached private data
+// exposed to an unauthenticated visitor.
 //
-// When AUTH is not configured, the app keeps running in single-user
-// device-id mode and renders the full shell as before.
+// When Supabase isn't configured at all (env vars missing), the app
+// falls back to single-device mode and renders the full shell.
 
-import { auth, isAuthEnabled } from "@/lib/auth/config";
 import { AppShell } from "@/components/app/app-shell";
 import { WelcomeScreen } from "@/components/auth/welcome-screen";
+import {
+  getServerUser,
+  isSupabaseServerConfigured,
+} from "@/lib/supabase/server-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams?: Promise<{ callbackUrl?: string }>;
+  searchParams?: Promise<{ next?: string }>;
 }) {
-  if (isAuthEnabled()) {
-    const session = await auth();
-    if (!session?.user) {
+  if (isSupabaseServerConfigured()) {
+    const user = await getServerUser();
+    if (!user) {
       const sp = (await searchParams) ?? {};
-      const raw = sp.callbackUrl;
+      const raw = sp.next;
       // Only honor same-origin relative paths to prevent open redirects.
-      const callback =
+      const next =
         typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//")
           ? raw
           : "/";
-      return <WelcomeScreen callbackUrl={callback} />;
+      return <WelcomeScreen next={next} />;
     }
   }
   return <AppShell />;

@@ -5,23 +5,24 @@
 Make Supabase the source of truth for user entity data, while keeping every
 hard-won safety guarantee from Phases 71 / 126 / 149 / 151 intact.
 
-## Identity model
+## Identity model (Phase 152b — single Supabase Auth)
 
-There are TWO authentication systems running side by side:
+Supabase Auth (Google OAuth) is the SOLE identity system. NextAuth and
+its KV adapter were deleted in Phase 152b. The user signs in ONCE; the
+resulting Supabase session powers:
 
-| System | Purpose | Server access |
-|---|---|---|
-| NextAuth (Google OAuth via KV adapter) | Sessions for `/api/state`, webhooks, push, claim-device | `auth()` server helper |
-| Supabase Auth (Google OAuth) | RLS principal for entity tables | client-side `supabase.auth.getSession()` |
+- **Client RLS principal** — every read/write via `supabase()` carries
+  the user's JWT in cookies; RLS policies check `auth.uid() = user_id`.
+- **Server identity** — `getServerUser()` (server-client.ts) reads the
+  same cookies via `@supabase/ssr`'s `createServerClient`. Used by
+  every route handler that needs to scope a KV write (state blob,
+  backups, snapshots, claim-device, recover-device).
+- **Middleware refresh** — `middleware.ts` calls `getUser()` on every
+  request so expired JWTs get rotated automatically and the outgoing
+  cookies stay fresh.
 
-Until a future migration unifies them, the user signs into BOTH:
-
-- NextAuth — gates Vercel KV blob, iOS Shortcut webhook authorization.
-- Supabase — issues the JWT that RLS checks `auth.uid() = user_id` against.
-
-The two user ids are independent. KV state continues to be scoped by NextAuth
-user id; Supabase entity rows are scoped by Supabase user id. There is no
-auto-migration between them — the Supabase cloud-sync layer is purely additive.
+`/api/auth/session` returns `{ user: { id, email } }` from the Supabase
+session for components that prefer a fetch over the SDK call.
 
 ## Cloud truth = Supabase
 
@@ -76,11 +77,11 @@ local:
 ## Hydration order
 
 ```
-1. SSR shell renders welcome screen OR app shell based on NextAuth session.
+1. SSR shell renders welcome screen OR app shell based on Supabase session.
 2. Zustand persist hydrates from localStorage → hasHydrated flips true.
-3. useRemoteStateSync runs: GET /api/state (KV).
+3. useRemoteStateSync runs: GET /api/state (KV — scoped by Supabase user).
    - Guarded by Phase 149 richness checks.
-4. useCloudSync runs (additive — only if Supabase configured + signed in):
+4. useCloudSync runs:
    - verifyCloudAccess().
    - fetchAllEntities().
    - Reconcile cloud vs local.

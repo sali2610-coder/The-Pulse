@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
   CloudUpload,
+  Loader2,
   Lock,
   Sparkles,
   TrendingUp,
 } from "lucide-react";
 
 import { tap } from "@/lib/haptics";
+import { signInWithGoogle } from "@/lib/supabase/auth";
 
 // Premium fintech welcome screen. Rendered server-side when auth is enabled
 // and the user has no active session. Replaces the previous "stub /sign-in
@@ -36,26 +38,27 @@ const TRUST_BULLETS: Array<{ icon: typeof Lock; label: string; copy: string }> =
     },
   ];
 
-export function WelcomeScreen({ callbackUrl }: { callbackUrl?: string }) {
-  const [csrf, setCsrf] = useState<string | null>(null);
+export function WelcomeScreen({ next }: { next?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/csrf", { cache: "no-store" });
-        const json = (await res.json()) as { csrfToken?: string };
-        if (!cancelled && typeof json.csrfToken === "string") {
-          setCsrf(json.csrfToken);
-        }
-      } catch {
-        /* network failure — button stays disabled until retry */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const handleSignIn = async () => {
+    tap();
+    setBusy(true);
+    setAuthError(null);
+    const result = await signInWithGoogle(
+      typeof window !== "undefined"
+        ? `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(
+            next ?? "/",
+          )}`
+        : undefined,
+    );
+    if (!result.ok) {
+      setAuthError(result.reason);
+      setBusy(false);
+    }
+    // On ok=true the browser is already redirecting to Google.
+  };
 
   return (
     <main
@@ -161,27 +164,27 @@ export function WelcomeScreen({ callbackUrl }: { callbackUrl?: string }) {
           transition={{ delay: 0.35, duration: 0.5 }}
           className="flex flex-col gap-3"
         >
-          <form action="/api/auth/signin/google" method="POST">
-            {csrf ? (
-              <input type="hidden" name="csrfToken" value={csrf} />
-            ) : null}
-            <input
-              type="hidden"
-              name="callbackUrl"
-              value={callbackUrl ?? "/"}
-            />
-            <motion.button
-              type="submit"
-              whileTap={{ scale: 0.985 }}
-              whileHover={{ y: -1 }}
-              onClick={() => tap()}
-              disabled={!csrf}
-              className="relative flex h-14 w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-white to-white/95 text-[15px] font-semibold text-[#0A0A0A] shadow-[0_18px_45px_-22px_rgba(255,255,255,0.55)] transition-transform disabled:cursor-not-allowed disabled:opacity-60"
-            >
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.985 }}
+            whileHover={{ y: -1 }}
+            onClick={handleSignIn}
+            disabled={busy}
+            className="relative flex h-14 w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-white to-white/95 text-[15px] font-semibold text-[#0A0A0A] shadow-[0_18px_45px_-22px_rgba(255,255,255,0.55)] transition-transform disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : (
               <GoogleMark />
-              התחבר עם Google
-            </motion.button>
-          </form>
+            )}
+            התחבר עם Google
+          </motion.button>
+
+          {authError ? (
+            <p className="text-center text-[11px] text-destructive" dir="ltr">
+              שגיאה: {authError}
+            </p>
+          ) : null}
 
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
             בלחיצה אתה מאשר חיבור לחשבון Google ומסכים שנשמור שם, מייל ותמונת

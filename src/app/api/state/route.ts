@@ -3,7 +3,7 @@
 // reinstalls, and Vercel deploys.
 //
 // Auth: delegates to resolveRequestScope which picks the strongest signal
-// available — NextAuth session → device-claim → bare device id.
+// available — Supabase session → device-claim → bare device id.
 // No Bearer required.
 
 import {

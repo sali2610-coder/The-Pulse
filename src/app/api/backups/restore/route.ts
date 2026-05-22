@@ -8,7 +8,7 @@
 //   3. Returns before/after summaries so the UI can show "X entries
 //      restored, Y previous state preserved".
 
-import { auth } from "@/lib/auth/config";
+import { getServerUser } from "@/lib/supabase/server-client";
 import {
   appendBackupLog,
   captureStateSnapshot,
@@ -30,8 +30,8 @@ function fail(status: number, code: string, extra?: Record<string, unknown>) {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await auth();
-  const userId = session?.user?.id;
+  const user = await getServerUser();
+  const userId = user?.id;
   if (!userId) return fail(401, "unauthenticated");
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
 

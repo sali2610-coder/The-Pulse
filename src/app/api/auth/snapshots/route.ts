@@ -11,7 +11,7 @@
 //
 // Auth-gated. Operates only on the signed-in user's own snapshots.
 
-import { auth } from "@/lib/auth/config";
+import { getServerUser } from "@/lib/supabase/server-client";
 import {
   captureStateSnapshot,
   isKvConfigured,
@@ -28,8 +28,8 @@ function fail(status: number, code: string) {
 }
 
 export async function GET(): Promise<Response> {
-  const session = await auth();
-  const userId = session?.user?.id;
+  const user = await getServerUser();
+  const userId = user?.id;
   if (!userId) return fail(401, "unauthenticated");
   if (!isKvConfigured()) {
     return Response.json({ ok: true, snapshots: [] });
@@ -47,8 +47,8 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await auth();
-  const userId = session?.user?.id;
+  const user = await getServerUser();
+  const userId = user?.id;
   if (!userId) return fail(401, "unauthenticated");
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
 

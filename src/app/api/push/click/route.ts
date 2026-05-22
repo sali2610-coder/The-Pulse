@@ -2,7 +2,7 @@
 //
 // CRITICAL: this route does NOT use resolveRequestScope. The Service
 // Worker's POST happens from background context where iOS Safari
-// doesn't reliably forward the NextAuth session cookie. The PWA's GET
+// doesn't reliably forward the Supabase session cookie. The PWA's GET
 // happens from a normal client where the cookie IS forwarded. If both
 // went through resolveRequestScope, the SW would write under a device
 // scope while the PWA would read under a user scope, and the beacon

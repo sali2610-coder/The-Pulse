@@ -15,7 +15,6 @@
 //          "force-device" (overwrite user with device, irreversible until
 //          the next PUT). Returns the same shape as claim-device.
 
-import { auth } from "@/lib/auth/config";
 import {
   captureStateSnapshot,
   getUserState,
@@ -31,6 +30,7 @@ import {
   getDeviceClaimUserId,
 } from "@/lib/scope-resolver";
 import { planMigration, richnessScore } from "@/lib/state-merge";
+import { getServerUser } from "@/lib/supabase/server-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,31 +39,21 @@ function fail(status: number, code: string) {
   return Response.json({ ok: false, error: code }, { status });
 }
 
-/** True when the userId actually exists as a NextAuth user record. Used
- *  to detect orphan claims (former sessions that were deleted/expired
- *  while the device-claim KV row persisted). Orphan claims can be
- *  safely taken over because no live user owns them. */
-async function userRecordExists(uid: string): Promise<boolean> {
-  const v = await kv().get(`sally:auth:user:${uid}`);
-  return v !== null && v !== undefined;
-}
-
-/** Authorisation rule:
+/** Authorisation rule (Phase 152b simplification — no orphan detection
+ *  since Supabase user records aren't stored in our KV layer):
  *    claim is null            → allowed (unclaimed device)
  *    claim === current user   → allowed (idempotent)
- *    claim is some other id but THAT user record no longer exists
- *                             → allowed (orphan — former session of this
- *                               same human, or expired)
- *    claim is another live user → 403
- */
+ *    claim is any other id    → 403
+ *
+ *  Lost-orphan recovery is now handled exclusively via Supabase row
+ *  data — the user signs in with the same Google account and gets
+ *  their entities back through the cloud-sync hydration path. */
 async function assertOwnsDevice(
   deviceId: string,
   userId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; code: string }> {
   const claimed = await getDeviceClaimUserId(deviceId);
   if (!claimed || claimed === userId) return { ok: true };
-  const stillThere = await userRecordExists(claimed);
-  if (!stillThere) return { ok: true };
   return { ok: false, status: 403, code: "device_claimed_by_other_user" };
 }
 
@@ -84,8 +74,8 @@ function summarize(b: StateBlob | null) {
 }
 
 export async function GET(req: Request): Promise<Response> {
-  const session = await auth();
-  const userId = session?.user?.id;
+  const user = await getServerUser();
+  const userId = user?.id;
   if (!userId) return fail(401, "unauthenticated");
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
 
@@ -115,8 +105,8 @@ export async function GET(req: Request): Promise<Response> {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await auth();
-  const userId = session?.user?.id;
+  const user = await getServerUser();
+  const userId = user?.id;
   if (!userId) return fail(401, "unauthenticated");
   if (!isKvConfigured()) return fail(503, "kv_not_configured");
 

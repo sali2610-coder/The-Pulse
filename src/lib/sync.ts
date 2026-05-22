@@ -47,7 +47,7 @@ async function fetchSync(since: number): Promise<FetchOutcome> {
   try {
     const url = `/api/transactions/sync?since=${since}`;
     // Always send device id — server's resolveRequestScope picks the
-    // strongest signal (NextAuth session → device-claim → bare device id).
+    // strongest signal (Supabase session → device-claim → bare device id).
     const headers: Record<string, string> = {
       "x-sally-device": getOrCreateDeviceId(),
     };

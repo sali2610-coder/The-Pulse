@@ -94,7 +94,7 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
     ? authHeader.slice("Bearer ".length)
     : "";
 
-  // Device-scoped ingestion. Multi-user comes via NextAuth + the
+  // Device-scoped ingestion. Multi-user comes via Supabase + the
   // device-claim mapping (see src/lib/scope-resolver.ts) — the webhook
   // itself always writes to a device scope so the iOS Shortcut never
   // needs an OAuth session. The PWA later resolves the same deviceId to
@@ -121,7 +121,7 @@ async function resolveScope(req: Request): Promise<ResolvedScope> {
 
   // Device-claim resolution. When the user has signed in with Google and
   // claimed this deviceId from their PWA, route the write under the user's
-  // KV namespace. The PWA's sync route resolves the same way (NextAuth
+  // KV namespace. The PWA's sync route resolves the same way (Supabase
   // session → user scope), so transactions never get stranded under a
   // device key that the signed-in dashboard no longer reads.
   const claimedUserId = await getDeviceClaimUserId(deviceId);

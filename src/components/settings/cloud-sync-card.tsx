@@ -5,8 +5,8 @@
 // Three distinct states render different bodies:
 //
 //   1. Supabase not configured (env vars absent) →
-//        single-row notice. Existing KV+NextAuth flow is the only
-//        source of truth.
+//        single-row notice. KV device-scoped flow is the only source
+//        of truth until env vars are wired up.
 //
 //   2. Configured but no Supabase session →
 //        "Connect Google" CTA that fires Supabase OAuth. Tells the
