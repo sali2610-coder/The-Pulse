@@ -53,7 +53,7 @@ function shouldCanonicalize(hostname: string, pathname: string): boolean {
   return true;
 }
 
-export async function middleware(req: NextRequest): Promise<NextResponse> {
+export async function proxy(req: NextRequest): Promise<NextResponse> {
   const { pathname, search } = req.nextUrl;
   const hostname = req.nextUrl.hostname;
 
