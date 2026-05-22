@@ -253,6 +253,12 @@ const EmergencyFundCard = lazy(() =>
   })),
 );
 
+const NetWorthTrendCard = lazy(() =>
+  import("@/components/dashboard/net-worth-trend-card").then((m) => ({
+    default: m.NetWorthTrendCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const BillingCalendarCard = lazy(() =>
   import("@/components/dashboard/billing-calendar-card").then((m) => ({
     default: m.BillingCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -384,6 +390,9 @@ export function DashboardTab() {
         </div>
         <div className="sm:col-span-6">
           <Safe name="EmergencyFundCard"><EmergencyFundCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="NetWorthTrendCard"><NetWorthTrendCard /></Safe>
         </div>
         <div className="sm:col-span-6">
           <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>

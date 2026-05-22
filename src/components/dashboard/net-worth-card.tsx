@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Scale, TrendingDown, TrendingUp } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { computeNetWorth } from "@/lib/net-worth";
 import { currentMonthKey } from "@/lib/dates";
+import { recordSnapshot } from "@/lib/net-worth-history";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -38,6 +39,22 @@ export function NetWorthCard() {
       monthKey: currentMonthKey(),
     });
   }, [hydrated, accounts, loans, entries, rules, statuses]);
+
+  // Persist the current month's net-worth value so NetWorthTrendCard
+  // can render a multi-month sparkline. Idempotent per month — same-
+  // day edits just overwrite. Pure localStorage, no network.
+  useEffect(() => {
+    if (!nw) return;
+    if (nw.assets === 0 && nw.totalDebt === 0) return;
+    try {
+      recordSnapshot({
+        netWorth: nw.netWorth,
+        monthKey: currentMonthKey(),
+      });
+    } catch {
+      /* never block the card on snapshot failure */
+    }
+  }, [nw]);
 
   if (!hydrated || !nw) return null;
   const hasAnyEntity =
