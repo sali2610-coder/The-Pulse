@@ -22,6 +22,11 @@ import {
 import { readLastBlockedReason } from "@/lib/remote-state-sync";
 import { getOrCreateDeviceId } from "@/lib/device-id";
 import { tap, success } from "@/lib/haptics";
+import {
+  clearErrors,
+  listErrors,
+  type LoggedError,
+} from "@/lib/error-log";
 
 const TIME_FMT = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "medium",
@@ -78,6 +83,7 @@ export function SafetyDiagnostics() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
   const [lastRestore, setLastRestore] = useState<RestoreResult | null>(null);
+  const [errors, setErrors] = useState<LoggedError[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +93,7 @@ export function SafetyDiagnostics() {
       setSnapshots(listSafetyBackups());
       setBlockedReason(readLastBlockedReason());
       setLastRestore(readLastRestoreResult());
+      setErrors(listErrors());
       void fetch("/api/auth/session", { cache: "no-store" })
         .then((r) => r.json())
         .then((j) => {
@@ -286,6 +293,46 @@ export function SafetyDiagnostics() {
           >
             {blockedReason}
           </pre>
+        </div>
+      ) : null}
+
+      {errors.length > 0 ? (
+        <div className="rounded-lg border border-[#F87171]/30 bg-black/30 p-2 text-[10px]">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="font-medium text-destructive">
+              שגיאות אחרונות · {errors.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                clearErrors();
+                setErrors([]);
+              }}
+              className="rounded-md border border-white/15 bg-background/40 px-2 py-0.5 text-[9px] text-muted-foreground hover:text-foreground"
+            >
+              נקה
+            </button>
+          </div>
+          <ul className="flex flex-col gap-1">
+            {errors.slice(0, 5).map((e) => (
+              <li
+                key={e.id}
+                className="rounded border border-white/8 bg-black/40 p-1.5"
+                dir="ltr"
+                data-mono="true"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-destructive">
+                    {e.source} · {fmtTime(e.at)}
+                  </span>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap text-[9.5px] text-foreground/85">
+                  {e.message}
+                </pre>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

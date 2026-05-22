@@ -16,6 +16,7 @@ import { subscribeInsightDismissals } from "@/lib/insight-dismiss";
 import { useAutoBackup } from "@/lib/auto-backup";
 import { useStoreMutationBridge } from "@/lib/store-mutation-bridge";
 import { CloudSyncProvider } from "@/lib/supabase/cloud-sync-context";
+import { installGlobalErrorHandlers } from "@/lib/error-log";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -58,6 +59,7 @@ function AppShellContent() {
 
   useAutoBackup();
   useStoreMutationBridge();
+  useEffect(() => installGlobalErrorHandlers(), []);
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "dashboard";
