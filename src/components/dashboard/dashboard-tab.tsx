@@ -116,6 +116,11 @@ const SavingsRateCard = lazy(() =>
     default: m.SavingsRateCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const CategoryPaceCard = lazy(() =>
+  import("@/components/dashboard/category-pace-card").then((m) => ({
+    default: m.CategoryPaceCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const SubscriptionRadarCard = lazy(() =>
   import("@/components/dashboard/subscription-radar-card").then((m) => ({
     default: m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -426,6 +431,9 @@ export function DashboardTab() {
         </div>
         <div className="sm:col-span-6">
           <Safe name="SavingsRateCard"><SavingsRateCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="CategoryPaceCard"><CategoryPaceCard /></Safe>
         </div>
         <div className="sm:col-span-6">
           <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
