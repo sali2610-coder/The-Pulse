@@ -11,6 +11,7 @@ import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
 import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 
 // Every dashboard card except the always-needed PulseBar + NewExpenseButton
 // is dynamically imported with `ssr: false`. iPhone Safari was rejecting `/`
@@ -284,14 +285,7 @@ export function DashboardTab() {
   );
 
   if (showCurtain) {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
-        <div className="size-10 animate-spin rounded-full border-2 border-[color:var(--neon)] border-t-transparent" />
-        <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          טוען נתונים מהענן
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
