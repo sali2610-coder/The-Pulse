@@ -27,8 +27,16 @@ import { ruleSchedule } from "@/lib/installment-schedule";
 export type CardPressure = {
   card: Account;
   /** Sum of non-installment linked recurring rule estimates that haven't
-   *  been paid yet this month. */
+   *  been paid yet this month. Equals fixedRecurringThisMonth +
+   *  variableRecurringThisMonth — kept for back-compat with consumers
+   *  that don't care about the fixed/variable split. */
   recurringPendingThisMonth: number;
+  /** Non-installment linked recurring rules without `variable: true`
+   *  (rent, subscriptions, predictable bills). */
+  fixedRecurringThisMonth: number;
+  /** Non-installment linked recurring rules flagged `variable: true`
+   *  (electricity, water, gas — predictable date, unpredictable amount). */
+  variableRecurringThisMonth: number;
   /** Sum of installment-plan linked rules firing this month + remaining
    *  count across all linked plans. */
   installmentThisMonth: number;
@@ -36,9 +44,13 @@ export type CardPressure = {
   /** Sum of card-side ExpenseEntry slices that landed (or will land)
    *  this month. */
   entriesThisMonth: number;
-  /** Total pressure = sum of all three buckets, the user's "this card
-   *  costs me X this month" headline. */
+  /** Total pressure = sum of all four expense buckets, the user's
+   *  "this card costs me X this month" headline. */
   totalThisMonth: number;
+  /** When the card carries an explicit creditLimit, the unused frame
+   *  after subtracting totalThisMonth. Clamped at zero. Undefined when
+   *  no limit is set so the UI can hide the row. */
+  remainingFrame: number | undefined;
 };
 
 export function buildCardPressure(args: {
@@ -62,7 +74,8 @@ export function buildCardPressure(args: {
   );
 
   return cards.map((card) => {
-    let recurringPendingThisMonth = 0;
+    let fixedRecurringThisMonth = 0;
+    let variableRecurringThisMonth = 0;
     let installmentThisMonth = 0;
     let installmentPlansActive = 0;
     let entriesThisMonth = 0;
@@ -78,7 +91,11 @@ export function buildCardPressure(args: {
         installmentThisMonth += rule.estimatedAmount;
         installmentPlansActive++;
       } else if (!paidThisMonth.has(rule.id)) {
-        recurringPendingThisMonth += rule.estimatedAmount;
+        if (rule.variable) {
+          variableRecurringThisMonth += rule.estimatedAmount;
+        } else {
+          fixedRecurringThisMonth += rule.estimatedAmount;
+        }
       }
     }
 
@@ -97,17 +114,26 @@ export function buildCardPressure(args: {
       }
     }
 
+    const recurringPendingThisMonth =
+      fixedRecurringThisMonth + variableRecurringThisMonth;
     const totalThisMonth =
       recurringPendingThisMonth + installmentThisMonth + entriesThisMonth;
+    const remainingFrame =
+      card.creditLimit !== undefined && card.creditLimit > 0
+        ? Math.max(0, card.creditLimit - totalThisMonth)
+        : undefined;
 
     void now;
     return {
       card,
       recurringPendingThisMonth,
+      fixedRecurringThisMonth,
+      variableRecurringThisMonth,
       installmentThisMonth,
       installmentPlansActive,
       entriesThisMonth,
       totalThisMonth,
+      remainingFrame,
     };
   });
 }

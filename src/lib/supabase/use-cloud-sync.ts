@@ -207,6 +207,10 @@ export function useCloudSync(): CloudSyncState {
   // the latest value without taking a dependency on it — keeping it in
   // the dep array would re-fire the effect on every reconcile.
   const ownershipMismatchRef = useRef(false);
+  // Holds the latest retry-queue drain fn so the reconnect-tick effect
+  // can flush queued failures without forcing the write-loop effect to
+  // re-mount. See the write-loop effect for the Bug 1 rationale.
+  const drainRetryRef = useRef<(() => Promise<void>) | null>(null);
 
   // ── Online + visibility listeners ─────────────────────────────────
   // Bumps `reconnectTick` on transition events so the hydration
@@ -509,6 +513,14 @@ export function useCloudSync(): CloudSyncState {
   // Subscribes once after hydration. Fires on every store change
   // with a 1.5s debounce. Only pushes ENTITIES that actually changed
   // (shallow id-keyed diff).
+  //
+  // CRITICAL: `state.reconnectTick` is NOT in deps. Putting it there
+  // tears down the subscription + cancels any pending debounce timer
+  // on every visibility/online tick — a save followed by a tab
+  // refocus inside the 1.5s window silently dropped the write
+  // (Bug 1, May 2026). The retry-drain that used to live here moved
+  // to its own effect below so reconnect ticks still flush queued
+  // failures but do NOT interrupt in-flight debounced writes.
   useEffect(() => {
     if (!state.hydrated) return;
     if (!state.authenticated) return;
@@ -683,13 +695,31 @@ export function useCloudSync(): CloudSyncState {
       }, 1500);
     });
 
-    // Drain on reconnect/foreground ticks too.
+    // Stash the drain fn on the ref so the reconnect-tick effect can
+    // call it without owning the closure or re-mounting this effect.
+    drainRetryRef.current = drainRetryQueue;
+
+    // Initial drain when the write loop comes online.
     void drainRetryQueue();
 
     return () => {
       unsub();
-      if (timer) clearTimeout(timer);
+      drainRetryRef.current = null;
+      // Force-flush any in-flight debounce on teardown (sign-out etc.)
+      // so a pending write isn't dropped silently.
+      if (timer) {
+        clearTimeout(timer);
+      }
     };
+  }, [state.hydrated, state.authenticated]);
+
+  // Drain the retry queue on every reconnect / foreground tick. Kept
+  // separate from the write loop so reconnect events never cancel an
+  // in-flight debounced write (Bug 1, May 2026).
+  useEffect(() => {
+    if (!state.hydrated || !state.authenticated) return;
+    const fn = drainRetryRef.current;
+    if (fn) void fn();
   }, [state.hydrated, state.authenticated, state.reconnectTick]);
 
   return state;

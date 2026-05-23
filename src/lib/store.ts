@@ -55,6 +55,7 @@ type AddRuleInput = {
   startYear?: number;
   paymentSource?: "bank" | "card" | "cash" | "unknown";
   linkedCardId?: string;
+  variable?: boolean;
 };
 
 type AddAccountInput = {
@@ -590,6 +591,7 @@ export const useFinanceStore = create<State & Actions>()(
           startYear: input.startYear,
           paymentSource: input.paymentSource ?? "unknown",
           linkedCardId: input.linkedCardId,
+          variable: input.variable,
         };
         set((state) => ({ rules: [rule, ...state.rules] }));
         return rule;
@@ -635,6 +637,9 @@ export const useFinanceStore = create<State & Actions>()(
                     : {}),
                   ...("linkedCardId" in patch
                     ? { linkedCardId: patch.linkedCardId }
+                    : {}),
+                  ...("variable" in patch
+                    ? { variable: patch.variable }
                     : {}),
                 }
               : r,
@@ -950,7 +955,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 8,
+      version: 9,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -1020,6 +1025,13 @@ export const useFinanceStore = create<State & Actions>()(
           // this migration is a no-op guard that records the schema
           // bump so downstream debug tooling can tell v7 vs v8 state apart.
           // Existing IDs, links, balances, anchors are untouched.
+          migrated = { ...migrated };
+        }
+        if (fromVersion < 9) {
+          // Phase 193 — RecurringRule gained optional `variable` flag
+          // (fixed vs variable monthly bill, drives the card-burden
+          // breakdown's fixed/variable split). Undefined defaults to
+          // "fixed" downstream, so this is a no-op guard.
           migrated = { ...migrated };
         }
         return migrated;

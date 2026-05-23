@@ -44,6 +44,7 @@ type SubmitInput = {
   startYear?: number;
   paymentSource?: "bank" | "card" | "cash" | "unknown";
   linkedCardId?: string;
+  variable?: boolean;
 };
 
 type Mode = "regular" | "installment";
@@ -67,6 +68,7 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
   const [linkedCardId, setLinkedCardId] = useState<string | undefined>(
     initial?.linkedCardId,
   );
+  const [variable, setVariable] = useState<boolean>(initial?.variable ?? false);
   // CRITICAL: subscribe to the raw accounts array, then derive the
   // card subset via useMemo. Subscribing to `s.accounts.filter(...)`
   // returns a fresh array on every store read — Zustand v5 + React 19
@@ -119,6 +121,9 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
     payload.paymentSource = paymentSource;
     payload.linkedCardId =
       paymentSource === "card" ? linkedCardId : undefined;
+    if (mode === "regular") {
+      payload.variable = variable;
+    }
     onSubmit(payload);
   });
 
@@ -487,6 +492,23 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
               ))}
             </select>
           </div>
+        ) : null}
+        {mode === "regular" ? (
+          <label className="mt-1 flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-white/10 bg-background/40 px-3 py-2 text-[11px] text-muted-foreground hover:border-white/20">
+            <span>
+              סכום משתנה (חשמל, מים, גז)
+              <span className="ms-1 text-[10px] text-muted-foreground/70">
+                — מופיע ב״משתנים״ בפירוט עומס הכרטיס
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={variable}
+              onChange={(e) => setVariable(e.target.checked)}
+              className="size-4 accent-[color:var(--neon)]"
+              aria-label="סכום משתנה חודש בחודש"
+            />
+          </label>
         ) : null}
       </div>
 

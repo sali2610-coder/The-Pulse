@@ -222,24 +222,41 @@ export function CardsPressureCard() {
                 ) : null}
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px] text-muted-foreground">
-                {row.recurringPendingThisMonth > 0 ? (
-                  <span>
-                    קבועים {ILS.format(row.recurringPendingThisMonth)}
-                  </span>
-                ) : null}
-                {row.installmentThisMonth > 0 ? (
-                  <>
-                    <span>·</span>
-                    <span>תשלומים {ILS.format(row.installmentThisMonth)}</span>
-                  </>
-                ) : null}
-                {row.entriesThisMonth > 0 ? (
-                  <>
-                    <span>·</span>
-                    <span>חיובים {ILS.format(row.entriesThisMonth)}</span>
-                  </>
-                ) : null}
+                {(() => {
+                  const parts: string[] = [];
+                  if (row.fixedRecurringThisMonth > 0) {
+                    parts.push(`קבועים ${ILS.format(row.fixedRecurringThisMonth)}`);
+                  }
+                  if (row.variableRecurringThisMonth > 0) {
+                    parts.push(
+                      `משתנים ${ILS.format(row.variableRecurringThisMonth)}`,
+                    );
+                  }
+                  if (row.installmentThisMonth > 0) {
+                    parts.push(`תשלומים ${ILS.format(row.installmentThisMonth)}`);
+                  }
+                  if (row.entriesThisMonth > 0) {
+                    parts.push(`חד-פעמיים ${ILS.format(row.entriesThisMonth)}`);
+                  }
+                  return parts.map((p, i) => (
+                    <span key={i} className="flex items-center gap-1.5">
+                      {i > 0 ? <span>·</span> : null}
+                      <span>{p}</span>
+                    </span>
+                  ));
+                })()}
               </div>
+              {row.remainingFrame !== undefined ? (
+                <div
+                  className="mt-0.5 text-[10px] text-muted-foreground/85"
+                  dir="ltr"
+                >
+                  <span>נותרו במסגרת </span>
+                  <span data-mono="true" style={{ color: "#34D399" }}>
+                    {ILS.format(row.remainingFrame)}
+                  </span>
+                </div>
+              ) : null}
               {cycle ? (
                 <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground/85">
                   <CalendarClock className="size-2.5 text-gold" />

@@ -3,6 +3,8 @@
 // use-cloud-sync.ts so the policy itself is verifiable without a
 // Supabase round-trip.
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 type Row = { id: string; value?: number };
@@ -149,5 +151,37 @@ describe("settings reconcile policy", () => {
     expect(decide({ cloud: 0, local: 0, ownershipMismatch: false })).toBe(
       "noop",
     );
+  });
+});
+
+describe("write-loop effect dep array (Bug 1 regression)", () => {
+  // The write-loop subscription must NOT depend on `state.reconnectTick`.
+  // If it does, every visibility/online tick tears down the subscription
+  // and cancels any pending 1.5s debounce — silently dropping a save
+  // that happened in the window. This was Bug 1 (May 2026): edits to a
+  // bank-account anchor only persisted on the first save, then any
+  // subsequent edit could be dropped if a focus event fired before the
+  // debounce flushed. Retry-drain on reconnect lives in its own effect.
+  const src = readFileSync(
+    resolve(__dirname, "../src/lib/supabase/use-cloud-sync.ts"),
+    "utf8",
+  );
+
+  it("write-loop effect deps exclude reconnectTick", () => {
+    // Grab every dep array in the file and look at the one that closes
+    // the write-loop effect (immediately above the comment that opens
+    // the reconnect-tick drain effect).
+    const marker = "// Drain the retry queue on every reconnect / foreground tick";
+    const idx = src.indexOf(marker);
+    expect(idx).toBeGreaterThan(0);
+    const writeLoopRegion = src.slice(0, idx);
+    // The last `}, [ ... ]);` before the marker is the write-loop effect's
+    // dep array.
+    const depMatches = [...writeLoopRegion.matchAll(/}, \[(.*?)\]\)/g)];
+    expect(depMatches.length).toBeGreaterThan(0);
+    const last = depMatches[depMatches.length - 1][1];
+    expect(last).toContain("state.hydrated");
+    expect(last).toContain("state.authenticated");
+    expect(last).not.toContain("reconnectTick");
   });
 });

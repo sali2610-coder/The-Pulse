@@ -162,6 +162,13 @@ export type RecurringRule = {
   /** v7+: when paymentSource === "card", the Account.id of the
    *  credit card. Optional — undefined means "card but unspecified". */
   linkedCardId?: string;
+  /** v9+: marks a regular monthly bill whose amount fluctuates
+   *  (electricity, water, gas). Card-pressure breakdown reports
+   *  fixed vs variable separately so the user can see which slice
+   *  of their card burden is predictable. Installment-mode rules
+   *  ignore this flag (their amount is by definition fixed per
+   *  plan). Undefined → treat as fixed. */
+  variable?: boolean;
 };
 
 export type PaymentSource = "bank" | "card" | "cash" | "unknown";
