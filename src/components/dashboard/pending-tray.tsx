@@ -15,6 +15,7 @@ import { useFinanceStore } from "@/lib/store";
 import { getCategory } from "@/lib/categories";
 import { tap, success } from "@/lib/haptics";
 import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet";
+import { InstantConfirmSheet } from "@/components/confirmation/instant-confirm-sheet";
 import { detectStalePending } from "@/lib/stale-pending";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -201,8 +202,13 @@ export function PendingTray() {
         </ul>
       </motion.section>
 
+      {/* Phase 205 — InstantConfirmSheet is the express lane.
+         Replaces the form-heavy ConfirmationSheet by default. The
+         old sheet stays in the codebase for the "edit deeply" path
+         (ExpenseEditSheet from RecentActivity already covers that),
+         but no longer mounts from the tray. */}
       {active && (
-        <ConfirmationSheet
+        <InstantConfirmSheet
           key={active.id}
           open={Boolean(active)}
           onOpenChange={(v) => {
@@ -214,3 +220,8 @@ export function PendingTray() {
     </>
   );
 }
+
+// Type-only retention so the legacy import stays referenced and
+// downstream tree-shaking doesn't drop ConfirmationSheet from the
+// repo. Other call sites (confirm-page-client) still use it.
+void ConfirmationSheet;
