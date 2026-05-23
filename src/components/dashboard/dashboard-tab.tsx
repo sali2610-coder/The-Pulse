@@ -265,6 +265,36 @@ const IncomeBreakdownCard = lazy(() =>
   })),
 );
 
+const IncomeForecastCard = lazy(() =>
+  import("@/components/dashboard/income-forecast-card").then((m) => ({
+    default: m.IncomeForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const SmartRecommendationsCard = lazy(() =>
+  import("@/components/dashboard/smart-recommendations-card").then((m) => ({
+    default: m.SmartRecommendationsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const SubscriptionReviewCard = lazy(() =>
+  import("@/components/dashboard/subscription-review-card").then((m) => ({
+    default: m.SubscriptionReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const SpendingDietCard = lazy(() =>
+  import("@/components/dashboard/spending-diet-card").then((m) => ({
+    default: m.SpendingDietCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const SpendingHoursCard = lazy(() =>
+  import("@/components/dashboard/spending-hours-card").then((m) => ({
+    default: m.SpendingHoursCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const RunwayCard = lazy(() =>
   import("@/components/dashboard/runway-card").then((m) => ({
     default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -452,6 +482,9 @@ export function DashboardTab() {
           <Safe name="IncomeBreakdownCard"><IncomeBreakdownCard /></Safe>
         </div>
         <div className="sm:col-span-6">
+          <Safe name="IncomeForecastCard"><IncomeForecastCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
           <Safe name="RunwayCard"><RunwayCard /></Safe>
         </div>
         <div className="sm:col-span-6">
@@ -546,6 +579,18 @@ export function DashboardTab() {
         title="תובנות חכמות"
         subtitle="חריגות, מגמות ועזרת ה-CFO"
       >
+        <div className="sm:col-span-6">
+          <Safe name="SmartRecommendationsCard"><SmartRecommendationsCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SubscriptionReviewCard"><SubscriptionReviewCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SpendingDietCard"><SpendingDietCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SpendingHoursCard"><SpendingHoursCard /></Safe>
+        </div>
         <div className="sm:col-span-6">
           <Safe name="RiskWarningsCard"><RiskWarningsCard /></Safe>
         </div>
