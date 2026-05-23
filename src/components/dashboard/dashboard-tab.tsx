@@ -265,6 +265,12 @@ const IncomeBreakdownCard = lazy(() =>
   })),
 );
 
+const RunwayCard = lazy(() =>
+  import("@/components/dashboard/runway-card").then((m) => ({
+    default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const BillingCalendarCard = lazy(() =>
   import("@/components/dashboard/billing-calendar-card").then((m) => ({
     default: m.BillingCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -402,6 +408,9 @@ export function DashboardTab() {
         </div>
         <div className="sm:col-span-6">
           <Safe name="IncomeBreakdownCard"><IncomeBreakdownCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="RunwayCard"><RunwayCard /></Safe>
         </div>
         <div className="sm:col-span-6">
           <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
