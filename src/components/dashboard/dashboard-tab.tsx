@@ -337,6 +337,12 @@ const TodayPulseCard = lazy(() =>
   })),
 );
 
+const SafeToSpendCard = lazy(() =>
+  import("@/components/dashboard/safe-to-spend-card").then((m) => ({
+    default: m.SafeToSpendCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const RunwayCard = lazy(() =>
   import("@/components/dashboard/runway-card").then((m) => ({
     default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -508,6 +514,9 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-3">
         <Safe name="CfoSummary"><CfoSummary /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="SafeToSpendCard"><SafeToSpendCard /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="TodayPulseCard"><TodayPulseCard /></Safe>
