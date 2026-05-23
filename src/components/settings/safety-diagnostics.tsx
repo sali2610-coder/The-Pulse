@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { useFinanceStore } from "@/lib/store";
@@ -32,6 +32,7 @@ import {
   listEvents,
   type AnalyticsEvent,
 } from "@/lib/analytics";
+import { downloadDiagnosticReport } from "@/lib/diagnostic-export";
 
 const TIME_FMT = new Intl.DateTimeFormat("he-IL", {
   dateStyle: "medium",
@@ -226,9 +227,24 @@ export function SafetyDiagnostics() {
       layout
       className="mt-3 flex flex-col gap-2 rounded-2xl border border-[#F87171]/30 bg-[#F87171]/5 p-3"
     >
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#F87171]">
-        <ShieldAlert className="size-3.5" />
-        אבחון בטיחות נתונים
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-[#F87171]">
+          <ShieldAlert className="size-3.5" />
+          אבחון בטיחות נתונים
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            tap();
+            downloadDiagnosticReport();
+            toast.success("דו״ח אבחון JSON הורד");
+          }}
+          aria-label="הורד דו״ח אבחון JSON"
+          className="flex h-7 items-center gap-1 rounded-md border border-white/15 bg-background/40 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          <Download className="size-3" />
+          דו״ח
+        </button>
       </div>
 
       <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground">
