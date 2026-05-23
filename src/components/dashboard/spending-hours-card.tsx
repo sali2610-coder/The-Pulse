@@ -6,10 +6,13 @@
 // window (so a fresh install doesn't see a noisy card).
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import { Clock4 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { spendingHours } from "@/lib/spending-hours";
+import { SectionHeader } from "@/components/ui/section-header";
+import { EASE_OUT_EXPO } from "@/lib/motion-tokens";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -40,15 +43,15 @@ export function SpendingHoursCard() {
 
   return (
     <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
-      <header className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Clock4 className="size-3 text-[color:var(--neon)]" />
-          שעות פעילות
-        </span>
-        <span className="text-[10px] text-muted-foreground/70">
-          90 ימים אחרונים
-        </span>
-      </header>
+      <SectionHeader
+        icon={<Clock4 />}
+        title="שעות פעילות"
+        trailing={
+          <span className="text-[10px] text-muted-foreground/70">
+            90 ימים אחרונים
+          </span>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         {report.mostActiveBucket ? (
@@ -66,7 +69,7 @@ export function SpendingHoursCard() {
       </div>
 
       <ul className="flex flex-col gap-1">
-        {report.buckets.map((b) => {
+        {report.buckets.map((b, idx) => {
           const pct = max > 0 ? (b.amount / max) * 100 : 0;
           return (
             <li
@@ -75,10 +78,16 @@ export function SpendingHoursCard() {
             >
               <span className="w-20 shrink-0">{b.label}</span>
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
-                <div
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{
+                    delay: idx * 0.06,
+                    duration: 0.6,
+                    ease: EASE_OUT_EXPO,
+                  }}
                   className="h-full rounded-full"
                   style={{
-                    width: `${pct}%`,
                     background:
                       "linear-gradient(90deg, var(--neon), color-mix(in oklch, var(--neon) 35%, transparent))",
                   }}

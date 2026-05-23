@@ -6,6 +6,7 @@
 // panel where the user can edit/delete the rule manually.
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import { SearchCheck } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
@@ -15,6 +16,12 @@ import {
 } from "@/lib/subscription-review";
 import { navigateToTab } from "@/lib/tab-nav";
 import { tap } from "@/lib/haptics";
+import { SectionHeader } from "@/components/ui/section-header";
+import {
+  InsightChip,
+  type InsightSeverity,
+} from "@/components/ui/insight-chip";
+import { CARD_TAP, listReveal } from "@/lib/motion-tokens";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -22,11 +29,11 @@ const ILS = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
 });
 
-const REASON_TONE: Record<ReviewReason, string> = {
-  stale_no_charge: "#A1A1AA",
-  rising_price: "#F87171",
-  duplicate_lookalike: "#D4AF37",
-  low_value_signal: "#60A5FA",
+const REASON_SEV: Record<ReviewReason, InsightSeverity> = {
+  stale_no_charge: "info",
+  rising_price: "warn",
+  duplicate_lookalike: "watch",
+  low_value_signal: "info",
 };
 
 const REASON_LABEL: Record<ReviewReason, string> = {
@@ -51,55 +58,59 @@ export function SubscriptionReviewCard() {
 
   return (
     <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
-      <header className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-        <SearchCheck className="size-3 text-[color:var(--neon)]" />
-        מנויים לבדיקה
-      </header>
+      <SectionHeader
+        icon={<SearchCheck />}
+        title="מנויים לבדיקה"
+        trailing={
+          <span className="text-[10px] text-muted-foreground/70" dir="ltr">
+            {candidates.length}
+          </span>
+        }
+      />
       <ul className="flex flex-col gap-1.5">
-        {candidates.map((c) => {
-          const tone = REASON_TONE[c.reason];
-          return (
-            <li
-              key={`${c.ruleId}:${c.reason}`}
-              className="flex items-center gap-2 rounded-2xl border border-white/8 bg-black/25 p-2.5"
-            >
-              <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-[12px] font-medium text-foreground">
-                    {c.label}
-                  </span>
-                  <span
-                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px]"
-                    style={{ background: `${tone}1a`, color: tone }}
-                  >
-                    {REASON_LABEL[c.reason]}
-                  </span>
-                </div>
-                <span className="text-[10.5px] text-muted-foreground/85">
-                  {c.reasonText}
+        {candidates.map((c, idx) => (
+          <motion.li
+            key={`${c.ruleId}:${c.reason}`}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={listReveal(idx)}
+            className="flex items-center gap-2 rounded-2xl border border-white/8 bg-black/25 p-2.5 transition-colors hover:border-white/14"
+          >
+            <div className="flex min-w-0 flex-1 flex-col leading-tight">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-[12px] font-medium text-foreground">
+                  {c.label}
                 </span>
+                <InsightChip
+                  severity={REASON_SEV[c.reason]}
+                  label={REASON_LABEL[c.reason]}
+                />
               </div>
-              <span
-                data-mono="true"
-                dir="ltr"
-                className="shrink-0 text-[11px] text-muted-foreground"
-              >
-                {ILS.format(c.amount)}
+              <span className="text-[10.5px] text-muted-foreground/85">
+                {c.reasonText}
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  tap();
-                  navigateToTab("settings", "recurring-rules");
-                }}
-                className="shrink-0 rounded-md border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-2 py-1 text-[10px] text-[color:var(--neon)]"
-                aria-label={`לבדיקה ${c.label}`}
-              >
-                לבדיקה
-              </button>
-            </li>
-          );
-        })}
+            </div>
+            <span
+              data-mono="true"
+              dir="ltr"
+              className="shrink-0 text-[11px] text-muted-foreground"
+            >
+              {ILS.format(c.amount)}
+            </span>
+            <motion.button
+              type="button"
+              whileTap={CARD_TAP}
+              onClick={() => {
+                tap();
+                navigateToTab("settings", "recurring-rules");
+              }}
+              className="shrink-0 rounded-md border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-2 py-1 text-[10px] text-[color:var(--neon)] outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+              aria-label={`לבדיקה ${c.label}`}
+            >
+              לבדיקה
+            </motion.button>
+          </motion.li>
+        ))}
       </ul>
     </section>
   );

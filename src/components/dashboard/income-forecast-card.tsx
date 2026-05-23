@@ -5,11 +5,18 @@
 // income (no scheduled income, no irregular history).
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import { TrendingUp } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { incomeForecast } from "@/lib/income-forecast";
 import { currentMonthKey } from "@/lib/dates";
+import { SectionHeader } from "@/components/ui/section-header";
+import {
+  InsightChip,
+  type InsightSeverity,
+} from "@/components/ui/insight-chip";
+import { listReveal } from "@/lib/motion-tokens";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -23,10 +30,10 @@ const CONFIDENCE_LABEL: Record<string, string> = {
   low: "ביטחון נמוך",
 };
 
-const CONFIDENCE_TONE: Record<string, string> = {
-  high: "#34D399",
-  medium: "#D4AF37",
-  low: "#A1A1AA",
+const CONFIDENCE_SEVERITY: Record<string, InsightSeverity> = {
+  high: "info",
+  medium: "watch",
+  low: "warn",
 };
 
 const MONTH_FMT = new Intl.DateTimeFormat("he-IL", {
@@ -57,32 +64,29 @@ export function IncomeForecastCard() {
     return null;
   }
 
-  const tone = CONFIDENCE_TONE[report.confidence];
-
   return (
     <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
-      <header className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <TrendingUp className="size-3 text-[color:var(--neon)]" />
-          תחזית הכנסה
-        </span>
-        <span
-          className="rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em]"
-          style={{ background: `${tone}22`, color: tone }}
-          dir="ltr"
-        >
-          {CONFIDENCE_LABEL[report.confidence]}
-        </span>
-      </header>
+      <SectionHeader
+        icon={<TrendingUp />}
+        title="תחזית הכנסה"
+        trailing={
+          <InsightChip
+            severity={CONFIDENCE_SEVERITY[report.confidence]}
+            label={CONFIDENCE_LABEL[report.confidence]}
+          />
+        }
+      />
 
       <div className="grid grid-cols-2 gap-2">
         <Stat
+          index={0}
           title={`החודש (${monthLabel(report.monthKey)})`}
           total={report.expectedTotal}
           scheduled={report.scheduledMonthly}
           irregular={report.irregularMonthly}
         />
         <Stat
+          index={1}
           title={`הבא (${monthLabel(report.nextMonth.monthKey)})`}
           total={report.nextMonth.expectedTotal}
           scheduled={report.nextMonth.scheduledMonthly}
@@ -98,18 +102,25 @@ export function IncomeForecastCard() {
 }
 
 function Stat({
+  index,
   title,
   total,
   scheduled,
   irregular,
 }: {
+  index: number;
   title: string;
   total: number;
   scheduled: number;
   irregular: number;
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-2xl border border-white/8 bg-black/25 p-3">
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={listReveal(index)}
+      className="flex flex-col gap-1 rounded-2xl border border-white/8 bg-black/25 p-3"
+    >
       <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
         {title}
       </span>
@@ -123,7 +134,7 @@ function Stat({
       <span className="text-[10px] text-muted-foreground/80">
         קבוע {ILS.format(scheduled)} · משתנה {ILS.format(irregular)}
       </span>
-    </div>
+    </motion.div>
   );
 }
 
