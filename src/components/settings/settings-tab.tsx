@@ -20,6 +20,7 @@ import { DormantRulesCard } from "./dormant-rules-card";
 import { BudgetRecommendationCard } from "./budget-recommendation-card";
 import { BackupsCard } from "./backups-card";
 import { CloudSyncCard } from "./cloud-sync-card";
+import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
 
 export function SettingsTab() {
   return (
@@ -36,6 +37,7 @@ export function SettingsTab() {
         <AccountsPanel />
       </Section>
       <SubscriptionSuggestions />
+      <RecurringSuggestionsCard />
       <RuleDriftCard />
       <DormantRulesCard />
       <Section title="הוצאות וחיובים קבועים" section="recurring-rules">
