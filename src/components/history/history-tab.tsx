@@ -6,12 +6,14 @@ import { EntrySearchCard } from "./entry-search-card";
 import { YearlySummaryCard } from "./yearly-summary-card";
 import { TopMerchantsCard } from "./top-merchants-card";
 import { YoyCard } from "./yoy-card";
+import { LifestyleInflationCard } from "./lifestyle-inflation-card";
 
 export function HistoryTab() {
   return (
     <div className="flex flex-col gap-4">
       <EntrySearchCard />
       <YearlySummaryCard />
+      <LifestyleInflationCard />
       <YoyCard />
       <TopMerchantsCard />
       <MonthOverMonth />
