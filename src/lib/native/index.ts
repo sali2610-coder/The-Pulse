@@ -23,5 +23,14 @@ export { getSecure, setSecure, removeSecure } from "./secure-storage";
 export {
   registerNativePush,
   nativePlatformLabel,
+  readLastNativeRegistration,
   type NativePushRegistration,
+  type LastNativeRegistration,
 } from "./push";
+export {
+  validateNativePushTokenInput,
+  buildNativePushTokenRecord,
+  type NativePushToken,
+  type NativePushTokenInput,
+  type NativePlatform,
+} from "./push-token";

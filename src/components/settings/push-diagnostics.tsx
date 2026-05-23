@@ -29,16 +29,32 @@ import {
   withTimeout,
   type PushDiagStatus,
 } from "@/lib/push-diagnostic-state";
+import {
+  nativePlatformLabel,
+  readLastNativeRegistration,
+  type LastNativeRegistration,
+} from "@/lib/native/push";
+import { isNative } from "@/lib/native/platform";
 
 type ServerDiag = {
   ok: boolean;
   vapidConfigured?: boolean;
   kvConfigured?: boolean;
+  apnsConfigured?: boolean;
+  fcmConfigured?: boolean;
   subscription: {
     endpoint: string;
     endpointHost?: string;
     registeredAt: number;
   } | null;
+  nativeTokens?: Array<{
+    platform: "ios" | "android";
+    tokenPreview: string;
+    deviceId: string;
+    appVersion?: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   lastAttempt: {
     ts: number;
     ok: boolean;
@@ -157,6 +173,11 @@ export function PushDiagnostics() {
   const [foregroundExplainer, setForegroundExplainer] = useState<string | null>(
     null,
   );
+  const [lastNative, setLastNative] = useState<LastNativeRegistration | null>(
+    null,
+  );
+  const nativePlatform = nativePlatformLabel();
+  const isNativeShell = isNative();
 
   const refresh = useCallback(async () => {
     setStatus("checking");
@@ -201,6 +222,7 @@ export function PushDiagnostics() {
         }),
       );
     }
+    setLastNative(readLastNativeRegistration());
   }, []);
 
   const handleToggle = useCallback(() => {
@@ -349,6 +371,53 @@ export function PushDiagnostics() {
           </Row>
           <Row label="KV configured">
             <Pill value={server?.kvConfigured ?? null} />
+          </Row>
+
+          {/* ── Native push (Phase 203) ─────────────────────────── */}
+          <div className="mt-2 border-t border-white/8 pt-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Native push
+          </div>
+          <Row label="native platform">
+            <Mono>{nativePlatform}</Mono>
+          </Row>
+          <Row label="native shell">
+            <Pill
+              value={isNativeShell}
+              positiveLabel="כן"
+              negativeLabel="לא — מצב web/PWA"
+            />
+          </Row>
+          <Row label="fallback mode">
+            <Mono>{isNativeShell ? "native+web" : "web"}</Mono>
+          </Row>
+          <Row label="APNs configured (server)">
+            <Pill value={server?.apnsConfigured ?? null} />
+          </Row>
+          <Row label="FCM configured (server)">
+            <Pill value={server?.fcmConfigured ?? null} />
+          </Row>
+          <Row label="native tokens registered">
+            <Mono>
+              {server?.nativeTokens && server.nativeTokens.length > 0
+                ? server.nativeTokens.map((t) => t.platform).join(", ")
+                : "—"}
+            </Mono>
+          </Row>
+          {server?.nativeTokens?.map((t) => (
+            <Row key={t.platform} label={`token (${t.platform})`}>
+              <Mono>{t.tokenPreview}</Mono>
+            </Row>
+          )) ?? null}
+          <Row label="last native attempt">
+            <Mono>{lastNative ? fmtTime(lastNative.ts) : "—"}</Mono>
+          </Row>
+          <Row label="last native result">
+            <Pill
+              value={lastNative ? lastNative.ok : null}
+              positiveLabel={lastNative?.platform ?? "ok"}
+              negativeLabel={lastNative?.reason ?? "fail"}
+              neutralLabel="—"
+            />
           </Row>
         </div>
       ) : null}

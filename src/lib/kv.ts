@@ -1,6 +1,7 @@
 import { Redis } from "@upstash/redis";
 import type { Scope } from "@/lib/scope";
 import type { Issuer } from "@/types/finance";
+import type { NativePushToken } from "@/lib/native/push-token";
 
 // Upstash REST credentials are auto-provisioned by the Vercel Marketplace
 // integration as KV_REST_API_URL + KV_REST_API_TOKEN. We use the REST client
@@ -553,6 +554,57 @@ export async function getPushSubscription(
 
 export async function deletePushSubscription(scope: Scope): Promise<void> {
   await kv().del(SUB_KEY(scope));
+}
+
+// ── Native push tokens (Phase 203) ────────────────────────────────────
+// One record per (scope, platform). Stored alongside the Web Push
+// subscription so the future fan-out (push-native-server.ts) can prefer
+// native delivery and fall back to Web Push transparently.
+
+const NATIVE_TOKEN_KEY = (scope: Scope, platform: "ios" | "android") =>
+  `${scopePrefix(scope)}:push-native:${platform}`;
+
+export async function saveNativePushToken(
+  scope: Scope,
+  token: NativePushToken,
+): Promise<void> {
+  const key = NATIVE_TOKEN_KEY(scope, token.platform);
+  await kv().set(key, token);
+  await kv().expire(key, TX_TTL_SECONDS);
+}
+
+export async function getNativePushToken(
+  scope: Scope,
+  platform: "ios" | "android",
+): Promise<NativePushToken | null> {
+  const raw = await kv().get(NATIVE_TOKEN_KEY(scope, platform));
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as NativePushToken;
+    } catch {
+      return null;
+    }
+  }
+  return raw as NativePushToken;
+}
+
+export async function deleteNativePushToken(
+  scope: Scope,
+  platform: "ios" | "android",
+): Promise<void> {
+  await kv().del(NATIVE_TOKEN_KEY(scope, platform));
+}
+
+export async function listNativePushTokens(
+  scope: Scope,
+): Promise<NativePushToken[]> {
+  const out: NativePushToken[] = [];
+  for (const platform of ["ios", "android"] as const) {
+    const t = await getNativePushToken(scope, platform);
+    if (t) out.push(t);
+  }
+  return out;
 }
 
 export type PushAttempt = {

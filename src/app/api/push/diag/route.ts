@@ -11,6 +11,7 @@
 import {
   getPushSubscription,
   isKvConfigured,
+  listNativePushTokens,
   readPushAttempt,
 } from "@/lib/kv";
 import { isPushConfigured } from "@/lib/push-server";
@@ -43,12 +44,24 @@ export async function GET(req: Request): Promise<Response> {
   const lastAttempt = kvConfigured
     ? await readPushAttempt(scopeRes.scope)
     : null;
+  const nativeTokens = kvConfigured
+    ? await listNativePushTokens(scopeRes.scope)
+    : [];
 
   return Response.json({
     ok: true,
     scopeKind: scopeRes.scope.kind,
     vapidConfigured,
     kvConfigured,
+    apnsConfigured: Boolean(
+      process.env.APNS_TEAM_ID &&
+        process.env.APNS_KEY_ID &&
+        process.env.APNS_PRIVATE_KEY &&
+        process.env.APNS_BUNDLE_ID,
+    ),
+    fcmConfigured: Boolean(
+      process.env.FCM_PROJECT_ID && process.env.FCM_SERVICE_ACCOUNT_JSON,
+    ),
     subscription: sub
       ? {
           endpoint: sub.endpoint,
@@ -56,6 +69,18 @@ export async function GET(req: Request): Promise<Response> {
           registeredAt: sub.registeredAt,
         }
       : null,
+    nativeTokens: nativeTokens.map((t) => ({
+      platform: t.platform,
+      tokenPreview:
+        t.token.length <= 12
+          ? "*".repeat(t.token.length)
+          : `${t.token.slice(0, 8)}…${t.token.slice(-4)}`,
+      deviceId: t.deviceId,
+      userId: t.userId,
+      appVersion: t.appVersion,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    })),
     lastAttempt,
   });
 }
