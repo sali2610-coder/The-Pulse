@@ -231,3 +231,70 @@ function clampDay(d: number): number {
 function roundCents(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 208 — recurring-rule lens
+// ────────────────────────────────────────────────────────────────────
+//
+// When a RecurringRule is paid via a credit card (paymentSource ===
+// "card" + linkedCardId), the actual liquidity hit isn't on the
+// rule's declared dayOfMonth — it's on the linked card's paymentDay
+// in the cycle the rule's day belongs to.
+//
+// Returns kind: "card" with effectiveCashDate moved to the card's
+// payment day, or kind: "cash"/"bank" with effectiveCashDate ===
+// ruleDate when not card-linked. This lets the new per-card
+// bucketing layer route every rule to the correct future-debit slot.
+
+export type RuleCashImpact = {
+  ruleId: string;
+  /** Calendar day the rule said it charges (dayOfMonth in target month). */
+  ruleDate: Date;
+  /** When the bank actually debits. */
+  effectiveCashDate: Date;
+  amount: number;
+  kind: CashImpactKind;
+  viaCardId?: string;
+};
+
+export function effectiveCashImpactForRule(args: {
+  rule: import("@/types/finance").RecurringRule;
+  accounts: Account[];
+  /** Month to compute the impact for. Format YYYY-MM. */
+  monthKey: string;
+}): RuleCashImpact | null {
+  const [yStr, mStr] = args.monthKey.split("-");
+  const year = Number(yStr);
+  const month0 = Number(mStr) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(month0)) return null;
+  const lastDay = new Date(year, month0 + 1, 0).getDate();
+  const day = Math.min(Math.max(1, args.rule.dayOfMonth), lastDay);
+  const ruleDate = new Date(year, month0, day, 12, 0, 0);
+
+  const isCard = args.rule.paymentSource === "card";
+  if (!isCard) {
+    return {
+      ruleId: args.rule.id,
+      ruleDate,
+      effectiveCashDate: ruleDate,
+      amount: roundCents(args.rule.estimatedAmount),
+      kind: args.rule.paymentSource === "cash" ? "cash" : "bank",
+    };
+  }
+
+  const card =
+    args.accounts.find(
+      (a) => a.id === args.rule.linkedCardId && a.kind === "card",
+    ) ??
+    args.accounts.find((a) => a.kind === "card" && a.active) ??
+    null;
+
+  return {
+    ruleId: args.rule.id,
+    ruleDate,
+    effectiveCashDate: cardPaymentDateFor(card, ruleDate),
+    amount: roundCents(args.rule.estimatedAmount),
+    kind: "card",
+    viaCardId: card?.id,
+  };
+}

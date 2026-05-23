@@ -36,7 +36,10 @@ import type {
 import { addMonths, monthKeyOf } from "@/lib/dates";
 import { sliceForMonth } from "@/lib/projections";
 import { ruleSchedule } from "@/lib/installment-schedule";
-import { effectiveCashImpactStream } from "@/lib/effective-cash-date";
+import {
+  effectiveCashImpactForRule,
+  effectiveCashImpactStream,
+} from "@/lib/effective-cash-date";
 
 export type SafeToSpendVibe = "calm" | "tight" | "danger";
 
@@ -133,7 +136,11 @@ export function safeToSpendUntilNextSalary(args: {
     }
   }
 
-  // Recurring rule charges in window.
+  // Recurring rule charges in window. Phase 208 fix: card-linked
+  // rules settle on the LINKED CARD's paymentDay, not the rule's
+  // declared dayOfMonth. We route every rule through
+  // effectiveCashImpactForRule so the actual liquidity hit is what
+  // gets counted.
   let expectedRecurringDebits = 0;
   const paidThisMonth = new Set(
     args.statuses
@@ -160,7 +167,19 @@ export function safeToSpendUntilNextSalary(args: {
       }
       const mk = monthKeyOf(date);
       if (!ruleSchedule(rule, mk).active) continue;
-      expectedRecurringDebits += rule.estimatedAmount;
+      const impact = effectiveCashImpactForRule({
+        rule,
+        accounts: args.accounts,
+        monthKey: mk,
+      });
+      if (!impact) continue;
+      const t = impact.effectiveCashDate.getTime();
+      // Card-linked rules whose payment day rolls past the horizon
+      // simply don't hit liquidity inside the window — that's the
+      // whole point of the rewrite. Drop them from this period's
+      // count.
+      if (t <= now.getTime() || t > horizon.getTime()) continue;
+      expectedRecurringDebits += impact.amount;
     }
   }
 
