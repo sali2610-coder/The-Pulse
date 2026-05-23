@@ -4,12 +4,14 @@ import { MonthOverMonth } from "./month-over-month";
 import { CategoryTrendsCard } from "./category-trends";
 import { EntrySearchCard } from "./entry-search-card";
 import { YearlySummaryCard } from "./yearly-summary-card";
+import { TopMerchantsCard } from "./top-merchants-card";
 
 export function HistoryTab() {
   return (
     <div className="flex flex-col gap-4">
       <EntrySearchCard />
       <YearlySummaryCard />
+      <TopMerchantsCard />
       <MonthOverMonth />
       <CategoryTrendsCard />
     </div>
