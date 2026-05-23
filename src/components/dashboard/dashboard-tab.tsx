@@ -325,6 +325,12 @@ const ExpectedBalanceCard = lazy(() =>
   })),
 );
 
+const ForecastTimelineCard = lazy(() =>
+  import("@/components/dashboard/forecast-timeline-card").then((m) => ({
+    default: m.ForecastTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const RunwayCard = lazy(() =>
   import("@/components/dashboard/runway-card").then((m) => ({
     default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -484,6 +490,9 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-6">
         <Safe name="ExpectedBalanceCard"><ExpectedBalanceCard /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="ForecastTimelineCard"><ForecastTimelineCard /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
