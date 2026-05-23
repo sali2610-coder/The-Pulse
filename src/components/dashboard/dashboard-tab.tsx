@@ -289,6 +289,12 @@ const WeekendSpendCard = lazy(() =>
   })),
 );
 
+const SpendConsistencyCard = lazy(() =>
+  import("@/components/dashboard/spend-consistency-card").then((m) => ({
+    default: m.SpendConsistencyCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const BillingCalendarCard = lazy(() =>
   import("@/components/dashboard/billing-calendar-card").then((m) => ({
     default: m.BillingCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -438,6 +444,11 @@ export function DashboardTab() {
         </div>
         <div className="sm:col-span-6">
           <Safe name="WeekendSpendCard"><WeekendSpendCard /></Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="SpendConsistencyCard">
+            <SpendConsistencyCard />
+          </Safe>
         </div>
         <div className="sm:col-span-6">
           <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
