@@ -331,6 +331,12 @@ const ForecastTimelineCard = lazy(() =>
   })),
 );
 
+const TodayPulseCard = lazy(() =>
+  import("@/components/dashboard/today-pulse-card").then((m) => ({
+    default: m.TodayPulseCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const RunwayCard = lazy(() =>
   import("@/components/dashboard/runway-card").then((m) => ({
     default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -502,6 +508,9 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-3">
         <Safe name="CfoSummary"><CfoSummary /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="TodayPulseCard"><TodayPulseCard /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="PendingTray"><PendingTray /></Safe>

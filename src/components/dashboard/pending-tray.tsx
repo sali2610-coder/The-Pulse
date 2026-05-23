@@ -16,6 +16,7 @@ import { getCategory } from "@/lib/categories";
 import { tap, success } from "@/lib/haptics";
 import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet";
 import { InstantConfirmSheet } from "@/components/confirmation/instant-confirm-sheet";
+import { classifyPending } from "@/lib/pending-lifecycle";
 import { detectStalePending } from "@/lib/stale-pending";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -51,6 +52,16 @@ export function PendingTray() {
     () => detectStalePending({ entries: pending }).length,
     [pending],
   );
+
+  // Phase 206 — lifecycle classification. Reads ALL entries (not
+  // only pending) so the merge-candidate detector can match against
+  // already-confirmed siblings.
+  const allEntries = useFinanceStore((s) => s.entries);
+  const lifecycle = useMemo(
+    () => classifyPending({ entries: allEntries }),
+    [allEntries],
+  );
+  const mergeCount = lifecycle.counts.mergeCandidates;
 
   if (!hydrated || pending.length === 0) return null;
 
@@ -106,6 +117,15 @@ export function PendingTray() {
                   >
                     <AlarmClock className="size-2.5" />
                     {staleCount} ישנים
+                  </span>
+                ) : null}
+                {mergeCount > 0 ? (
+                  <span
+                    className="flex items-center gap-1 rounded-full bg-[#60A5FA]/15 px-1.5 py-0.5 text-[9px] font-medium text-[#60A5FA]"
+                    aria-label={`${mergeCount} מועמדים למיזוג`}
+                    title="חיוב פעיל נוסף נראה כמו אותה עסקה. מיזוג יקרה אוטומטית כשהנתונים יתעדכנו."
+                  >
+                    {mergeCount} מועמדים למיזוג
                   </span>
                 ) : null}
               </span>
