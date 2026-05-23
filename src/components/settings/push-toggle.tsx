@@ -130,17 +130,34 @@ export function PushToggle() {
         return;
       }
 
-      // Probe server + browser in parallel.
+      // Probe server + browser in parallel. EACH probe is wrapped in
+      // a 5s timeout so a single hung promise (slow iOS network, stuck
+      // SW) can't strand the toggle on "loading" forever.
+      const timeout = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((resolve) =>
+            setTimeout(() => resolve(fallback), 5000),
+          ),
+        ]);
+
       const [serverStateRaw, reg] = await Promise.all([
-        fetch("/api/push/subscribe", {
-          method: "GET",
-          headers: scopeHeaders(),
-          credentials: "same-origin",
-          cache: "no-store",
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-        navigator.serviceWorker.getRegistration().catch(() => undefined),
+        timeout(
+          fetch("/api/push/subscribe", {
+            method: "GET",
+            headers: scopeHeaders(),
+            credentials: "same-origin",
+            cache: "no-store",
+            signal: AbortSignal.timeout(5000),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+          null as unknown,
+        ),
+        timeout(
+          navigator.serviceWorker.getRegistration().catch(() => undefined),
+          undefined as ServiceWorkerRegistration | undefined,
+        ),
       ]);
       const serverState = serverStateRaw as
         | { subscribed?: boolean; endpoint?: string }
@@ -149,7 +166,10 @@ export function PushToggle() {
       const serverEndpoint = serverState?.endpoint;
 
       const localSub = reg
-        ? await reg.pushManager.getSubscription().catch(() => null)
+        ? await timeout(
+            reg.pushManager.getSubscription().catch(() => null),
+            null as PushSubscription | null,
+          )
         : null;
       const localEndpoint = localSub?.endpoint;
 

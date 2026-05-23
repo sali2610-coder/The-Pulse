@@ -5,6 +5,7 @@ import { IntegrationInfo } from "./integration-info";
 import { StatementImport } from "./statement-import";
 import { AudioToggle } from "./audio-toggle";
 import { PushToggle } from "./push-toggle";
+import { IphonePushOnboardingCard } from "./iphone-push-onboarding-card";
 import { AuthCard } from "./auth-card";
 // DeviceRecoveryCard is no longer mounted as a top-level container.
 // BackupsCard renders it inside "אפשרויות מתקדמות" so the user sees
@@ -32,6 +33,7 @@ export function SettingsTab() {
       <BudgetRecommendationCard />
       <BudgetInput />
       <IntegrationInfo />
+      <IphonePushOnboardingCard />
       <PushToggle />
       <AudioToggle />
       <Section title="חשבונות" section="accounts">
