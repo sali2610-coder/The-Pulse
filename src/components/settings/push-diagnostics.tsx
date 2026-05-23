@@ -1,10 +1,34 @@
 "use client";
 
-import { useCallback, useState } from "react";
+// Tap-to-Pulse diagnostic card. Reworked May 2026 to fix the
+// "stuck on בודק רישום קיים..." production bug:
+//
+//   * Every async probe is wrapped in withTimeout(4s) so a slow
+//     network or hung SW promise can't strand the UI.
+//   * The render is driven by a pure state machine
+//     (classifyPushDiagnostic) instead of a single loading boolean.
+//     Every refresh ends in a final state: idle / checking /
+//     unsupported / permission_denied / waiting_for_sw /
+//     no_subscription / subscribed_browser_only /
+//     subscribed_server_only / subscribed_synced / send_ok /
+//     send_failed / timed_out.
+//   * If the user is currently foregrounded inside the PWA, we show
+//     a Hebrew explainer telling them iOS suppresses notifications
+//     in that mode — so a missing toast isn't read as a bug.
+
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, RefreshCw } from "lucide-react";
 
 import { getOrCreateDeviceId } from "@/lib/device-id";
+import {
+  classifyPushDiagnostic,
+  foregroundNote,
+  labelFor,
+  PROBE_TIMEOUT_MS,
+  withTimeout,
+  type PushDiagStatus,
+} from "@/lib/push-diagnostic-state";
 
 type ServerDiag = {
   ok: boolean;
@@ -71,30 +95,30 @@ async function probeBrowser(): Promise<BrowserDiag> {
   let swScope: string | undefined;
   let localEndpoint: string | undefined;
   if ("serviceWorker" in navigator) {
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        swRegistered = true;
-        swActive = Boolean(reg.active);
-        swScope = reg.scope;
-        const sub = await reg.pushManager.getSubscription().catch(() => null);
-        if (sub) localEndpoint = sub.endpoint;
-      }
-    } catch {
-      /* ignore */
+    // Each SW call is independently timed so a single hang doesn't
+    // abort the whole probe — we want partial signals over none.
+    const regResult = await withTimeout(
+      navigator.serviceWorker.getRegistration(),
+    );
+    if (regResult.ok && regResult.value) {
+      const reg = regResult.value;
+      swRegistered = true;
+      swActive = Boolean(reg.active);
+      swScope = reg.scope;
+      const subResult = await withTimeout(
+        reg.pushManager.getSubscription().catch(() => null),
+      );
+      if (subResult.ok && subResult.value) localEndpoint = subResult.value.endpoint;
     }
   }
   const swController = Boolean(navigator.serviceWorker?.controller);
 
-  // iOS standalone PWA detection (Safari-specific + W3C display-mode).
   const nav = navigator as unknown as { standalone?: boolean };
   const standalone =
     nav.standalone === true ||
     window.matchMedia?.("(display-mode: standalone)").matches ||
     false;
 
-  // iOS major.minor from UA (best effort — Apple obscures recent versions
-  // but the digits are present in the standard `Version/X.Y Safari` segment).
   let iosVersion: string | undefined;
   const m = navigator.userAgent.match(/OS (\d+)_(\d+)(?:_(\d+))?/);
   if (m) iosVersion = `${m[1]}.${m[2]}${m[3] ? "." + m[3] : ""}`;
@@ -129,41 +153,91 @@ export function PushDiagnostics() {
   const [open, setOpen] = useState(false);
   const [server, setServer] = useState<ServerDiag | null>(null);
   const [browser, setBrowser] = useState<BrowserDiag | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<PushDiagStatus>("idle");
+  const [foregroundExplainer, setForegroundExplainer] = useState<string | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [s, b] = await Promise.all([
-        fetch("/api/push/diag", {
-          credentials: "same-origin",
-          cache: "no-store",
-          headers: { "x-sally-device": getOrCreateDeviceId() },
-        })
-          .then((r) => r.json())
-          .catch(() => null),
-        probeBrowser(),
-      ]);
-      setServer(s as ServerDiag | null);
-      setBrowser(b);
-    } finally {
-      setLoading(false);
+    setStatus("checking");
+    const serverPromise = fetch("/api/push/diag", {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "x-sally-device": getOrCreateDeviceId() },
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<ServerDiag>) : null))
+      .catch(() => null);
+
+    const [serverResult, browserResult] = await Promise.all([
+      withTimeout(serverPromise),
+      withTimeout(probeBrowser()),
+    ]);
+
+    const s = serverResult.ok ? serverResult.value : null;
+    const b = browserResult.ok ? browserResult.value : null;
+    setServer(s);
+    setBrowser(b);
+
+    const next = classifyPushDiagnostic({
+      pushSupported: b?.pushSupported ?? false,
+      notificationPermission: b?.notificationPermission ?? null,
+      swRegistered: b?.swRegistered ?? false,
+      swActive: b?.swActive ?? false,
+      localEndpoint: b?.localEndpoint ?? null,
+      serverEndpoint: s?.subscription?.endpoint ?? null,
+      lastSendOk: s?.lastAttempt?.ok ?? null,
+      probeTimedOut: !serverResult.ok && !browserResult.ok,
+    });
+    setStatus(next);
+
+    if (b) {
+      setForegroundExplainer(
+        foregroundNote({
+          visibilityState:
+            typeof document !== "undefined" ? document.visibilityState : "hidden",
+          standalone: b.standalone,
+          iosVersion: b.iosVersion ?? null,
+        }),
+      );
     }
   }, []);
 
   const handleToggle = useCallback(() => {
     setOpen((wasOpen) => {
-      if (!wasOpen && server === null) {
+      if (!wasOpen && status === "idle") {
         void refresh();
       }
       return !wasOpen;
     });
-  }, [server, refresh]);
+  }, [status, refresh]);
+
+  // Refresh whenever the user returns to the tab — keeps the status
+  // honest after iOS swaps the SW out, the user grants permission in
+  // Settings, or the network recovers.
+  useEffect(() => {
+    if (!open) return;
+    if (typeof document === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [open, refresh]);
 
   const serverHost = server?.subscription?.endpointHost;
   const localHost = browser?.localEndpointHost;
   const endpointMatch =
     serverHost && localHost ? serverHost === localHost : null;
+
+  const statusTone =
+    status === "subscribed_synced" || status === "send_ok"
+      ? "ok"
+      : status === "checking" || status === "waiting_for_sw"
+        ? "wait"
+        : status === "idle"
+          ? "wait"
+          : "warn";
 
   return (
     <div className="border-t border-white/8 pt-3">
@@ -171,6 +245,7 @@ export function PushDiagnostics() {
         type="button"
         onClick={handleToggle}
         className="flex w-full items-center justify-between text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        aria-expanded={open}
       >
         <span>אבחון Tap-to-Pulse</span>
         <motion.span animate={{ rotate: open ? 180 : 0 }}>
@@ -178,29 +253,44 @@ export function PushDiagnostics() {
         </motion.span>
       </button>
       {open ? (
-        <div className="mt-3 flex flex-col gap-1 rounded-2xl border border-white/8 bg-background/40 p-3 text-[11px]">
-          <div className="mb-2 flex items-center justify-between text-muted-foreground">
+        <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-white/8 bg-background/40 p-3 text-[11px]">
+          <div className="flex items-center justify-between text-muted-foreground">
             <span>מצב נוכחי</span>
             <button
               type="button"
               onClick={() => void refresh()}
-              disabled={loading}
-              className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] hover:border-white/20"
+              disabled={status === "checking"}
+              className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] hover:border-white/20 disabled:opacity-50"
+              aria-label="רענן אבחון"
             >
               <RefreshCw
-                className={`size-3 ${loading ? "animate-spin" : ""}`}
+                className={`size-3 ${status === "checking" ? "animate-spin" : ""}`}
               />
               רענן
             </button>
           </div>
 
-          <Row label="push subscription found">
-            <Pill
-              value={Boolean(server?.subscription)}
-              positiveLabel="כן"
-              negativeLabel="לא"
-            />
-          </Row>
+          {/* Authoritative final state — always rendered. */}
+          <div
+            className={`rounded-xl border px-3 py-2 text-[11.5px] ${
+              statusTone === "ok"
+                ? "border-[#34D399]/30 bg-[#34D399]/10 text-[#34D399]"
+                : statusTone === "warn"
+                  ? "border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border-white/10 bg-white/5 text-muted-foreground"
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            {labelFor(status)}
+          </div>
+
+          {foregroundExplainer ? (
+            <p className="rounded-xl border border-gold/30 bg-gold/10 px-3 py-2 text-[10.5px] text-gold">
+              {foregroundExplainer}
+            </p>
+          ) : null}
+
           <Row label="server endpoint host">
             <Mono>{serverHost ?? "—"}</Mono>
           </Row>
@@ -229,14 +319,6 @@ export function PushDiagnostics() {
           </Row>
           <Row label="last push reason">
             <Mono>{server?.lastAttempt?.reason ?? "—"}</Mono>
-          </Row>
-          <Row label="last push ok">
-            <Pill
-              value={server?.lastAttempt ? server.lastAttempt.ok : null}
-              positiveLabel="ok"
-              negativeLabel="fail"
-              neutralLabel="—"
-            />
           </Row>
           <Row label="service worker registered">
             <Pill value={browser?.swRegistered ?? null} />

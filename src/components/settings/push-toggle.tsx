@@ -81,6 +81,11 @@ export function PushToggle() {
   const [status, setStatus] = useState<Status>("loading");
   const [busy, setBusy] = useState(false);
   const [debug, setDebug] = useState<string | null>(null);
+  // Bumped every time the user returns to the tab; the reconcile
+  // effect watches this so its async work re-runs after foreground.
+  // Without it the effect only fires once on mount and a visibility-
+  // triggered setStatus("loading") would strand the UI forever.
+  const [reconcileTick, setReconcileTick] = useState(0);
   const reconciledRef = useRef(false);
 
   const persistSub = useCallback(
@@ -211,16 +216,19 @@ export function PushToggle() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, persistSub]);
+  }, [hydrated, persistSub, reconcileTick]);
 
   // Visibility recovery — if browser endpoint dies while we're idle,
-  // re-probe the server.
+  // bump the reconcile tick so the effect above re-runs. Setting
+  // status back to "loading" alone wouldn't refire the effect (its
+  // deps don't watch status), which used to strand the UI in Phase 197.
   useEffect(() => {
     if (!hydrated) return;
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
       reconciledRef.current = false;
       setStatus("loading");
+      setReconcileTick((n) => n + 1);
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);

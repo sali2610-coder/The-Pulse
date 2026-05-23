@@ -307,6 +307,24 @@ const DailyInsightsCard = lazy(() =>
   })),
 );
 
+const SpentThisMonthCard = lazy(() =>
+  import("@/components/dashboard/spent-this-month-card").then((m) => ({
+    default: m.SpentThisMonthCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const AccountBridgeCard = lazy(() =>
+  import("@/components/dashboard/account-bridge-card").then((m) => ({
+    default: m.AccountBridgeCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const ExpectedBalanceCard = lazy(() =>
+  import("@/components/dashboard/expected-balance-card").then((m) => ({
+    default: m.ExpectedBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const RunwayCard = lazy(() =>
   import("@/components/dashboard/runway-card").then((m) => ({
     default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -453,6 +471,19 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-6">
         <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
+      </div>
+      {/* Phase 200 — financial trio: how much I spent, bridge to the
+         bank balance, and the expected EOM position. Placed directly
+         under the Pulse so a user opening the app sees the three
+         numbers that answer "where do I stand?". */}
+      <div className="sm:col-span-6">
+        <Safe name="SpentThisMonthCard"><SpentThisMonthCard /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="AccountBridgeCard"><AccountBridgeCard /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="ExpectedBalanceCard"><ExpectedBalanceCard /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
