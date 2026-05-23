@@ -1,0 +1,61 @@
+name: CI
+
+# Runs the same local quality gates on every push to main and on every
+# pull request targeting main. Each gate is its own step so a failure
+# message points at the exact command that broke. Steps run in the same
+# order the README documents for local development.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs for the same ref so a force-push doesn't pile
+# up unnecessary worker time.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Node 22 LTS — Next.js 16 requires >= 18.18 and the local dev
+          # environment is on Node 24, so 22 stays well within the
+          # supported window without tracking the cutting edge.
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Performance budget
+        run: npm run perf:budget
+
+      - name: Accessibility audit
+        run: npm run a11y:audit
