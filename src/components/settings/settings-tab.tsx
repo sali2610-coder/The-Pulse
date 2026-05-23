@@ -21,6 +21,7 @@ import { BudgetRecommendationCard } from "./budget-recommendation-card";
 import { BackupsCard } from "./backups-card";
 import { CloudSyncCard } from "./cloud-sync-card";
 import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
+import { ReceiptScanCard } from "./receipt-scan-card";
 
 export function SettingsTab() {
   return (
@@ -50,6 +51,7 @@ export function SettingsTab() {
         <IncomePanel />
       </Section>
       <StatementImport />
+      <ReceiptScanCard />
     </div>
   );
 }
