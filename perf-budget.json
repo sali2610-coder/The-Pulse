@@ -1,6 +1,6 @@
 {
-  "_comment": "Performance budget seeded at Phase 164 baseline + ~10% headroom. Phase 184: fileCount bumped to 100 to accommodate continued per-card additions; totalKB still well within original 2640 cap. Update intentionally when a feature legitimately needs more bundle.",
+  "_comment": "Performance budget. Phase 164 baseline + ~10% headroom. Phase 184: fileCount bumped to 100. Phase 202: fileCount bumped to 115 to accommodate Capacitor plugin chunks (lazy-loaded on web — dead code on the web bundle but the chunks still exist). Update intentionally when a feature legitimately needs more bundle.",
   "totalKB": 2800,
   "biggestKB": 940,
-  "fileCount": 100
+  "fileCount": 115
 }

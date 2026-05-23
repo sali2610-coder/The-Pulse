@@ -4,6 +4,7 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
+import { NativeShellProvider } from "@/components/app/native-shell-provider";
 
 // Clerk is intentionally NOT imported here. Auth is disabled at the app
 // level — the dashboard is a single-user public app served straight from
@@ -29,6 +30,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         reducedMotion="user"
         transition={{ type: "spring", stiffness: 220, damping: 26 }}
       >
+        {/* Phase 202 — native bridge boot. No-op on web. */}
+        <NativeShellProvider />
         {children}
         <Toaster richColors position="top-center" dir="rtl" />
       </MotionConfig>

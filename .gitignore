@@ -51,3 +51,10 @@ next-env.d.ts
 
 # Phase 164: perf-budget snapshot is per-build, not checked in.
 perf-budget.snapshot.json
+
+# Capacitor native shells (Phase 202)
+# Generated locally via `npx cap add ios|android`. Native sources
+# are committed only after a deliberate promotion — out of repo by
+# default to keep CI + Vercel build paths clean.
+/ios
+/android
