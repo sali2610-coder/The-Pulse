@@ -295,6 +295,18 @@ const SpendingHoursCard = lazy(() =>
   })),
 );
 
+const DailyFlowCard = lazy(() =>
+  import("@/components/timeline/daily-flow-card").then((m) => ({
+    default: m.DailyFlowCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+const DailyInsightsCard = lazy(() =>
+  import("@/components/dashboard/daily-insights-card").then((m) => ({
+    default: m.DailyInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const RunwayCard = lazy(() =>
   import("@/components/dashboard/runway-card").then((m) => ({
     default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -453,6 +465,12 @@ export function DashboardTab() {
       </div>
       <div className="sm:col-span-6">
         <Safe name="PendingTray"><PendingTray /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="DailyInsightsCard"><DailyInsightsCard /></Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="DailyFlowCard"><DailyFlowCard /></Safe>
       </div>
       <div className="sm:col-span-6">
         <Safe name="RecentActivity"><RecentActivity /></Safe>
