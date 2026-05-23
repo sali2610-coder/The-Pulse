@@ -7,12 +7,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { Search, Tag } from "lucide-react";
+import { toast } from "sonner";
 
 import { useFinanceStore } from "@/lib/store";
 import { searchEntries } from "@/lib/entry-search";
-import { getCategory } from "@/lib/categories";
+import { CATEGORIES, getCategory } from "@/lib/categories";
+import type { CategoryId } from "@/lib/categories";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
+import { tap, success } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -37,8 +40,10 @@ function fmtDate(iso: string): string {
 export function EntrySearchCard() {
   const entries = useFinanceStore((s) => s.entries);
   const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const updateExpense = useFinanceStore((s) => s.updateExpense);
   const [raw, setRaw] = useState("");
   const [query, setQuery] = useState("");
+  const [bulkCategory, setBulkCategory] = useState<CategoryId | "">("");
 
   // 200ms debounce.
   useEffect(() => {
@@ -122,6 +127,61 @@ export function EntrySearchCard() {
         <p className="text-[10px] text-muted-foreground/80">
           {hits.length === 50 ? "מציג 50 ראשונים — חדד את החיפוש" : `${hits.length} תוצאות`}
         </p>
+      ) : null}
+
+      {/* Bulk re-categorize — visible only when there are hits.
+         Lets the user fix a misclassified merchant across every
+         match at once. Confirmation required because the action
+         is non-trivially destructive. */}
+      {hits.length > 0 ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2">
+          <Tag className="size-3 text-[color:var(--neon)]" />
+          <span className="text-[10.5px] text-muted-foreground">
+            הגדר קטגוריה לכל התוצאות
+          </span>
+          <select
+            value={bulkCategory}
+            onChange={(e) => setBulkCategory(e.target.value as CategoryId | "")}
+            aria-label="בחר קטגוריה"
+            className="h-7 rounded-md border border-white/10 bg-background/40 px-1 text-[11px] text-foreground"
+          >
+            <option value="">—</option>
+            {CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!bulkCategory}
+            onClick={() => {
+              if (!bulkCategory) return;
+              if (
+                typeof window !== "undefined" &&
+                !window.confirm(
+                  `לעדכן את הקטגוריה של ${hits.length} חיובים?`,
+                )
+              ) {
+                return;
+              }
+              tap();
+              let n = 0;
+              for (const h of hits) {
+                if (h.entry.category === bulkCategory) continue;
+                updateExpense(h.entry.id, { category: bulkCategory });
+                n += 1;
+              }
+              success();
+              toast.success(`עודכנו ${n} חיובים`);
+              setBulkCategory("");
+            }}
+            aria-label="עדכן קטגוריה לכל התוצאות"
+            className="ms-auto flex h-7 items-center gap-1 rounded-md border border-[color:var(--neon)]/40 bg-[color:var(--neon)]/10 px-2 text-[10px] text-[color:var(--neon)] disabled:opacity-50"
+          >
+            עדכן
+          </button>
+        </div>
       ) : null}
     </section>
   );
