@@ -295,6 +295,12 @@ const SpendConsistencyCard = lazy(() =>
   })),
 );
 
+const AvgTicketCard = lazy(() =>
+  import("@/components/dashboard/avg-ticket-card").then((m) => ({
+    default: m.AvgTicketCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
 const BillingCalendarCard = lazy(() =>
   import("@/components/dashboard/billing-calendar-card").then((m) => ({
     default: m.BillingCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
@@ -449,6 +455,9 @@ export function DashboardTab() {
           <Safe name="SpendConsistencyCard">
             <SpendConsistencyCard />
           </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="AvgTicketCard"><AvgTicketCard /></Safe>
         </div>
         <div className="sm:col-span-6">
           <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
