@@ -1,6 +1,6 @@
 {
-  "_comment": "Performance budget. Phase 164 baseline + ~10% headroom. Phase 184: fileCount bumped to 100. Phase 202: fileCount bumped to 115 to accommodate Capacitor plugin chunks (lazy-loaded on web — dead code on the web bundle but the chunks still exist). Update intentionally when a feature legitimately needs more bundle.",
-  "totalKB": 2800,
+  "_comment": "Performance budget. Phase 164 baseline + ~10% headroom. Phase 184: fileCount → 100. Phase 202: fileCount → 115 (Capacitor plugin chunks). Phase 209: totalKB → 2900 to make room for the liquidity engine (effective-cash-date + cash-flow-bucket + liquidity-curve compute + 3 dashboard cards). Update intentionally when a feature legitimately needs more bundle.",
+  "totalKB": 2900,
   "biggestKB": 940,
   "fileCount": 115
 }
