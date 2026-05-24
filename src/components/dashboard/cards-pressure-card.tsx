@@ -56,6 +56,10 @@ export function CardsPressureCard() {
       entries,
       statuses,
       monthKey: currentMonthKey(),
+      // Phase 216 — route everything through the effective-cash
+      // lens. Rules + entries that settle in a future month no
+      // longer inflate this month's pressure.
+      useEffectiveCashDates: true,
     });
   }, [hydrated, accounts, rules, entries, statuses]);
 

@@ -23,6 +23,11 @@ import type {
 } from "@/types/finance";
 import { sliceForMonth } from "@/lib/projections";
 import { ruleSchedule } from "@/lib/installment-schedule";
+import {
+  effectiveCashImpactForRule,
+  effectiveCashImpacts,
+} from "@/lib/effective-cash-date";
+import { monthKeyOf } from "@/lib/dates";
 
 export type CardPressure = {
   card: Account;
@@ -60,6 +65,13 @@ export function buildCardPressure(args: {
   statuses: Array<{ ruleId: string; monthKey: MonthKey; status: "paid" | "pending" }>;
   monthKey: MonthKey;
   now?: Date;
+  /** Phase 216 — when true, every contribution lands on its
+   *  effective-cash month. A rule whose day is the 28th + card
+   *  paymentDay 10 correctly rolls to next month and stops
+   *  inflating THIS month's pressure. Default false so existing
+   *  consumers (CardsPressureCard before this phase) are not
+   *  shifted underneath them; CardsPressureCard opts in. */
+  useEffectiveCashDates?: boolean;
 }): CardPressure[] {
   const now = args.now ?? new Date();
   const cards = args.accounts.filter(
@@ -87,6 +99,21 @@ export function buildCardPressure(args: {
       if (rule.linkedCardId !== card.id) continue;
       const sched = ruleSchedule(rule, args.monthKey);
       if (!sched.active) continue;
+
+      // Phase 216 — when on the effective-cash lens, skip the rule
+      // if its payment day rolls to a DIFFERENT month than the one
+      // we're measuring. Net: rules whose day is past the card's
+      // paymentDay correctly land next month.
+      if (args.useEffectiveCashDates) {
+        const impact = effectiveCashImpactForRule({
+          rule,
+          accounts: args.accounts,
+          monthKey: args.monthKey,
+        });
+        if (!impact) continue;
+        if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
+      }
+
       if (rule.installmentTotal) {
         installmentThisMonth += rule.estimatedAmount;
         installmentPlansActive++;
@@ -100,7 +127,26 @@ export function buildCardPressure(args: {
     }
 
     // Card-side entries.
-    if (card.cardLast4) {
+    if (args.useEffectiveCashDates) {
+      // Effective-cash branch — walk every CashImpact, keep the ones
+      // routed via THIS card AND landing in the target monthKey.
+      // Handles installment plans whose slices straddle months.
+      for (const entry of args.entries) {
+        if (entry.needsConfirmation) continue;
+        if (entry.bankPending) continue;
+        if (entry.isRefund) continue;
+        if (entry.currency && entry.currency !== "ILS") continue;
+        if (entry.excludeFromBudget) continue;
+        for (const impact of effectiveCashImpacts({
+          entry,
+          accounts: args.accounts,
+        })) {
+          if (impact.viaCardId !== card.id) continue;
+          if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
+          entriesThisMonth += impact.amount;
+        }
+      }
+    } else if (card.cardLast4) {
       for (const entry of args.entries) {
         if (entry.cardLast4 !== card.cardLast4) continue;
         if (entry.needsConfirmation) continue;

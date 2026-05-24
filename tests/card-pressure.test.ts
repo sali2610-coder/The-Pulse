@@ -283,4 +283,42 @@ describe("buildCardPressure", () => {
     expect(calRow?.totalThisMonth).toBe(100);
     expect(maxRow?.totalThisMonth).toBe(0);
   });
+
+  it("Phase 216 — effective-cash lens skips rules whose card paymentDay rolls to next month", () => {
+    const cal: Account = {
+      id: "card-cal",
+      kind: "card",
+      label: "CAL",
+      active: true,
+      cardLast4: "1234",
+      paymentDay: 10,
+      createdAt: "2026-05-01T00:00:00.000Z",
+    };
+    const rule28OnCal = rule(800, 28, {
+      label: "Insurance",
+      paymentSource: "card",
+      linkedCardId: cal.id,
+    });
+    const rowsLegacy = buildCardPressure({
+      accounts: [cal],
+      rules: [rule28OnCal],
+      entries: [],
+      statuses: [],
+      monthKey: MONTH,
+      now: NOW,
+    });
+    const rowsLens = buildCardPressure({
+      accounts: [cal],
+      rules: [rule28OnCal],
+      entries: [],
+      statuses: [],
+      monthKey: MONTH,
+      now: NOW,
+      useEffectiveCashDates: true,
+    });
+    // Legacy branch counted the rule in May (rule.dayOfMonth alone).
+    // Lens correctly rolls the cash hit to June 10 → 0 in May.
+    expect(rowsLegacy[0].fixedRecurringThisMonth).toBe(800);
+    expect(rowsLens[0].fixedRecurringThisMonth).toBe(0);
+  });
 });
