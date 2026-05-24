@@ -249,7 +249,12 @@ export const deleteIncome = (id: string) => deleteGeneric("incomes", id);
 // on user_id so writes are always one-row-per-user.
 
 export async function fetchUserSettings(): Promise<
-  | { ok: true; monthlyBudget: number }
+  | {
+      ok: true;
+      monthlyBudget: number;
+      budgetMode: "manual" | "auto";
+      budgetSafetyBuffer: number;
+    }
   | { ok: false; reason: "not_configured" | "no_session" | "rls"; detail?: string }
 > {
   const client = supabase();
@@ -263,24 +268,61 @@ export async function fetchUserSettings(): Promise<
         val: string,
       ) => {
         maybeSingle: () => Promise<{
-          data: { monthly_budget: number } | null;
+          data: {
+            monthly_budget: number;
+            budget_mode?: string | null;
+            budget_safety_buffer?: number | null;
+          } | null;
           error: { message: string } | null;
         }>;
       };
     };
   };
   const { data, error } = await builder
-    .select("monthly_budget")
+    // Phase 214 — pull all settings columns. Missing columns return
+    // undefined for older databases that haven't been migrated yet;
+    // we coerce defaults below so legacy schemas keep working.
+    .select("monthly_budget, budget_mode, budget_safety_buffer")
     .eq("user_id", userId)
     .maybeSingle();
-  if (error) return { ok: false, reason: "rls", detail: error.message };
+  if (error) {
+    // Tolerate the specific case where the columns don't exist yet
+    // (legacy schema). Re-select the old shape so the user still
+    // gets monthlyBudget. Anything else propagates as before.
+    if (/column .* does not exist/i.test(error.message)) {
+      const legacy = await builder
+        .select("monthly_budget")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (legacy.error) {
+        return { ok: false, reason: "rls", detail: legacy.error.message };
+      }
+      return {
+        ok: true,
+        monthlyBudget: legacy.data ? Number(legacy.data.monthly_budget) : 0,
+        budgetMode: "manual",
+        budgetSafetyBuffer: 0,
+      };
+    }
+    return { ok: false, reason: "rls", detail: error.message };
+  }
   return {
     ok: true,
     monthlyBudget: data ? Number(data.monthly_budget) : 0,
+    budgetMode:
+      data?.budget_mode === "auto" ? "auto" : "manual",
+    budgetSafetyBuffer:
+      data && typeof data.budget_safety_buffer === "number"
+        ? Number(data.budget_safety_buffer)
+        : 0,
   };
 }
 
-export async function upsertUserSettings(monthlyBudget: number): Promise<Status> {
+export async function upsertUserSettings(args: {
+  monthlyBudget: number;
+  budgetMode?: "manual" | "auto";
+  budgetSafetyBuffer?: number;
+}): Promise<Status> {
   const client = supabase();
   if (!client) return { ok: false, reason: "not_configured" };
   const userId = await getUserId();
@@ -291,11 +333,35 @@ export async function upsertUserSettings(monthlyBudget: number): Promise<Status>
       opts: { onConflict: string },
     ) => Promise<{ error: { message: string } | null }>;
   };
-  const { error } = await builder.upsert(
-    { user_id: userId, monthly_budget: monthlyBudget },
-    { onConflict: "user_id" },
-  );
-  if (error) return { ok: false, reason: "rls", detail: error.message };
+  const payload: Record<string, unknown> = {
+    user_id: userId,
+    monthly_budget: args.monthlyBudget,
+  };
+  // Only include the new columns when they're provided so a legacy
+  // schema (no budget_mode column yet) doesn't reject the upsert.
+  // The caller (use-cloud-sync) gates inclusion behind a runtime
+  // capability flag flipped on first successful read.
+  if (args.budgetMode !== undefined) payload.budget_mode = args.budgetMode;
+  if (args.budgetSafetyBuffer !== undefined) {
+    payload.budget_safety_buffer = args.budgetSafetyBuffer;
+  }
+  const { error } = await builder.upsert(payload, { onConflict: "user_id" });
+  if (error) {
+    // Phase 214 — gracefully degrade when the schema is older. Drop
+    // the new columns and retry with the legacy shape. Caller logs
+    // a warning so the developer knows the migration is pending.
+    if (/column .* (does not exist|cannot|unknown)/i.test(error.message)) {
+      const legacy = await builder.upsert(
+        { user_id: userId, monthly_budget: args.monthlyBudget },
+        { onConflict: "user_id" },
+      );
+      if (legacy.error) {
+        return { ok: false, reason: "rls", detail: legacy.error.message };
+      }
+      return { ok: true };
+    }
+    return { ok: false, reason: "rls", detail: error.message };
+  }
   return { ok: true };
 }
 

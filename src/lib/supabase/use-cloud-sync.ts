@@ -184,7 +184,13 @@ type RetryItem =
   | { kind: "loan"; op: "delete"; id: string }
   | { kind: "income"; op: "upsert"; payload: import("@/types/finance").Income }
   | { kind: "income"; op: "delete"; id: string }
-  | { kind: "settings"; op: "upsert"; monthlyBudget: number };
+  | {
+      kind: "settings";
+      op: "upsert";
+      monthlyBudget: number;
+      budgetMode?: "manual" | "auto";
+      budgetSafetyBuffer?: number;
+    };
 
 const RETRY_MAX = 200;
 const retryQueue: RetryItem[] = [];
@@ -422,19 +428,39 @@ export function useCloudSync(): CloudSyncState {
         const settingsRes = await fetchUserSettings();
         if (!cancelled && settingsRes.ok) {
           const cloudBudget = settingsRes.monthlyBudget;
-          const localBudget = useFinanceStore.getState().monthlyBudget;
+          const localState = useFinanceStore.getState();
+          const localBudget = localState.monthlyBudget;
+          const api = useFinanceStore.setState as (
+            partial: Partial<ReturnType<typeof useFinanceStore.getState>>,
+          ) => void;
+
           if (cloudBudget > 0) {
-            // Cloud has a value — apply it. Don't overwrite when local
-            // already matches (avoids triggering the subscribe handler).
             if (cloudBudget !== localBudget) {
-              const api = useFinanceStore.setState as (
-                partial: Partial<ReturnType<typeof useFinanceStore.getState>>,
-              ) => void;
               api({ monthlyBudget: cloudBudget });
             }
           } else if (localBudget > 0 && !ownershipMismatchRef.current) {
-            // Local has a value, cloud doesn't — push up.
-            await upsertUserSettings(localBudget);
+            await upsertUserSettings({
+              monthlyBudget: localBudget,
+              budgetMode: localState.budgetMode,
+              budgetSafetyBuffer: localState.budgetSafetyBuffer,
+            });
+          }
+
+          // Phase 214 — also reconcile budgetMode + buffer. Cloud
+          // is treated as the latest-write authority. We only patch
+          // local when it actually differs, to avoid re-firing the
+          // subscribe handler.
+          if (
+            settingsRes.budgetMode &&
+            settingsRes.budgetMode !== localState.budgetMode
+          ) {
+            api({ budgetMode: settingsRes.budgetMode });
+          }
+          if (
+            typeof settingsRes.budgetSafetyBuffer === "number" &&
+            settingsRes.budgetSafetyBuffer !== localState.budgetSafetyBuffer
+          ) {
+            api({ budgetSafetyBuffer: settingsRes.budgetSafetyBuffer });
           }
         }
       } catch (err) {
@@ -532,6 +558,8 @@ export function useCloudSync(): CloudSyncState {
       loans: useFinanceStore.getState().loans,
       incomes: useFinanceStore.getState().incomes,
       monthlyBudget: useFinanceStore.getState().monthlyBudget,
+      budgetMode: useFinanceStore.getState().budgetMode,
+      budgetSafetyBuffer: useFinanceStore.getState().budgetSafetyBuffer,
     };
 
     // Apply a single cloud write. On failure (offline, RLS glitch,
@@ -598,7 +626,11 @@ export function useCloudSync(): CloudSyncState {
               ? (await upsertIncome(item.payload)).ok
               : (await deleteIncome(item.id)).ok;
         } else if (item.kind === "settings") {
-          ok = (await upsertUserSettings(item.monthlyBudget)).ok;
+          ok = (await upsertUserSettings({
+            monthlyBudget: item.monthlyBudget,
+            budgetMode: item.budgetMode,
+            budgetSafetyBuffer: item.budgetSafetyBuffer,
+          })).ok;
         }
         if (!ok) break;
         retryQueue.shift();
@@ -616,6 +648,8 @@ export function useCloudSync(): CloudSyncState {
           loans: s.loans,
           incomes: s.incomes,
           monthlyBudget: s.monthlyBudget,
+          budgetMode: s.budgetMode,
+          budgetSafetyBuffer: s.budgetSafetyBuffer,
         };
 
         // Drain anything that previously failed BEFORE pushing the new
@@ -680,10 +714,25 @@ export function useCloudSync(): CloudSyncState {
         await upsertChangedSafe(lastSnap.incomes, next.incomes, upsertIncome, "income");
         await upsertChangedSafe(lastSnap.entries, next.entries, upsertEntry, "entry");
 
-        if (next.monthlyBudget !== lastSnap.monthlyBudget) {
+        if (
+          next.monthlyBudget !== lastSnap.monthlyBudget ||
+          next.budgetMode !== lastSnap.budgetMode ||
+          next.budgetSafetyBuffer !== lastSnap.budgetSafetyBuffer
+        ) {
           await tryWrite(
-            () => upsertUserSettings(next.monthlyBudget),
-            { kind: "settings", op: "upsert", monthlyBudget: next.monthlyBudget },
+            () =>
+              upsertUserSettings({
+                monthlyBudget: next.monthlyBudget,
+                budgetMode: next.budgetMode,
+                budgetSafetyBuffer: next.budgetSafetyBuffer,
+              }),
+            {
+              kind: "settings",
+              op: "upsert",
+              monthlyBudget: next.monthlyBudget,
+              budgetMode: next.budgetMode,
+              budgetSafetyBuffer: next.budgetSafetyBuffer,
+            },
           );
         }
         lastSnap = next;
