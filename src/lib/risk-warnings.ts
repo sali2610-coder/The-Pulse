@@ -72,6 +72,8 @@ export function buildRiskWarnings(args: RiskInputs): RiskWarning[] {
   const out: RiskWarning[] = [];
 
   // 1. Forecast end-of-month < 0 → alert.
+  // Phase 215 — opt into the effective-cash lens so the warning
+  // threshold reflects the real cash-hit dates per card.
   const forecast = forecastEndOfMonth({
     accounts: args.accounts,
     loans: args.loans,
@@ -81,6 +83,7 @@ export function buildRiskWarnings(args: RiskInputs): RiskWarning[] {
     statuses: args.statuses,
     monthKey,
     now,
+    useEffectiveCashDates: true,
   });
   if (forecast.forecast < 0) {
     out.push({

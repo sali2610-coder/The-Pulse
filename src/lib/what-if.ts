@@ -60,6 +60,12 @@ export function simulateForecast(args: {
   now?: Date;
   overrides?: WhatIfOverrides;
 }): WhatIfResult {
+  // Phase 215 — kept on the legacy lens deliberately. what-if is a
+  // user-facing simulator; swapping the lens shifts the baseline
+  // numbers users have been seeing for months and would invalidate
+  // existing "what if I cut 25%" sliders without a UI explainer.
+  // Migrate as a separate phase once the simulator gets its own
+  // before/after comparison surface.
   const baseline = forecastEndOfMonth({
     accounts: args.accounts,
     loans: args.loans,

@@ -22,6 +22,7 @@ import type { CategoryId } from "@/lib/categories";
 import type { ExpenseEntry, RecurringRule } from "@/types/finance";
 import { categorize } from "@/lib/parsers";
 import { merchantKey } from "@/lib/sanitize";
+import type { CorrectionRecord } from "@/lib/corrections";
 
 export type SuggestionConfidence = "high" | "medium" | "low";
 
@@ -39,6 +40,12 @@ export type SuggestInput = {
   /** History the engine learns from. */
   entries: ExpenseEntry[];
   rules: RecurringRule[];
+  /** Phase 215 — user-issued category corrections. Each correction
+   *  for an entry whose merchantKey matches the current input adds
+   *  +2 weight to the modal vote, so 3 unanimous overrides can flip
+   *  the suggestion to HIGH confidence on its own. Pass an empty
+   *  array (or omit) to keep legacy behaviour. */
+  corrections?: CorrectionRecord[];
 };
 
 export function suggestCategory(input: SuggestInput): CategorySuggestion {
@@ -65,8 +72,16 @@ export function suggestCategory(input: SuggestInput): CategorySuggestion {
 
   // 2. Merchant history — read confirmed entries with same canonical
   //    merchant. Skip refunds + pending. Vote.
+  //
+  //    Phase 215 — corrections add +2 to the entry whose merchantKey
+  //    matches AND that carries an explicit suggestedCategory. Three
+  //    deliberate overrides can flip the vote on their own.
   if (mkey) {
-    const history = collectHistory({ mkey, entries: input.entries });
+    const history = collectHistory({
+      mkey,
+      entries: input.entries,
+      corrections: input.corrections ?? [],
+    });
     if (history.total > 0) {
       const best = history.modal!;
       const unanimous = best.count === history.total;
@@ -80,9 +95,11 @@ export function suggestCategory(input: SuggestInput): CategorySuggestion {
         category: best.category,
         confidence,
         reason:
-          history.total === 1
-            ? "ראינו את העסק פעם אחת בעבר"
-            : `${best.count}/${history.total} מהחיובים האחרונים של העסק בקטגוריה זו`,
+          history.correctionsApplied > 0
+            ? `מבוסס על ${history.correctionsApplied} תיקונים שלך + היסטוריה`
+            : history.total === 1
+              ? "ראינו את העסק פעם אחת בעבר"
+              : `${best.count}/${history.total} מהחיובים האחרונים של העסק בקטגוריה זו`,
       };
     }
   }
@@ -145,14 +162,24 @@ type HistoryBucket = { category: CategoryId; count: number };
 type HistoryResult = {
   total: number;
   modal: HistoryBucket | null;
+  correctionsApplied: number;
 };
+
+const CORRECTION_WEIGHT = 2;
 
 function collectHistory(args: {
   mkey: string;
   entries: ExpenseEntry[];
+  corrections: CorrectionRecord[];
 }): HistoryResult {
   const counts = new Map<CategoryId, number>();
   let total = 0;
+
+  // Index entries by id so corrections can target a specific entry's
+  // merchantKey + carry their own "approved category" signal.
+  const entryById = new Map<string, ExpenseEntry>();
+  for (const e of args.entries) entryById.set(e.id, e);
+
   for (const e of args.entries) {
     if (e.needsConfirmation && !e.confirmedAt) continue;
     if (e.bankPending) continue;
@@ -164,11 +191,33 @@ function collectHistory(args: {
     counts.set(e.category, (counts.get(e.category) ?? 0) + 1);
     total++;
   }
+
+  // Phase 215 — fold in user corrections that target this merchant.
+  // Each "wrong_category" correction with an explicit suggestedCategory
+  // contributes +2 weight to that category, but only when the target
+  // entry's merchantKey still matches the canonical key we're voting on
+  // (so a correction on a different merchant doesn't leak).
+  let correctionsApplied = 0;
+  for (const c of args.corrections) {
+    if (c.kind !== "wrong_category") continue;
+    if (!c.suggestedCategory) continue;
+    const targetEntry = entryById.get(c.targetId);
+    if (!targetEntry) continue;
+    const tk = merchantKey(targetEntry.merchant ?? targetEntry.note ?? "");
+    if (!tk || tk !== args.mkey) continue;
+    counts.set(
+      c.suggestedCategory,
+      (counts.get(c.suggestedCategory) ?? 0) + CORRECTION_WEIGHT,
+    );
+    total += CORRECTION_WEIGHT;
+    correctionsApplied += 1;
+  }
+
   let modal: HistoryBucket | null = null;
   for (const [category, count] of counts) {
     if (!modal || count > modal.count) modal = { category, count };
   }
-  return { total, modal };
+  return { total, modal, correctionsApplied };
 }
 
 function containsAny(haystack: string, needles: string[]): boolean {

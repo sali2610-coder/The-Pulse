@@ -30,6 +30,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useFinanceStore } from "@/lib/store";
 import { getCategory, type CategoryId, CATEGORIES } from "@/lib/categories";
 import { suggestCategory } from "@/lib/suggest-category";
+import { listCorrections, recordCorrection } from "@/lib/corrections";
 import {
   InsightChip,
   type InsightSeverity,
@@ -77,6 +78,10 @@ export function InstantConfirmSheet({ open, onOpenChange, entry }: Props) {
       cardLast4: entry.cardLast4,
       entries,
       rules,
+      // Phase 215 — feed user-recorded corrections back into the
+      // engine so 3 manual overrides for a merchant can flip the
+      // suggestion to HIGH confidence on its own.
+      corrections: listCorrections(),
     });
   }, [entry, entries, rules]);
 
@@ -101,6 +106,18 @@ export function InstantConfirmSheet({ open, onOpenChange, entry }: Props) {
   const onApprove = () => {
     if (confirming) return;
     setConfirming(true);
+    // Phase 215 — if the user overrode the suggested category,
+    // record a correction so the next suggestion biases toward
+    // their choice. Same-category approvals don't record (they
+    // already match the engine's vote).
+    if (override && override !== suggestion.category) {
+      recordCorrection({
+        targetId: entry.id,
+        targetKind: "entry",
+        kind: "wrong_category",
+        suggestedCategory: activeCategory,
+      });
+    }
     // Optimistic: confirmExpense is synchronous against the local
     // store; downstream cloud sync replays the update.
     confirmExpense(entry.id, { category: activeCategory });

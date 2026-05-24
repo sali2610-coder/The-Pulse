@@ -166,4 +166,76 @@ describe("suggestCategory", () => {
     });
     expect(s.reason).not.toContain("Gym");
   });
+
+  it("Phase 215 — corrections fold into the modal vote", () => {
+    // One past entry categorised as shopping; three explicit user
+    // corrections flagging it as food. Engine should now suggest
+    // food (3 × +2 weight vs 1 raw vote for shopping).
+    const past = entry({
+      id: "e-1",
+      amount: 100,
+      iso: "2026-05-01T10:00:00Z",
+      merchant: "שופרסל",
+      category: "shopping",
+    });
+    const s = suggestCategory({
+      merchant: "שופרסל סניף",
+      amount: 80,
+      entries: [past],
+      rules: [],
+      corrections: [
+        {
+          id: "c1",
+          targetId: "e-1",
+          targetKind: "entry",
+          kind: "wrong_category",
+          suggestedCategory: "food",
+          at: "2026-05-02T00:00:00Z",
+        },
+        {
+          id: "c2",
+          targetId: "e-1",
+          targetKind: "entry",
+          kind: "wrong_category",
+          suggestedCategory: "food",
+          at: "2026-05-03T00:00:00Z",
+        },
+      ],
+    });
+    expect(s.category).toBe("food");
+    expect(s.reason).toContain("תיקונים");
+  });
+
+  it("Phase 215 — corrections for a different merchant don't leak", () => {
+    const past = entry({
+      id: "e-aroma",
+      amount: 30,
+      iso: "2026-05-01T10:00:00Z",
+      merchant: "ארומה",
+      category: "food",
+    });
+    const s = suggestCategory({
+      // Use a merchant the static categorize() table doesn't
+      // recognise, so we can be sure the suggestion didn't come from
+      // a leaked correction.
+      merchant: "Random Studio XYZ",
+      amount: 50,
+      entries: [past],
+      rules: [],
+      corrections: [
+        {
+          id: "c1",
+          targetId: "e-aroma",
+          targetKind: "entry",
+          kind: "wrong_category",
+          suggestedCategory: "entertainment",
+          at: "2026-05-02T00:00:00Z",
+        },
+      ],
+    });
+    // No history match, no correction match → static categorize on
+    // unknown merchant → "other".
+    expect(s.category).toBe("other");
+    expect(s.reason).not.toContain("תיקונים");
+  });
 });
