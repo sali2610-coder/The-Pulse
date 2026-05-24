@@ -95,6 +95,14 @@ type State = {
   rules: RecurringRule[];
   statuses: RecurringStatus[];
   monthlyBudget: number;
+  /** Phase 210 — budgeting mode. "manual" keeps the existing user-typed
+   *  monthlyBudget as the authority. "auto" lets the dashboard
+   *  recompute the safe budget per the liquidity engine. Defaults to
+   *  "manual" so legacy users see no behaviour change. */
+  budgetMode: "manual" | "auto";
+  /** Phase 210 — optional safety buffer subtracted from auto safe-to-
+   *  spend so the user can keep a personal cushion. Default 0. */
+  budgetSafetyBuffer: number;
   lastSyncedAt: number;
   accounts: Account[];
   loans: Loan[];
@@ -187,6 +195,8 @@ type Actions = {
   deleteIncome: (id: string) => void;
 
   setMonthlyBudget: (value: number) => void;
+  setBudgetMode: (mode: "manual" | "auto") => void;
+  setBudgetSafetyBuffer: (value: number) => void;
   setAudioEnabled: (v: boolean) => void;
   setLastSyncedAt: (ms: number) => void;
   setHydrated: (v: boolean) => void;
@@ -247,6 +257,8 @@ export const useFinanceStore = create<State & Actions>()(
       rules: [],
       statuses: [],
       monthlyBudget: 0,
+      budgetMode: "manual",
+      budgetSafetyBuffer: 0,
       lastSyncedAt: 0,
       accounts: [],
       loans: [],
@@ -932,6 +944,15 @@ export const useFinanceStore = create<State & Actions>()(
         set({ monthlyBudget: safe });
       },
 
+      setBudgetMode: (mode) => {
+        set({ budgetMode: mode === "auto" ? "auto" : "manual" });
+      },
+
+      setBudgetSafetyBuffer: (value) => {
+        const safe = Number.isFinite(value) && value >= 0 ? value : 0;
+        set({ budgetSafetyBuffer: safe });
+      },
+
       setAudioEnabled: (v) => set({ audioEnabled: Boolean(v) }),
 
       setLastSyncedAt: (ms) => {
@@ -955,13 +976,15 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 9,
+      version: 10,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
         rules: s.rules,
         statuses: s.statuses,
         monthlyBudget: s.monthlyBudget,
+        budgetMode: s.budgetMode,
+        budgetSafetyBuffer: s.budgetSafetyBuffer,
         lastSyncedAt: s.lastSyncedAt,
         accounts: s.accounts,
         loans: s.loans,
@@ -1033,6 +1056,16 @@ export const useFinanceStore = create<State & Actions>()(
           // breakdown's fixed/variable split). Undefined defaults to
           // "fixed" downstream, so this is a no-op guard.
           migrated = { ...migrated };
+        }
+        if (fromVersion < 10) {
+          // Phase 210 — budgetMode + budgetSafetyBuffer. Default to
+          // "manual" + 0 so every legacy user keeps the previous
+          // typed-monthlyBudget behaviour. Opt-in only.
+          migrated = {
+            ...migrated,
+            budgetMode: migrated.budgetMode ?? "manual",
+            budgetSafetyBuffer: migrated.budgetSafetyBuffer ?? 0,
+          };
         }
         return migrated;
       },

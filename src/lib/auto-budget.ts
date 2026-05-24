@@ -1,0 +1,189 @@
+// Phase 210 — Auto budget engine.
+//
+// Single source for "how much can I safely spend until end of cycle"
+// when the user picks `budgetMode === "auto"`. Wraps the existing
+// Phase 207-208 liquidity engine so no math is re-derived here.
+//
+// Cycle end definition:
+//   * If a salary is scheduled in the next 35 days → cycle ends the
+//     day BEFORE that salary (we want the answer "until the next
+//     salary tops up the account").
+//   * Otherwise → end of next month.
+//
+// Output:
+//   * spendableUntilCycleEnd     ILS the user can spend total
+//   * dailyAllowance             spendable / daysRemaining
+//   * vibe                       calm | tight | danger
+//   * cycleEndAt                 ISO of cycle horizon
+//   * recommendedMonthlyBudget   anchored to actuals + safe future
+//                                spend. Used to seed the PulseBar
+//                                marker when budgetMode === "auto"
+//                                and the user hasn't set monthlyBudget.
+//
+// Per-card grouping is preserved — we read from buildCashFlowBuckets
+// so a card-linked rule never double-counts.
+
+import type {
+  Account,
+  ExpenseEntry,
+  Income,
+  Loan,
+  RecurringRule,
+  RecurringStatus,
+} from "@/types/finance";
+import { liquidityCurve } from "@/lib/liquidity-curve";
+import { monthlySpent } from "@/lib/monthly-spent";
+import { daysInMonth } from "@/lib/projections";
+import { monthKeyOf } from "@/lib/dates";
+
+export type AutoBudgetVibe = "calm" | "tight" | "danger";
+
+export type AutoBudgetReport = {
+  cycleEndAt: string;
+  daysRemaining: number;
+  /** Total ILS safe to spend from today through cycle end. */
+  spendableUntilCycleEnd: number;
+  dailyAllowance: number;
+  vibe: AutoBudgetVibe;
+  /** Lowest projected balance during the window. */
+  lowestProjectedBalance: number;
+  /** Whether projection ever goes negative — drives the danger
+   *  banner. */
+  willCrossZero: boolean;
+  /** Single recommended monthly budget the dashboard can use to
+   *  back the PulseBar marker when running in auto mode. Computed
+   *  as actualSpentThisMonth + spendableUntilCycleEnd. */
+  recommendedMonthlyBudget: number;
+  /** Echo of the user's preference so explain sheets can show it. */
+  safetyBufferApplied: number;
+};
+
+const TIGHT_FLOOR_PER_DAY = 100;
+
+export function autoBudget(args: {
+  accounts: Account[];
+  loans: Loan[];
+  incomes: Income[];
+  entries: ExpenseEntry[];
+  rules: RecurringRule[];
+  statuses: RecurringStatus[];
+  safetyBuffer?: number;
+  now?: Date;
+}): AutoBudgetReport {
+  const now = args.now ?? new Date();
+  const safetyBuffer = Math.max(0, args.safetyBuffer ?? 0);
+
+  // Walk the curve forward 35 days. Pick cycleEnd = day BEFORE the
+  // next salary (we want runway until salary tops up), falling back
+  // to the curve horizon.
+  const curve = liquidityCurve({
+    accounts: args.accounts,
+    loans: args.loans,
+    incomes: args.incomes,
+    rules: args.rules,
+    statuses: args.statuses,
+    entries: args.entries,
+    now,
+    windowDays: 35,
+  });
+
+  const cycleEnd = pickCycleEnd({
+    points: curve.points,
+    salaryIso: curve.nextSalaryAt,
+  });
+  const cycleEndIdx = cycleEnd.dayIndex;
+  // From today INCLUSIVE up to (and including) cycleEnd.
+  const daysRemaining = Math.max(1, cycleEndIdx);
+
+  // Lowest balance between now and cycle end (NOT past it — we don't
+  // want a post-salary spike to mask a mid-cycle dip).
+  let lowest = curve.points[0]?.balance ?? 0;
+  for (let i = 1; i <= cycleEndIdx; i++) {
+    if (curve.points[i].balance < lowest) lowest = curve.points[i].balance;
+  }
+
+  // Spendable = lowest projected balance minus safety buffer. If
+  // lowest is already negative, no safe spend exists.
+  const spendable = Math.max(0, lowest - safetyBuffer);
+  const dailyAllowance = round2(spendable / daysRemaining);
+
+  // Vibe: same threshold logic as safe-to-spend for parity.
+  let vibe: AutoBudgetVibe = "calm";
+  if (lowest - safetyBuffer < 0) {
+    vibe = "danger";
+  } else if (dailyAllowance < TIGHT_FLOOR_PER_DAY) {
+    vibe = "tight";
+  }
+
+  // Recommended monthly budget for the PulseBar marker. Sum:
+  //   actualSpentThisMonth + spendable. PulseBar reads it as the
+  //   month-cap so the visible bar stays calibrated.
+  const monthKey = monthKeyOf(now);
+  const spent = monthlySpent({
+    entries: args.entries,
+    monthKey,
+    now,
+  });
+  // Pro-rate spendable to a notional month so PulseBar's scale
+  // doesn't shrink dramatically when the cycle window is short.
+  const monthDays = daysInMonth(monthKey);
+  const proRatedSpendable =
+    daysRemaining > 0 ? (spendable * monthDays) / daysRemaining : spendable;
+  const recommendedMonthlyBudget = round2(
+    Math.max(0, spent.spentSoFar + proRatedSpendable),
+  );
+
+  return {
+    cycleEndAt: cycleEnd.whenISO,
+    daysRemaining,
+    spendableUntilCycleEnd: round2(spendable),
+    dailyAllowance,
+    vibe,
+    lowestProjectedBalance: round2(lowest),
+    willCrossZero: curve.crossesNegative,
+    recommendedMonthlyBudget,
+    safetyBufferApplied: round2(safetyBuffer),
+  };
+}
+
+/** Returns the monthlyBudget the dashboard should use given the
+ *  user's preference. Manual mode → user's typed value. Auto mode →
+ *  the engine's recommendation, falling back to the manual value
+ *  when the engine cannot compute (e.g. no anchors). */
+export function effectiveMonthlyBudget(args: {
+  monthlyBudget: number;
+  budgetMode: "manual" | "auto";
+  autoReport: AutoBudgetReport | null;
+}): number {
+  if (args.budgetMode === "manual") return args.monthlyBudget;
+  if (!args.autoReport) return args.monthlyBudget;
+  return args.autoReport.recommendedMonthlyBudget > 0
+    ? args.autoReport.recommendedMonthlyBudget
+    : args.monthlyBudget;
+}
+
+function pickCycleEnd(args: {
+  points: { whenISO: string; dayIndex: number; balance: number }[];
+  salaryIso: string | null;
+}): { whenISO: string; dayIndex: number } {
+  // No salary scheduled → use the curve horizon.
+  if (!args.salaryIso) {
+    const last = args.points[args.points.length - 1];
+    return { whenISO: last.whenISO, dayIndex: last.dayIndex };
+  }
+  const target = args.salaryIso.slice(0, 10);
+  for (let i = 0; i < args.points.length; i++) {
+    if (args.points[i].whenISO.startsWith(target)) {
+      // Day BEFORE salary → use index-1, clamped to >= 1 so we never
+      // return today itself (no runway window).
+      const idx = Math.max(1, i - 1);
+      return { whenISO: args.points[idx].whenISO, dayIndex: idx };
+    }
+  }
+  const last = args.points[args.points.length - 1];
+  return { whenISO: last.whenISO, dayIndex: last.dayIndex };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}

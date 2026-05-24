@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { tap } from "@/lib/haptics";
+import { BudgetModeToggle } from "@/components/settings/budget-mode-toggle";
 
 const formatILS = (value: number) =>
   new Intl.NumberFormat("he-IL", {
@@ -51,6 +52,10 @@ export function BudgetInput() {
 
       <div className="mt-3 text-[11px] text-muted-foreground">
         נוכחי: {formatILS(monthlyBudget)}
+      </div>
+
+      <div className="mt-3">
+        <BudgetModeToggle />
       </div>
     </section>
   );
