@@ -23,7 +23,8 @@ function bank(id: string, anchor: number): Account {
   };
 }
 
-function card(id: string, last4: string, limit?: number): Account {
+// kept for future tests; underscore prevents unused-var lint
+function _card(id: string, last4: string, limit?: number): Account {
   return {
     id,
     kind: "card",
@@ -34,6 +35,7 @@ function card(id: string, last4: string, limit?: number): Account {
     createdAt: "2026-01-01T00:00:00.000Z",
   };
 }
+void _card;
 
 function entry(opts: Partial<ExpenseEntry> & { amount: number; iso: string }): ExpenseEntry {
   const { amount, iso, ...rest } = opts;
@@ -150,7 +152,19 @@ describe("accountBridge", () => {
     // The future-card-slices term in forecastEndOfMonth covers each
     // installment slice once. A linked recurring rule is a SEPARATE
     // concept (subscription) and contributes to pendingFixed once.
-    const cardAcct = card("card-cal", "1234");
+    //
+    // Phase 213 effective-cash lens: card paymentDay must come AFTER
+    // both source dates so the impact still lands in May (otherwise
+    // the engine correctly rolls to June and counts 0 this month).
+    const cardAcct: Account = {
+      id: "card-cal",
+      kind: "card",
+      label: "card-cal",
+      active: true,
+      cardLast4: "1234",
+      paymentDay: 30,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
     const installment = entry({
       amount: 1200,
       iso: "2026-05-25T10:00:00Z",
@@ -183,11 +197,29 @@ describe("accountBridge", () => {
   });
 
   it("future obligations include charges scheduled later this month", () => {
+    // Phase 213 — entry routes through the linked card's paymentDay.
+    // Card paymentDay 30 keeps the May-28 purchase landing in May
+    // (settles May 30) so the charge contributes to this month.
+    const cardAcct: Account = {
+      id: "card-late",
+      kind: "card",
+      label: "card-late",
+      active: true,
+      cardLast4: "1234",
+      paymentDay: 30,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
     const b = accountBridge({
-      accounts: [bank("a", 1000)],
+      accounts: [bank("a", 1000), cardAcct],
       loans: [],
       incomes: [],
-      entries: [entry({ amount: 800, iso: "2026-05-28T10:00:00Z" })],
+      entries: [
+        entry({
+          amount: 800,
+          iso: "2026-05-28T10:00:00Z",
+          cardLast4: "1234",
+        }),
+      ],
       rules: [],
       statuses: [],
       now: NOW,

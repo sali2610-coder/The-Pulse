@@ -10,6 +10,10 @@ import type { MonthKey } from "@/types/finance";
 import { daysInMonth, projectMonth, sliceForMonth } from "@/lib/projections";
 import { addMonths, dayWithinMonth, monthKeyOf } from "@/lib/dates";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
+import {
+  effectiveCashImpactForRule,
+  effectiveCashImpacts,
+} from "@/lib/effective-cash-date";
 
 export type ForecastConfidence = "low" | "medium" | "high";
 
@@ -346,6 +350,16 @@ export function forecastEndOfMonth(args: {
   statuses: RecurringStatus[];
   monthKey: MonthKey;
   now?: Date;
+  /** Phase 213 — when true, the pendingFixed and futureCardSlices
+   *  terms route through the effective-cash-date lens. Card-linked
+   *  recurring rules then settle on the linked card's paymentDay,
+   *  not the rule's declared dayOfMonth, and an entry whose slice
+   *  lands in a future month no longer subtracts from THIS month's
+   *  forecast.
+   *
+   *  Defaults to false so existing CFOSummary / financial-snapshot
+   *  callers see no behaviour change until they opt in. */
+  useEffectiveCashDates?: boolean;
 }): EndOfMonthForecast {
   const now = args.now ?? new Date();
   const isCurrentMonth = monthKeyOf(now) === args.monthKey;
@@ -373,14 +387,27 @@ export function forecastEndOfMonth(args: {
       .filter((s) => s.monthKey === args.monthKey && s.status === "paid")
       .map((s) => statusKey(s.ruleId)),
   );
-  const pendingFixed = args.rules
-    .filter(
-      (r) =>
-        r.active &&
-        !paidThisMonth.has(statusKey(r.id)) &&
-        ruleSchedule(r, args.monthKey).active,
-    )
-    .reduce((sum, r) => sum + r.estimatedAmount, 0);
+  let pendingFixed = 0;
+  for (const r of args.rules) {
+    if (!r.active) continue;
+    if (paidThisMonth.has(statusKey(r.id))) continue;
+    if (!ruleSchedule(r, args.monthKey).active) continue;
+    if (args.useEffectiveCashDates) {
+      // Phase 213 lens — card-linked rule settles on the linked
+      // card's paymentDay. Only counts when the impact lands in
+      // the target month (the rule may roll to next month).
+      const impact = effectiveCashImpactForRule({
+        rule: r,
+        accounts: args.accounts,
+        monthKey: args.monthKey,
+      });
+      if (!impact) continue;
+      if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
+      pendingFixed += impact.amount;
+    } else {
+      pendingFixed += r.estimatedAmount;
+    }
+  }
 
   // 4. Pending loan installments still due this month.
   const pendingLoans = args.loans
@@ -393,21 +420,47 @@ export function forecastEndOfMonth(args: {
 
   // 5. Future card slices — entry slices in this month not yet posted.
   let futureCardSlices = 0;
-  for (const entry of args.entries) {
-    // Skip user-side pending (Wallet partial awaiting confirm) and
-    // bank-side pending (charge not finalized) — both would distort the
-    // forecast and double-count when richer data eventually arrives.
-    if (entry.needsConfirmation) continue;
-    if (entry.bankPending) continue;
-    const slice = sliceForMonth(entry, args.monthKey);
-    if (!slice) continue;
-    if (entry.isRefund) continue; // refunds don't deplete forecast
-    if (entry.currency && entry.currency !== "ILS") continue;
-    if (!startOfMonthForecast && slice.chargeDate.getTime() <= now.getTime()) {
-      // Already charged — already reflected in the bank anchor (in theory).
-      continue;
+  if (args.useEffectiveCashDates) {
+    // Phase 213 lens — walk every CashImpact across all entries.
+    // Only the ones whose effectiveCashDate lands in this monthKey
+    // count; a purchase made in May on a card that pays in June
+    // correctly contributes to June, not May.
+    for (const entry of args.entries) {
+      if (entry.needsConfirmation) continue;
+      if (entry.bankPending) continue;
+      if (entry.isRefund) continue;
+      if (entry.currency && entry.currency !== "ILS") continue;
+      for (const impact of effectiveCashImpacts({
+        entry,
+        accounts: args.accounts,
+      })) {
+        if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
+        if (
+          !startOfMonthForecast &&
+          impact.effectiveCashDate.getTime() <= now.getTime()
+        ) {
+          continue;
+        }
+        futureCardSlices += impact.amount;
+      }
     }
-    futureCardSlices += slice.amount;
+  } else {
+    for (const entry of args.entries) {
+      // Skip user-side pending (Wallet partial awaiting confirm) and
+      // bank-side pending (charge not finalized) — both would distort the
+      // forecast and double-count when richer data eventually arrives.
+      if (entry.needsConfirmation) continue;
+      if (entry.bankPending) continue;
+      const slice = sliceForMonth(entry, args.monthKey);
+      if (!slice) continue;
+      if (entry.isRefund) continue; // refunds don't deplete forecast
+      if (entry.currency && entry.currency !== "ILS") continue;
+      if (!startOfMonthForecast && slice.chargeDate.getTime() <= now.getTime()) {
+        // Already charged — already reflected in the bank anchor (in theory).
+        continue;
+      }
+      futureCardSlices += slice.amount;
+    }
   }
 
   const forecast =

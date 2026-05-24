@@ -75,6 +75,11 @@ export function accountBridge(args: {
 
   const spent = monthlySpent({ entries: args.entries, monthKey, now });
 
+  // Phase 213 — bridge opts into the effective-cash lens so its
+  // numbers match the safe-to-spend + liquidity-curve engines.
+  // Card-linked rules now settle on the linked card's paymentDay
+  // and entries whose slice lands in a future month no longer
+  // subtract from this month.
   const eom = forecastEndOfMonth({
     accounts: args.accounts,
     loans: args.loans,
@@ -84,6 +89,7 @@ export function accountBridge(args: {
     statuses: args.statuses,
     monthKey,
     now,
+    useEffectiveCashDates: true,
   });
 
   // Income split — incomes whose dayOfMonth >= today are "remaining",
