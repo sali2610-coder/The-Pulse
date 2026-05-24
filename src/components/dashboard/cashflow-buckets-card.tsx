@@ -7,7 +7,7 @@
 // loan, and one "bank direct debit" bucket. Lets the user instantly
 // see "which card will hit, when, and how much".
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   CalendarClock,
@@ -24,7 +24,9 @@ import {
 } from "@/lib/cash-flow-bucket";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
-import { listReveal } from "@/lib/motion-tokens";
+import { CashflowBucketDrilldownSheet } from "@/components/dashboard/cashflow-bucket-drilldown-sheet";
+import { CARD_TAP, listReveal } from "@/lib/motion-tokens";
+import { tap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -50,6 +52,7 @@ const SOURCE_TONE: Record<CashFlowBucket["source"], string> = {
 };
 
 export function CashflowBucketsCard() {
+  const [active, setActive] = useState<CashFlowBucket | null>(null);
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
   const loans = useFinanceStore((s) => s.loans);
@@ -98,7 +101,15 @@ export function CashflowBucketsCard() {
 
       <ul className="flex flex-col gap-1.5">
         {report.buckets.map((b, idx) => (
-          <BucketRow key={b.id} bucket={b} index={idx} />
+          <BucketRow
+            key={b.id}
+            bucket={b}
+            index={idx}
+            onActivate={() => {
+              tap();
+              setActive(b);
+            }}
+          />
         ))}
       </ul>
 
@@ -106,6 +117,14 @@ export function CashflowBucketsCard() {
         חיובי כרטיס מקובצים לפי הכרטיס המבצע — לא לפי יום החיוב של ההוצאה
         עצמה. הוצאה קבועה המשולמת בכרטיס תופיע כאן תחת הכרטיס.
       </p>
+
+      <CashflowBucketDrilldownSheet
+        bucket={active}
+        open={active !== null}
+        onOpenChange={(o) => {
+          if (!o) setActive(null);
+        }}
+      />
     </section>
   );
 }
@@ -113,9 +132,11 @@ export function CashflowBucketsCard() {
 function BucketRow({
   bucket,
   index,
+  onActivate,
 }: {
   bucket: CashFlowBucket;
   index: number;
+  onActivate: () => void;
 }) {
   const tone = SOURCE_TONE[bucket.source];
   return (
@@ -123,7 +144,18 @@ function BucketRow({
       initial={{ opacity: 0, y: 3 }}
       animate={{ opacity: 1, y: 0 }}
       transition={listReveal(index)}
-      className="flex items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3"
+      whileTap={CARD_TAP}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`פתח פירוט — ${bucket.label}`}
+      className="flex items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3 cursor-pointer outline-none transition-colors hover:border-white/16 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
     >
       <span
         className="flex size-9 shrink-0 items-center justify-center rounded-xl"

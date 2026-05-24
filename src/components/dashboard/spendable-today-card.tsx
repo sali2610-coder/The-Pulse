@@ -15,7 +15,7 @@
 // Auto-hides when no bank anchors exist (without a starting balance
 // the engine has no anchor to project from).
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/insight-chip";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
-import { navigateToTab } from "@/lib/tab-nav";
+import { InlineSalaryUpdateSheet } from "@/components/dashboard/inline-salary-update-sheet";
 import { tap } from "@/lib/haptics";
 import { SPRING_SOFT } from "@/lib/motion-tokens";
 
@@ -72,6 +72,7 @@ const VIBE_SEV: Record<AutoBudgetVibe, InsightSeverity> = {
 };
 
 export function SpendableTodayCard() {
+  const [salarySheetOpen, setSalarySheetOpen] = useState(false);
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
   const loans = useFinanceStore((s) => s.loans);
@@ -272,7 +273,7 @@ export function SpendableTodayCard() {
         type="button"
         onClick={() => {
           tap();
-          navigateToTab("settings", "accounts");
+          setSalarySheetOpen(true);
         }}
         className="mt-1 flex items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-[color:var(--neon)]/40 hover:text-foreground"
         aria-label="עדכן יתרת בנק"
@@ -286,6 +287,11 @@ export function SpendableTodayCard() {
         החישוב בודק עד היום שלפני המשכורת הבאה ולוקח בחשבון משכורות,
         הלוואות, הוצאות קבועות, וכל חיוב כרטיס שיגיע ביום הסליקה של הכרטיס.
       </p>
+
+      <InlineSalaryUpdateSheet
+        open={salarySheetOpen}
+        onOpenChange={setSalarySheetOpen}
+      />
     </motion.section>
   );
 }

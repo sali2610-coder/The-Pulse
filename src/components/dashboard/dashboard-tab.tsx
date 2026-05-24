@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useFinanceStore } from "@/lib/store";
+import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PulseBar } from "@/components/pulse/pulse-bar";
 import { FloatingCTA } from "@/components/dashboard/floating-cta";
@@ -471,7 +472,17 @@ export function DashboardTab() {
   const [open, setOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
   const cloudSync = useCloudSyncState();
+
+  // Phase 211 — PulseBar marker now follows the user's budget mode.
+  // Manual users keep the typed monthlyBudget; auto users let the
+  // liquidity engine drive the cap so the marker matches "כמה נשאר
+  // לי לבזבז".
+  const pulseBudget = usePulseBudget({
+    monthlyBudget,
+    budgetMode,
+  });
 
   // Loading curtain. Covers three windows where rendering the local
   // cache would be wrong:
@@ -512,7 +523,7 @@ export function DashboardTab() {
         <Safe name="UpcomingDebitsBanner"><UpcomingDebitsBanner /></Safe>
       </div>
       <div className="sm:col-span-6">
-        <Safe name="PulseBar"><PulseBar budget={monthlyBudget} /></Safe>
+        <Safe name="PulseBar"><PulseBar budget={pulseBudget} /></Safe>
       </div>
       {/* Phase 200 — financial trio: how much I spent, bridge to the
          bank balance, and the expected EOM position. Placed directly
@@ -826,7 +837,7 @@ export function DashboardTab() {
               <Safe name="HeatmapMini"><HeatmapMini /></Safe>
             </div>
             <div className="sm:col-span-6">
-              <Safe name="TimelineSync"><TimelineSync budget={monthlyBudget} /></Safe>
+              <Safe name="TimelineSync"><TimelineSync budget={pulseBudget} /></Safe>
             </div>
           </motion.div>
         ) : null}
