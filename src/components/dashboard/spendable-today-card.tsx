@@ -39,6 +39,7 @@ import {
 import { CardEmpty } from "@/components/ui/card-empty";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { InlineSalaryUpdateSheet } from "@/components/dashboard/inline-salary-update-sheet";
+import { useLiquidityAlert } from "@/lib/use-liquidity-alert";
 import { tap } from "@/lib/haptics";
 import { SPRING_SOFT } from "@/lib/motion-tokens";
 
@@ -106,6 +107,16 @@ export function SpendableTodayCard() {
       entries,
     });
   }, [hydrated, accounts, loans, rules, statuses, entries]);
+
+  // Phase 212 — proactive push when the engine flags a dip into
+  // the red. Hook handles its own once-per-day dedup; the server
+  // route dedups again per scope so multiple devices can't fan out.
+  useLiquidityAlert({
+    willCrossZero: report?.willCrossZero ?? false,
+    daysUntilDip: report?.daysRemaining ?? 0,
+    lowestBalance: report?.lowestProjectedBalance ?? 0,
+    lowestAtISO: report?.cycleEndAt ?? null,
+  });
 
   if (!hydrated || !report) return null;
 
