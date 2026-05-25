@@ -21,6 +21,7 @@ import {
   Banknote,
   CalendarClock,
   CreditCard,
+  Download,
   Landmark,
   Wallet,
 } from "lucide-react";
@@ -37,6 +38,8 @@ import {
   type InsightSeverity,
 } from "@/components/ui/insight-chip";
 import { CardEmpty } from "@/components/ui/card-empty";
+import { curveToCsv, downloadCsv } from "@/lib/csv-export-forecast";
+import { tap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -140,15 +143,32 @@ export function LiquidityCurveCard() {
         icon={<Activity />}
         title={`עקומת נזילות ${curve.windowDays} ימים`}
         trailing={
-          <InsightChip
-            severity={severity}
-            icon={
-              curve.crossesNegative ? (
-                <AlertTriangle className="size-2.5" />
-              ) : undefined
-            }
-            label={severityLabel}
-          />
+          <div className="flex items-center gap-2">
+            <InsightChip
+              severity={severity}
+              icon={
+                curve.crossesNegative ? (
+                  <AlertTriangle className="size-2.5" />
+                ) : undefined
+              }
+              label={severityLabel}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                downloadCsv({
+                  csv: curveToCsv(curve),
+                  filename: `sally-liquidity-${new Date().toISOString().slice(0, 10)}.csv`,
+                });
+              }}
+              aria-label="ייצוא CSV של עקומת נזילות"
+              className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+            >
+              <Download className="size-3" />
+              CSV
+            </button>
+          </div>
         }
       />
 

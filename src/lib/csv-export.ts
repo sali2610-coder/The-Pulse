@@ -35,7 +35,7 @@ const HEADER = [
   "createdAt",
 ];
 
-function escapeField(value: unknown): string {
+export function escapeField(value: unknown): string {
   if (value === undefined || value === null) return "";
   const s = String(value);
   // Per RFC 4180: quote fields containing comma, quote, CR, or LF.

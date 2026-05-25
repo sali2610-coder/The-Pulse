@@ -25,8 +25,13 @@ import {
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { CashflowBucketDrilldownSheet } from "@/components/dashboard/cashflow-bucket-drilldown-sheet";
+import {
+  bucketsToCsv,
+  downloadCsv,
+} from "@/lib/csv-export-forecast";
 import { CARD_TAP, listReveal } from "@/lib/motion-tokens";
 import { tap } from "@/lib/haptics";
+import { Download } from "lucide-react";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -93,9 +98,26 @@ export function CashflowBucketsCard() {
         icon={<Layers />}
         title="התחייבויות לפי מקור"
         trailing={
-          <span className="text-[10px] text-muted-foreground/70" dir="ltr">
-            סה״כ {ILS.format(report.totalCommitted)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground/70" dir="ltr">
+              סה״כ {ILS.format(report.totalCommitted)}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                downloadCsv({
+                  csv: bucketsToCsv(report),
+                  filename: `sally-buckets-${new Date().toISOString().slice(0, 10)}.csv`,
+                });
+              }}
+              aria-label="ייצוא CSV של התחייבויות"
+              className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+            >
+              <Download className="size-3" />
+              CSV
+            </button>
+          </div>
         }
       />
 
