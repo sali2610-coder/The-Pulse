@@ -25,10 +25,49 @@ export function useLiquidityAlert(args: {
   lowestAtISO?: string | null;
 }): void {
   const sentRef = useRef(false);
+  const statusPostedRef = useRef(false);
   const willCrossZero = args.willCrossZero;
   const daysUntilDip = args.daysUntilDip;
   const lowestBalance = args.lowestBalance;
   const lowestAtISO = args.lowestAtISO ?? null;
+
+  // Phase 217 — always POST the latest snapshot to KV so the daily
+  // cron has a fresh signal to act on, even when the user doesn't
+  // re-open the PWA tomorrow. Idempotent server-side; bounded by
+  // the 5s AbortController.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (statusPostedRef.current) return;
+    statusPostedRef.current = true;
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
+    (async () => {
+      try {
+        await fetch("/api/push/liquidity-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-sally-device": getOrCreateDeviceId(),
+          },
+          credentials: "same-origin",
+          signal: ctrl.signal,
+          body: JSON.stringify({
+            willCrossZero,
+            lowestProjectedBalance: lowestBalance,
+            daysUntilDip,
+          }),
+        });
+      } catch {
+        /* ignore */
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+    return () => {
+      clearTimeout(timeout);
+      ctrl.abort();
+    };
+  }, [willCrossZero, daysUntilDip, lowestBalance]);
 
   useEffect(() => {
     if (!willCrossZero) return;

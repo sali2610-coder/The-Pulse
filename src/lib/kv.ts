@@ -607,6 +607,80 @@ export async function listNativePushTokens(
   return out;
 }
 
+// ── Phase 217 — Liquidity status snapshot ────────────────────────────
+// Client posts this once per local-day. Cron reads it the next morning
+// to decide whether to fire a proactive push without re-deriving the
+// user's full liquidity curve on the server (which would require either
+// a service role or the user's full state in KV — neither exists).
+//
+// 26-hour TTL so a stale day's snapshot decays naturally if the user
+// stops opening the app.
+
+export type LiquidityStatusSnapshot = {
+  willCrossZero: boolean;
+  lowestProjectedBalance: number;
+  daysUntilDip: number;
+  updatedAt: number;
+};
+
+const LIQUIDITY_STATUS_KEY = (scope: Scope) =>
+  `${scopePrefix(scope)}:liquidity-status`;
+const LIQUIDITY_STATUS_TTL_SECONDS = 26 * 60 * 60;
+
+export async function saveLiquidityStatus(
+  scope: Scope,
+  snap: LiquidityStatusSnapshot,
+): Promise<void> {
+  const key = LIQUIDITY_STATUS_KEY(scope);
+  await kv().set(key, snap);
+  await kv().expire(key, LIQUIDITY_STATUS_TTL_SECONDS);
+}
+
+export async function getLiquidityStatus(
+  scope: Scope,
+): Promise<LiquidityStatusSnapshot | null> {
+  const raw = await kv().get(LIQUIDITY_STATUS_KEY(scope));
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as LiquidityStatusSnapshot;
+    } catch {
+      return null;
+    }
+  }
+  return raw as LiquidityStatusSnapshot;
+}
+
+/** Walk every push subscription key. Lets the cron fan out without
+ *  needing per-user secrets — RLS doesn't apply because KV is not
+ *  Supabase and every saved sub is scoped to a deterministic prefix
+ *  we control. */
+export async function listPushSubscriptionKeys(): Promise<string[]> {
+  const out: string[] = [];
+  let cursor: string | number = 0;
+  for (let i = 0; i < 40; i++) {
+    const res = (await kv().scan(cursor, {
+      match: "sally:*:push",
+      count: 500,
+    })) as [string, string[]];
+    const [next, batch] = res;
+    for (const k of batch) out.push(k);
+    if (String(next) === "0") break;
+    cursor = next;
+  }
+  return out;
+}
+
+/** Reverse of the SUB_KEY shape. Returns a Scope when the key is
+ *  recognised, null otherwise (e.g. malformed keys, future shapes). */
+export function scopeFromPushSubKey(key: string): Scope | null {
+  const device = key.match(/^sally:device:(.+):push$/);
+  if (device) return { kind: "device", id: device[1] };
+  const user = key.match(/^sally:user:(.+):push$/);
+  if (user) return { kind: "user", id: user[1] };
+  return null;
+}
+
 export type PushAttempt = {
   ts: number;
   ok: boolean;
