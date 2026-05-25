@@ -15,9 +15,10 @@ describe("OCR registry", () => {
     expect(p?.isReady()).toBe(true);
   });
 
-  it("picks manual when no paid provider is registered", () => {
+  it("falls back to manual for text input even when tesseract is ready", () => {
     _resetOcrRegistryForTests();
-    expect(pickReadyOcrProvider().id).toBe("manual");
+    // tesseract rejects text, so the text branch must skip past it.
+    expect(pickReadyOcrProvider("text").id).toBe("manual");
   });
 });
 

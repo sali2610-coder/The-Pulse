@@ -7,9 +7,11 @@
 
 import type { OcrProvider, OcrProviderId } from "./types";
 import { manualOcr } from "./manual";
+import { tesseractOcr } from "./tesseract";
 
 const REGISTRY: Map<OcrProviderId, OcrProvider> = new Map([
   ["manual", manualOcr],
+  ["tesseract", tesseractOcr],
 ]);
 
 export function listOcrProviders(): OcrProvider[] {
@@ -21,18 +23,23 @@ export function getOcrProvider(id: OcrProviderId): OcrProvider | undefined {
 }
 
 /** Pick the best provider that is ready right now. Order of preference:
- *    1. vision   (highest accuracy, paid)
- *    2. tesseract (in-browser, free, slower)
+ *    1. vision   (highest accuracy, paid — not yet wired)
+ *    2. tesseract (in-browser WASM, free, slower; image inputs only)
  *    3. manual   (always-available fallback)
- *  Today only "manual" is registered, but the order is defined so the
- *  upgrade path is clear. */
-export function pickReadyOcrProvider(): OcrProvider {
+ *  pickReadyOcrProvider() prefers the most-accurate provider that
+ *  accepts the input *kind* the caller has on hand. */
+export function pickReadyOcrProvider(
+  inputKind?: "text" | "image" | "image-url",
+): OcrProvider {
   const preference: OcrProviderId[] = ["vision", "tesseract", "manual"];
   for (const id of preference) {
     const p = REGISTRY.get(id);
-    if (p && p.isReady()) return p;
+    if (!p || !p.isReady()) continue;
+    // Manual rejects images; tesseract rejects text. Skip mismatches.
+    if (inputKind === "text" && id === "tesseract") continue;
+    if (inputKind && inputKind !== "text" && id === "manual") continue;
+    return p;
   }
-  // Manual is unconditionally available; this is unreachable in practice.
   return manualOcr;
 }
 
@@ -56,4 +63,5 @@ export function _registerOcrProviderForTests(p: OcrProvider): void {
 export function _resetOcrRegistryForTests(): void {
   REGISTRY.clear();
   REGISTRY.set("manual", manualOcr);
+  REGISTRY.set("tesseract", tesseractOcr);
 }
