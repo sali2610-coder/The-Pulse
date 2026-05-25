@@ -12,6 +12,7 @@ import {
   getPushSubscription,
   isKvConfigured,
   listNativePushTokens,
+  listPushAttempts,
   readPushAttempt,
 } from "@/lib/kv";
 import { isPushConfigured } from "@/lib/push-server";
@@ -44,6 +45,9 @@ export async function GET(req: Request): Promise<Response> {
   const lastAttempt = kvConfigured
     ? await readPushAttempt(scopeRes.scope)
     : null;
+  const attempts = kvConfigured
+    ? await listPushAttempts(scopeRes.scope, 20)
+    : [];
   const nativeTokens = kvConfigured
     ? await listNativePushTokens(scopeRes.scope)
     : [];
@@ -82,5 +86,6 @@ export async function GET(req: Request): Promise<Response> {
       updatedAt: t.updatedAt,
     })),
     lastAttempt,
+    attempts,
   });
 }

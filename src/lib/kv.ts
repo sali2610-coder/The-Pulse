@@ -44,7 +44,10 @@ const TX_SEEN_KEY = (scope: Scope, externalId: string) =>
   `${scopePrefix(scope)}:tx:seen:${externalId}`;
 const SUB_KEY = (scope: Scope) => `${scopePrefix(scope)}:push`;
 const PUSH_LAST_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:last`;
+const PUSH_LOG_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:log`;
 const PUSH_CLICK_KEY = (scope: Scope) => `${scopePrefix(scope)}:push:click`;
+
+const PUSH_LOG_MAX = 50;
 const SNAPSHOTS_KEY = (scope: Scope) => `${scopePrefix(scope)}:state:snapshots`;
 const STATE_KEY = (scope: Scope) => `${scopePrefix(scope)}:state`;
 const BACKUP_LOG_KEY = (scope: Scope) =>
@@ -695,9 +698,39 @@ export async function recordPushAttempt(
   scope: Scope,
   attempt: PushAttempt,
 ): Promise<void> {
-  const key = PUSH_LAST_KEY(scope);
-  await kv().set(key, JSON.stringify(attempt));
-  await kv().expire(key, TX_TTL_SECONDS);
+  const lastKey = PUSH_LAST_KEY(scope);
+  await kv().set(lastKey, JSON.stringify(attempt));
+  await kv().expire(lastKey, TX_TTL_SECONDS);
+
+  // Phase 222 — rolling ring buffer of the last PUSH_LOG_MAX attempts
+  // for the diagnostics dashboard. LPUSH + LTRIM keeps the list at a
+  // bounded length even after years of pushes.
+  const logKey = PUSH_LOG_KEY(scope);
+  await kv().lpush(logKey, JSON.stringify(attempt));
+  await kv().ltrim(logKey, 0, PUSH_LOG_MAX - 1);
+  await kv().expire(logKey, TX_TTL_SECONDS);
+}
+
+/** Return the most recent push attempts (newest first), capped by
+ *  PUSH_LOG_MAX. Used by the diagnostics dashboard. */
+export async function listPushAttempts(
+  scope: Scope,
+  limit = PUSH_LOG_MAX,
+): Promise<PushAttempt[]> {
+  const raw = await kv().lrange(PUSH_LOG_KEY(scope), 0, limit - 1);
+  const out: PushAttempt[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      try {
+        out.push(JSON.parse(item) as PushAttempt);
+      } catch {
+        // ignore malformed entries — keep the rest readable.
+      }
+    } else if (item && typeof item === "object") {
+      out.push(item as PushAttempt);
+    }
+  }
+  return out;
 }
 
 export async function readPushAttempt(

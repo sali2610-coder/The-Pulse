@@ -23,6 +23,7 @@ import { BackupsCard } from "./backups-card";
 import { CloudSyncCard } from "./cloud-sync-card";
 import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
 import { ReceiptScanCard } from "./receipt-scan-card";
+import { PushDiagnosticsCard } from "./push-diagnostics-card";
 
 export function SettingsTab() {
   return (
@@ -35,6 +36,7 @@ export function SettingsTab() {
       <IntegrationInfo />
       <IphonePushOnboardingCard />
       <PushToggle />
+      <PushDiagnosticsCard />
       <AudioToggle />
       <Section title="חשבונות" section="accounts">
         <AccountsPanel />
