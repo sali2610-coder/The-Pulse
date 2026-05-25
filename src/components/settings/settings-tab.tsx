@@ -24,6 +24,7 @@ import { CloudSyncCard } from "./cloud-sync-card";
 import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
 import { ReceiptScanCard } from "./receipt-scan-card";
 import { PushDiagnosticsCard } from "./push-diagnostics-card";
+import { SallyCsvImportCard } from "./sally-csv-import-card";
 
 export function SettingsTab() {
   return (
@@ -55,6 +56,7 @@ export function SettingsTab() {
         <IncomePanel />
       </Section>
       <StatementImport />
+      <SallyCsvImportCard />
       <ReceiptScanCard />
     </div>
   );
