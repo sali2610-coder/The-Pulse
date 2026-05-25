@@ -1,14 +1,22 @@
-// Phase 220 — Tesseract.js OCR provider.
+// Phase 220 + 223 — Tesseract.js OCR provider with persistent worker.
 //
-// In-browser image OCR. Tesseract ships as a WASM bundle (~5 MB),
-// so the module is dynamic-imported on first scan() to keep the
-// PWA cold install lean. Trained data (heb+eng) is fetched lazily
-// from the Tesseract CDN by the worker itself; we don't bundle it.
+// In-browser image OCR. Tesseract ships as a WASM bundle (~5 MB), so
+// the module is dynamic-imported on first use. Phase 223 reuses a
+// single Tesseract Worker across scans: createWorker() loads the
+// heb+eng language packs once (~5 s on a cold network), and every
+// subsequent recognize() call skips that cost.
 //
-// isReady() is true only on the client and only for image inputs —
-// SSR returns false so call sites fall back to the manual provider.
-// Errors degrade to OcrError shapes; the registry's pickReadyOcrProvider
-// still returns manual if tesseract throws at import time.
+//   * warm()      — pre-creates the worker. Cheap to call repeatedly
+//                   (idempotent). Settings can call it when the
+//                   ReceiptScanCard opens so the first real scan is
+//                   already warm.
+//   * scan()      — lazy-creates the worker if cold, then delegates
+//                   recognize. Cached worker survives across scans
+//                   for the lifetime of the page.
+//   * terminate() — drops the cached worker. Called on logout / debug.
+//
+// isReady() is true only on the client; SSR returns false so call
+// sites fall back to the manual provider.
 
 import type {
   OcrInput,
@@ -17,27 +25,49 @@ import type {
   OcrProviderId,
 } from "./types";
 
-type RecognizeFn = (
-  image: Blob | string,
-  langs?: string,
-) => Promise<{ data: { text: string; confidence: number } }>;
+type RecognizeResult = { data: { text: string; confidence: number } };
 
-let cached: RecognizeFn | null = null;
+type TesseractWorker = {
+  recognize(image: Blob | string): Promise<RecognizeResult>;
+  terminate?(): Promise<void>;
+};
 
-async function loadRecognize(): Promise<RecognizeFn> {
-  if (cached) return cached;
-  // Dynamic import keeps the WASM bundle out of the initial chunk.
+type WorkerFactory = (langs: string) => Promise<TesseractWorker>;
+
+let cachedWorker: TesseractWorker | null = null;
+let pendingWorker: Promise<TesseractWorker> | null = null;
+let workerFactoryOverride: WorkerFactory | null = null;
+
+async function defaultWorkerFactory(langs: string): Promise<TesseractWorker> {
   const mod = await import("tesseract.js");
-  // Default export shape across versions: `mod.recognize` or `mod.default.recognize`.
-  const rec =
-    (mod as unknown as { recognize?: RecognizeFn }).recognize ??
-    (mod as unknown as { default?: { recognize?: RecognizeFn } }).default
-      ?.recognize;
-  if (!rec) {
-    throw new Error("tesseract.js missing `recognize` export");
+  type CreateWorkerFn = (
+    langs: string | string[],
+  ) => Promise<TesseractWorker>;
+  const create =
+    (mod as unknown as { createWorker?: CreateWorkerFn }).createWorker ??
+    (mod as unknown as { default?: { createWorker?: CreateWorkerFn } })
+      .default?.createWorker;
+  if (!create) {
+    throw new Error("tesseract.js missing `createWorker` export");
   }
-  cached = rec;
-  return rec;
+  return create(langs);
+}
+
+async function getWorker(): Promise<TesseractWorker> {
+  if (cachedWorker) return cachedWorker;
+  if (pendingWorker) return pendingWorker;
+  const factory = workerFactoryOverride ?? defaultWorkerFactory;
+  pendingWorker = factory("heb+eng")
+    .then((w) => {
+      cachedWorker = w;
+      pendingWorker = null;
+      return w;
+    })
+    .catch((err) => {
+      pendingWorker = null;
+      throw err;
+    });
+  return pendingWorker;
 }
 
 function detectLanguageHint(text: string): "he" | "en" | "mixed" {
@@ -52,10 +82,32 @@ export class TesseractOcrProvider implements OcrProvider {
   readonly id: OcrProviderId = "tesseract";
 
   isReady(): boolean {
-    // Browser-only: SSR bails out, the actual WASM/worker loading is
-    // gated by the dynamic import inside scan() and any failure there
-    // surfaces as a provider_error (kept off the SSR critical path).
+    // Browser-only: SSR bails out, dynamic-import failures inside
+    // scan() surface as provider_error.
     return typeof window !== "undefined";
+  }
+
+  /** Phase 223 — pre-create the worker. Callers don't need to await
+   *  the result; any in-flight worker creation is reused by scan(). */
+  warm(): Promise<void> {
+    if (!this.isReady()) return Promise.resolve();
+    return getWorker()
+      .then(() => undefined)
+      .catch(() => undefined);
+  }
+
+  /** Drop the cached worker. Subsequent scan() rebuilds it. */
+  async terminate(): Promise<void> {
+    const w = cachedWorker;
+    cachedWorker = null;
+    pendingWorker = null;
+    if (w?.terminate) {
+      try {
+        await w.terminate();
+      } catch {
+        // ignore — we already cleared the reference.
+      }
+    }
   }
 
   async scan(input: OcrInput): Promise<OcrOutcome> {
@@ -80,9 +132,9 @@ export class TesseractOcrProvider implements OcrProvider {
     const started =
       typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
-      const recognize = await loadRecognize();
+      const worker = await getWorker();
       const image = input.kind === "image" ? input.data : input.url;
-      const res = await recognize(image, "heb+eng");
+      const res = await worker.recognize(image);
       const ended =
         typeof performance !== "undefined" ? performance.now() : Date.now();
       const text = (res.data.text ?? "").trim();
@@ -121,8 +173,34 @@ export class TesseractOcrProvider implements OcrProvider {
 
 export const tesseractOcr = new TesseractOcrProvider();
 
-/** Test-only seam: lets unit tests stub the dynamic-imported recognize
- *  function without pulling the WASM bundle. */
-export function _setTesseractRecognizeForTests(fn: RecognizeFn | null): void {
-  cached = fn;
+// === Test seams =============================================================
+
+/** @deprecated Phase 223 — kept as a thin shim so older tests written
+ *  before the worker refactor still pass. Each call wraps the provided
+ *  recognize function in a stub worker. Prefer
+ *  `_setTesseractWorkerFactoryForTests` going forward. */
+export function _setTesseractRecognizeForTests(
+  fn: ((image: Blob | string) => Promise<RecognizeResult>) | null,
+): void {
+  cachedWorker = null;
+  pendingWorker = null;
+  if (!fn) {
+    workerFactoryOverride = null;
+    return;
+  }
+  workerFactoryOverride = async () => ({
+    recognize: fn,
+    terminate: async () => undefined,
+  });
+}
+
+/** Inject a fake worker factory. The factory is invoked once per warm
+ *  start; the returned worker is reused across all scan() calls until
+ *  terminate() (or a new factory) replaces it. */
+export function _setTesseractWorkerFactoryForTests(
+  factory: WorkerFactory | null,
+): void {
+  cachedWorker = null;
+  pendingWorker = null;
+  workerFactoryOverride = factory;
 }

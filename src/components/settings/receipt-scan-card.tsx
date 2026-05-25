@@ -17,6 +17,7 @@ import {
   pickReadyOcrProvider,
   type ReceiptCandidate,
 } from "@/lib/ocr";
+import { tesseractOcr } from "@/lib/ocr/tesseract";
 import { buildExpenseFromReceipt } from "@/lib/ocr/receipt-to-expense";
 import { useFinanceStore } from "@/lib/store";
 import { tap } from "@/lib/haptics";
@@ -40,6 +41,14 @@ export function ReceiptScanCard() {
   const addExpense = useFinanceStore((s) => s.addExpense);
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
+
+  function handleOpen() {
+    const next = !open;
+    setOpen(next);
+    // Phase 223 — pre-warm the Tesseract worker so the first scan
+    // skips the ~5s cold language-pack load.
+    if (next) void tesseractOcr.warm();
+  }
 
   async function runTextScan() {
     setError(null);
@@ -127,7 +136,7 @@ export function ReceiptScanCard() {
     <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleOpen}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-2 text-start"
       >

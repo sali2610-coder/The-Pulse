@@ -1,14 +1,19 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   _resetOcrRegistryForTests,
   getOcrProvider,
   pickReadyOcrProvider,
 } from "@/lib/ocr";
-import { _setTesseractRecognizeForTests } from "@/lib/ocr/tesseract";
+import {
+  _setTesseractRecognizeForTests,
+  _setTesseractWorkerFactoryForTests,
+  tesseractOcr,
+} from "@/lib/ocr/tesseract";
 
 afterEach(() => {
+  _setTesseractWorkerFactoryForTests(null);
   _setTesseractRecognizeForTests(null);
   _resetOcrRegistryForTests();
 });
@@ -34,7 +39,7 @@ describe("tesseract provider", () => {
     }
   });
 
-  it("delegates an image blob to the dynamic recognize fn + normalizes confidence", async () => {
+  it("delegates image scans via the dynamic recognize fn + normalizes confidence", async () => {
     _setTesseractRecognizeForTests(async () => ({
       data: { text: "סה״כ 99.90 ש״ח", confidence: 87 },
     }));
@@ -99,7 +104,95 @@ describe("pickReadyOcrProvider", () => {
 
   it("returns manual when no input kind is given (backwards-compatible)", () => {
     const p = pickReadyOcrProvider();
-    // First ready entry in preference order — tesseract is ready in jsdom.
     expect(["tesseract", "manual"]).toContain(p.id);
+  });
+});
+
+describe("Phase 223 — worker reuse + warm()", () => {
+  it("creates the worker exactly once across multiple scans", async () => {
+    const factory = vi.fn(async () => ({
+      recognize: vi.fn(async () => ({
+        data: { text: "Hello", confidence: 90 },
+      })),
+      terminate: vi.fn(async () => undefined),
+    }));
+    _setTesseractWorkerFactoryForTests(factory);
+
+    const img = {
+      kind: "image" as const,
+      data: new Blob(["x"], { type: "image/png" }),
+      mimeType: "image/png",
+    };
+    await tesseractOcr.scan(img);
+    await tesseractOcr.scan(img);
+    await tesseractOcr.scan(img);
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(factory).toHaveBeenCalledWith("heb+eng");
+  });
+
+  it("warm() pre-creates the worker so a later scan reuses it", async () => {
+    const factory = vi.fn(async () => ({
+      recognize: vi.fn(async () => ({
+        data: { text: "Hi", confidence: 100 },
+      })),
+    }));
+    _setTesseractWorkerFactoryForTests(factory);
+
+    await tesseractOcr.warm();
+    await tesseractOcr.scan({
+      kind: "image",
+      data: new Blob(["x"], { type: "image/png" }),
+      mimeType: "image/png",
+    });
+
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it("concurrent scans share a single in-flight worker promise", async () => {
+    const factory = vi.fn(async () => ({
+      recognize: vi.fn(async () => ({
+        data: { text: "Concurrent", confidence: 75 },
+      })),
+    }));
+    _setTesseractWorkerFactoryForTests(factory);
+
+    const img = {
+      kind: "image" as const,
+      data: new Blob(["x"], { type: "image/png" }),
+      mimeType: "image/png",
+    };
+    const [a, b, c] = await Promise.all([
+      tesseractOcr.scan(img),
+      tesseractOcr.scan(img),
+      tesseractOcr.scan(img),
+    ]);
+    expect(a.ok && b.ok && c.ok).toBe(true);
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it("terminate() drops the cached worker so the next scan rebuilds", async () => {
+    let calls = 0;
+    const factory = vi.fn(async () => {
+      calls++;
+      return {
+        recognize: async () => ({
+          data: { text: `pass-${calls}`, confidence: 80 },
+        }),
+        terminate: async () => undefined,
+      };
+    });
+    _setTesseractWorkerFactoryForTests(factory);
+
+    const img = {
+      kind: "image" as const,
+      data: new Blob(["x"], { type: "image/png" }),
+      mimeType: "image/png",
+    };
+    await tesseractOcr.scan(img);
+    await tesseractOcr.terminate();
+    await tesseractOcr.scan(img);
+
+    expect(factory).toHaveBeenCalledTimes(2);
   });
 });
