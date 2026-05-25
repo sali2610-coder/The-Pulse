@@ -114,6 +114,14 @@ function SheetBody({
       const next = computedValue(d);
       if (next === d.current) continue;
       onSave(d.accountId, next);
+      // Phase 218 — append to local trajectory history.
+      void import("@/lib/anchor-history").then((m) =>
+        m.appendAnchorPoint({
+          accountId: d.accountId,
+          label: d.label,
+          balance: next,
+        }),
+      );
       touched++;
     }
     if (touched > 0) {

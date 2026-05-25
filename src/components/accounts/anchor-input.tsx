@@ -32,6 +32,16 @@ export function AnchorInput({ account }: Props) {
       account={account}
       onSave={(value) => {
         setAnchor(account.id, value);
+        // Phase 218 — append to local trajectory history so the
+        // dashboard can draw balance over time. Pure side-effect
+        // local to this component; no store coupling required.
+        void import("@/lib/anchor-history").then((m) =>
+          m.appendAnchorPoint({
+            accountId: account.id,
+            label: account.label,
+            balance: value,
+          }),
+        );
         tap();
         setBumpKey((n) => n + 1);
       }}
