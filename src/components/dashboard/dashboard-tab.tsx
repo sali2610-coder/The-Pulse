@@ -28,6 +28,7 @@ import { computeSummaries } from "@/lib/dashboard-section-summaries";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
 import { HeroEomCard } from "@/components/dashboard/simple/hero-eom-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
+import { HeroFutureBalanceCard } from "@/components/dashboard/simple/hero-future-balance-card";
 
 const lazy = (
   loader: () => Promise<{
@@ -427,10 +428,20 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* ── HERO — the only 3 cards visible on first paint ─────── */}
+        {/* ── HERO — the only cards visible on first paint ───────
+           Order answers the 4 questions in priority order:
+             1. How much can I safely spend?
+             2. What will my account look like later?
+             3. Will I enter overdraft?
+             4. What's the single most important thing right now? */}
         <div className="sm:col-span-6">
           <Safe name="HeroSpendableCard">
             <HeroSpendableCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="HeroFutureBalanceCard">
+            <HeroFutureBalanceCard />
           </Safe>
         </div>
         <div className="sm:col-span-6">
