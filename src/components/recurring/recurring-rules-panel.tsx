@@ -34,6 +34,7 @@ const formatILS = (value: number) =>
 export function RecurringRulesPanel() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
+  const accounts = useFinanceStore((s) => s.accounts);
   const addRule = useFinanceStore((s) => s.addRule);
   const updateRule = useFinanceStore((s) => s.updateRule);
   const deleteRule = useFinanceStore((s) => s.deleteRule);
@@ -52,63 +53,111 @@ export function RecurringRulesPanel() {
   const monthKey = currentMonthKey();
   const statusMap = useMemo(() => buildStatusMap(statuses), [statuses]);
 
-  type GroupKey =
-    | "installments"
-    | "card"
-    | "bank"
-    | "cash"
-    | "unknown";
+  // Phase 230 — card-linked rules now split per card instead of a
+  // single "כרטיס אשראי" bucket. Each card surfaces its own list +
+  // total so the user sees ישראכרט-only / כאל-only obligations.
+  type Group = {
+    key: string;
+    label: string;
+    rules: typeof rules;
+    total: number;
+  };
 
   const groups = useMemo(() => {
-    const buckets: Record<
-      GroupKey,
-      { key: GroupKey; label: string; rules: typeof rules; total: number }
-    > = {
-      installments: { key: "installments", label: "תשלומים", rules: [], total: 0 },
-      card: { key: "card", label: "כרטיס אשראי", rules: [], total: 0 },
-      bank: { key: "bank", label: "חיוב בנקאי", rules: [], total: 0 },
-      cash: { key: "cash", label: "מזומן", rules: [], total: 0 },
-      unknown: { key: "unknown", label: "ללא קישור", rules: [], total: 0 },
+    const installments: Group = {
+      key: "installments",
+      label: "תשלומים",
+      rules: [],
+      total: 0,
     };
-    for (const r of rules) {
-      // Phase 152d: paymentSource OUTRANKS installmentTotal. A card-
-      // linked installment plan belongs in the card's pressure group,
-      // not in a separate "installments" bucket — otherwise card
-      // pressure / utilization / net-worth math under-counts the
-      // committed monthly debt. The legacy "installments" group only
-      // catches plans with no payment source attached.
-      const key: GroupKey =
-        r.paymentSource === "card"
-          ? "card"
-          : r.paymentSource === "bank"
-            ? "bank"
-            : r.paymentSource === "cash"
-              ? "cash"
-              : r.installmentTotal
-                ? "installments"
-                : "unknown";
-      buckets[key].rules.push(r);
-      // Bucket totals reflect what actually fires THIS month — a past-end
-      // installment plan or a not-yet-started one is "active=true" on the
-      // record but doesn't bill, so it must not inflate the group total.
-      if (r.active && ruleSchedule(r, monthKey).active) {
-        buckets[key].total += r.estimatedAmount;
-      }
+    const bank: Group = {
+      key: "bank",
+      label: "חיוב בנקאי",
+      rules: [],
+      total: 0,
+    };
+    const cash: Group = {
+      key: "cash",
+      label: "מזומן",
+      rules: [],
+      total: 0,
+    };
+    const unknown: Group = {
+      key: "unknown",
+      label: "ללא קישור",
+      rules: [],
+      total: 0,
+    };
+    const cardUnlinked: Group = {
+      key: "card-unlinked",
+      label: "כרטיס אשראי — לא משויך",
+      rules: [],
+      total: 0,
+    };
+    // One bucket per card the user has on file, keyed by account id.
+    const cardBuckets = new Map<string, Group>();
+    for (const a of accounts) {
+      if (a.kind !== "card") continue;
+      const last4 = a.cardLast4 ? ` ····${a.cardLast4}` : "";
+      cardBuckets.set(a.id, {
+        key: `card-${a.id}`,
+        label: `${a.label}${last4}`,
+        rules: [],
+        total: 0,
+      });
     }
-    // Stable order: installments first, then by total desc.
-    const ordered: (typeof buckets)[GroupKey][] = [];
-    if (buckets.installments.rules.length > 0) ordered.push(buckets.installments);
-    const rest = (
-      ["card", "bank", "cash", "unknown"] as GroupKey[]
-    )
-      .map((k) => buckets[k])
+
+    for (const r of rules) {
+      const fires = r.active && ruleSchedule(r, monthKey).active;
+      // paymentSource OUTRANKS installmentTotal (Phase 152d): a card-
+      // linked installment plan belongs with its card so card pressure
+      // / utilization / net-worth math don't under-count committed
+      // monthly debt.
+      if (r.paymentSource === "card") {
+        const linked = r.linkedCardId
+          ? cardBuckets.get(r.linkedCardId)
+          : undefined;
+        const bucket: Group = linked ?? cardUnlinked;
+        bucket.rules.push(r);
+        if (fires) bucket.total += r.estimatedAmount;
+        continue;
+      }
+      if (r.paymentSource === "bank") {
+        bank.rules.push(r);
+        if (fires) bank.total += r.estimatedAmount;
+        continue;
+      }
+      if (r.paymentSource === "cash") {
+        cash.rules.push(r);
+        if (fires) cash.total += r.estimatedAmount;
+        continue;
+      }
+      if (r.installmentTotal) {
+        installments.rules.push(r);
+        if (fires) installments.total += r.estimatedAmount;
+        continue;
+      }
+      unknown.rules.push(r);
+      if (fires) unknown.total += r.estimatedAmount;
+    }
+
+    // Stable order: installments first, then every populated card
+    // (highest total first), then bank/cash/unlinked/unknown.
+    const ordered: Group[] = [];
+    if (installments.rules.length > 0) ordered.push(installments);
+    const cards = [...cardBuckets.values()]
       .filter((b) => b.rules.length > 0)
       .sort((a, b) => b.total - a.total);
-    return [...ordered, ...rest];
-  }, [rules, monthKey]);
+    ordered.push(...cards);
+    if (cardUnlinked.rules.length > 0) ordered.push(cardUnlinked);
+    for (const g of [bank, cash, unknown]) {
+      if (g.rules.length > 0) ordered.push(g);
+    }
+    return ordered;
+  }, [rules, accounts, monthKey]);
 
-  const [collapsed, setCollapsed] = useState<Set<GroupKey>>(new Set());
-  const toggleGroup = (key: GroupKey) => {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
