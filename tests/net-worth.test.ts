@@ -1,6 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { computeNetWorth } from "@/lib/net-worth";
+
+// Pin "now" to mid-May so the card-cycle window stays open over the
+// May-10 fixture entry regardless of the real clock when the suite runs.
+beforeAll(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 4, 15, 12, 0, 0));
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
 import type {
   Account,
   ExpenseEntry,

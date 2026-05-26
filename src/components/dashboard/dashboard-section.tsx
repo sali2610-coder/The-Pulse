@@ -21,6 +21,8 @@ import {
   writeSectionCollapsed,
 } from "@/lib/dashboard-section-store";
 
+export type DashboardSectionTone = "ok" | "warn" | "danger" | "info";
+
 export type DashboardSectionProps = {
   /** Stable identifier — DO NOT rename in place. Used as the
    *  localStorage key for the collapse state. */
@@ -32,7 +34,21 @@ export type DashboardSectionProps = {
   /** Short helper line under the title — kept terse so the header
    *  stays one row tall. */
   subtitle?: string;
+  /** Phase 225 — collapsed-state summary. Renders as a colored chip
+   *  on the right edge of the header so the user can read the section's
+   *  bottom line without expanding. */
+  summary?: {
+    value: string;
+    tone?: DashboardSectionTone;
+  };
   children: ReactNode;
+};
+
+const TONE_COLORS: Record<DashboardSectionTone, string> = {
+  ok: "#34D399",
+  warn: "#F59E0B",
+  danger: "#F87171",
+  info: "#60A5FA",
 };
 
 export function DashboardSection({
@@ -41,6 +57,7 @@ export function DashboardSection({
   icon,
   defaultCollapsed = false,
   subtitle,
+  summary,
   children,
 }: DashboardSectionProps) {
   // Initialise to the default; flip to the persisted value on mount.
@@ -74,32 +91,48 @@ export function DashboardSection({
         type="button"
         onClick={toggle}
         aria-expanded={!collapsed}
-        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-surface/40 px-4 py-3 text-right transition-colors hover:border-white/16"
+        className="flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border border-white/8 bg-surface/40 px-4 py-3.5 text-right transition-colors hover:border-white/16"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {icon ? (
-            <span className="flex size-7 items-center justify-center rounded-xl bg-white/5 text-[color:var(--neon)]">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-white/5 text-[color:var(--neon)]">
               {icon}
             </span>
           ) : null}
           <div className="flex flex-col leading-tight">
-            <span className="text-[11px] uppercase tracking-[0.25em] text-foreground/85">
+            <span className="text-[13px] font-medium text-foreground">
               {title}
             </span>
             {subtitle ? (
-              <span className="text-[10px] text-muted-foreground/80">
+              <span className="text-[11px] text-muted-foreground/80">
                 {subtitle}
               </span>
             ) : null}
           </div>
         </div>
-        <motion.span
-          animate={{ rotate: collapsed ? 0 : 180 }}
-          transition={{ duration: 0.2 }}
-          className="text-muted-foreground"
-        >
-          <ChevronDown className="size-4" />
-        </motion.span>
+        <div className="flex items-center gap-2">
+          {summary ? (
+            <span
+              data-mono="true"
+              dir="ltr"
+              className="rounded-full border px-2.5 py-1 text-[12px] font-medium"
+              style={{
+                color: TONE_COLORS[summary.tone ?? "info"],
+                borderColor: `${TONE_COLORS[summary.tone ?? "info"]}44`,
+                background: `${TONE_COLORS[summary.tone ?? "info"]}14`,
+              }}
+            >
+              {summary.value}
+            </span>
+          ) : null}
+          <motion.span
+            animate={{ rotate: collapsed ? 0 : 180 }}
+            transition={{ duration: 0.2 }}
+            className="text-muted-foreground"
+          >
+            <ChevronDown className="size-5" />
+          </motion.span>
+        </div>
       </button>
 
       <AnimatePresence initial={false}>

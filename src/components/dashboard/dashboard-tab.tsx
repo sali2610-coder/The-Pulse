@@ -1,472 +1,359 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+// Phase 225 — consumer-first dashboard refactor.
+//
+// Replaces the analyst-style 80+ card bento with a calm hero stack
+// + grouped collapsed sections. Reuses every existing calculation
+// (forecast, liquidity, risk-warnings, cash-flow buckets …); only
+// the visual hierarchy + density changes.
+//
+// First-paint reveals three hero cards and six collapsed section
+// headers. Each header shows a single colored summary chip so the
+// user reads the bottom-line of every section without expanding.
+
+import { useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+
 import { useFinanceStore } from "@/lib/store";
 import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { PulseBar } from "@/components/pulse/pulse-bar";
 import { FloatingCTA } from "@/components/dashboard/floating-cta";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
 import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
+import { computeSummaries } from "@/lib/dashboard-section-summaries";
 
-// Every dashboard card except the always-needed PulseBar + NewExpenseButton
-// is dynamically imported with `ssr: false`. iPhone Safari was rejecting `/`
-// with "This page couldn't load" — most likely a memory exhaustion as 19
-// cards with Framer Motion + SVG raced to mount at once. Lazy loading lets
-// the renderer mount them one at a time as their chunks resolve.
-//
-// Each card is wrapped in an ErrorBoundary so a single crash doesn't take
-// the whole page down — the offender silently falls back to `null` while
-// every other tile keeps rendering.
+import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
+import { HeroEomCard } from "@/components/dashboard/simple/hero-eom-card";
+import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
 
-const lazy = (loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>) =>
-  dynamic(loader, { ssr: false });
+const lazy = (
+  loader: () => Promise<{
+    default: React.ComponentType<Record<string, unknown>>;
+  }>,
+) => dynamic(loader, { ssr: false });
 
-const TimelineSync = lazy(() =>
-  import("@/components/pulse/timeline-sync").then((m) => ({
-    default: m.TimelineSync as unknown as React.ComponentType<Record<string, unknown>>,
+// ── Always-on critical surfaces ────────────────────────────────────
+const WelcomeSetupCard = lazy(() =>
+  import("@/components/dashboard/welcome-setup-card").then((m) => ({
+    default:
+      m.WelcomeSetupCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const DailyAllowance = lazy(() =>
-  import("@/components/dashboard/daily-allowance").then((m) => ({
-    default: m.DailyAllowance as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const CfoSummary = lazy(() =>
-  import("@/components/dashboard/cfo-summary").then((m) => ({
-    default: m.CfoSummary as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const StatsCards = lazy(() =>
-  import("@/components/dashboard/stats-cards").then((m) => ({
-    default: m.StatsCards as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const UpcomingExpenses = lazy(() =>
-  import("@/components/dashboard/upcoming-expenses").then((m) => ({
-    default: m.UpcomingExpenses as unknown as React.ComponentType<Record<string, unknown>>,
+const StaleAnchorsBanner = lazy(() =>
+  import("@/components/dashboard/stale-anchors-banner").then((m) => ({
+    default:
+      m.StaleAnchorsBanner as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const PendingTray = lazy(() =>
   import("@/components/dashboard/pending-tray").then((m) => ({
-    default: m.PendingTray as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.PendingTray as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const CategoryDonut = lazy(() =>
-  import("@/components/dashboard/category-donut").then((m) => ({
-    default: m.CategoryDonut as unknown as React.ComponentType<Record<string, unknown>>,
+
+// ── Future cash-flow section ──────────────────────────────────────
+const LiquidityCurveCard = lazy(() =>
+  import("@/components/dashboard/liquidity-curve-card").then((m) => ({
+    default:
+      m.LiquidityCurveCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const HeatmapMini = lazy(() =>
-  import("@/components/dashboard/heatmap-mini").then((m) => ({
-    default: m.HeatmapMini as unknown as React.ComponentType<Record<string, unknown>>,
+const CashflowBucketsCard = lazy(() =>
+  import("@/components/dashboard/cashflow-buckets-card").then((m) => ({
+    default:
+      m.CashflowBucketsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const BalanceForecastCard = lazy(() =>
-  import("@/components/dashboard/balance-forecast-card").then((m) => ({
-    default: m.BalanceForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
+const UpcomingOutflowsCard = lazy(() =>
+  import("@/components/dashboard/upcoming-outflows-card").then((m) => ({
+    default:
+      m.UpcomingOutflowsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const BalanceHorizonCard = lazy(() =>
-  import("@/components/dashboard/balance-horizon-card").then((m) => ({
-    default: m.BalanceHorizonCard as unknown as React.ComponentType<Record<string, unknown>>,
+const ForecastTimelineCard = lazy(() =>
+  import("@/components/dashboard/forecast-timeline-card").then((m) => ({
+    default:
+      m.ForecastTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const AccountForecastCard = lazy(() =>
-  import("@/components/dashboard/account-forecast-card").then((m) => ({
-    default: m.AccountForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
+
+// ── Credit cards section ──────────────────────────────────────────
+const CardsPressureCard = lazy(() =>
+  import("@/components/dashboard/cards-pressure-card").then((m) => ({
+    default:
+      m.CardsPressureCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const ActiveInstallmentsCard = lazy(() =>
   import("@/components/dashboard/active-installments-card").then((m) => ({
-    default: m.ActiveInstallmentsCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.ActiveInstallmentsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const FuturePressureCard = lazy(() =>
-  import("@/components/dashboard/future-pressure-card").then((m) => ({
-    default: m.FuturePressureCard as unknown as React.ComponentType<Record<string, unknown>>,
+
+// ── Obligations section ───────────────────────────────────────────
+const LoanSummaryCard = lazy(() =>
+  import("@/components/dashboard/loan-summary-card").then((m) => ({
+    default:
+      m.LoanSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const ObligationsTimelineCard = lazy(() =>
-  import("@/components/dashboard/obligations-timeline-card").then((m) => ({
-    default: m.ObligationsTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const WeeklyReviewCard = lazy(() =>
-  import("@/components/dashboard/weekly-review-card").then((m) => ({
-    default: m.WeeklyReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const RiskWarningsCard = lazy(() =>
-  import("@/components/dashboard/risk-warnings-card").then((m) => ({
-    default: m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const CommitmentBurdenCard = lazy(() =>
-  import("@/components/dashboard/commitment-burden-card").then((m) => ({
-    default: m.CommitmentBurdenCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const WhatIfSimulatorCard = lazy(() =>
-  import("@/components/dashboard/what-if-simulator-card").then((m) => ({
-    default: m.WhatIfSimulatorCard as unknown as React.ComponentType<Record<string, unknown>>,
+const HousingCard = lazy(() =>
+  import("@/components/dashboard/housing-card").then((m) => ({
+    default:
+      m.HousingCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const RecurringCalendarCard = lazy(() =>
   import("@/components/dashboard/recurring-calendar-card").then((m) => ({
-    default: m.RecurringCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.RecurringCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const SavingsRateCard = lazy(() =>
-  import("@/components/dashboard/savings-rate-card").then((m) => ({
-    default: m.SavingsRateCard as unknown as React.ComponentType<Record<string, unknown>>,
+const ObligationsTimelineCard = lazy(() =>
+  import("@/components/dashboard/obligations-timeline-card").then((m) => ({
+    default:
+      m.ObligationsTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+// ── Income section ────────────────────────────────────────────────
+const IncomeBreakdownCard = lazy(() =>
+  import("@/components/dashboard/income-breakdown-card").then((m) => ({
+    default:
+      m.IncomeBreakdownCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const IncomeForecastCard = lazy(() =>
+  import("@/components/dashboard/income-forecast-card").then((m) => ({
+    default:
+      m.IncomeForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+// ── Analytics section ─────────────────────────────────────────────
+const CategoryDonut = lazy(() =>
+  import("@/components/dashboard/category-donut").then((m) => ({
+    default:
+      m.CategoryDonut as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const CategoryParetoCard = lazy(() =>
+  import("@/components/dashboard/category-pareto-card").then((m) => ({
+    default:
+      m.CategoryParetoCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const CategoryPaceCard = lazy(() =>
   import("@/components/dashboard/category-pace-card").then((m) => ({
-    default: m.CategoryPaceCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.CategoryPaceCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const SpendSplitCard = lazy(() =>
+  import("@/components/dashboard/spend-split-card").then((m) => ({
+    default:
+      m.SpendSplitCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const NetWorthCard = lazy(() =>
+  import("@/components/dashboard/net-worth-card").then((m) => ({
+    default:
+      m.NetWorthCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const NetWorthTrendCard = lazy(() =>
+  import("@/components/dashboard/net-worth-trend-card").then((m) => ({
+    default:
+      m.NetWorthTrendCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const RunwayCard = lazy(() =>
+  import("@/components/dashboard/runway-card").then((m) => ({
+    default:
+      m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const FixedCostRatioCard = lazy(() =>
+  import("@/components/dashboard/fixed-cost-ratio-card").then((m) => ({
+    default:
+      m.FixedCostRatioCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const AvgTicketCard = lazy(() =>
+  import("@/components/dashboard/avg-ticket-card").then((m) => ({
+    default:
+      m.AvgTicketCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const WeekendSpendCard = lazy(() =>
+  import("@/components/dashboard/weekend-spend-card").then((m) => ({
+    default:
+      m.WeekendSpendCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const HeatmapMini = lazy(() =>
+  import("@/components/dashboard/heatmap-mini").then((m) => ({
+    default:
+      m.HeatmapMini as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+// ── Watch / subscriptions / anomalies section ────────────────────
+const SubscriptionReviewCard = lazy(() =>
+  import("@/components/dashboard/subscription-review-card").then((m) => ({
+    default:
+      m.SubscriptionReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const SubscriptionRadarCard = lazy(() =>
   import("@/components/dashboard/subscription-radar-card").then((m) => ({
-    default: m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const RiskWarningsCard = lazy(() =>
+  import("@/components/dashboard/risk-warnings-card").then((m) => ({
+    default:
+      m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const AnomalyBanner = lazy(() =>
+  import("@/components/dashboard/anomaly-banner").then((m) => ({
+    default:
+      m.AnomalyBanner as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const AnomaliesCard = lazy(() =>
   import("@/components/dashboard/anomalies-card").then((m) => ({
-    default: m.AnomaliesCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.AnomaliesCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const MonthlyDigestCard = lazy(() =>
-  import("@/components/dashboard/monthly-digest-card").then((m) => ({
-    default: m.MonthlyDigestCard as unknown as React.ComponentType<Record<string, unknown>>,
+const SmartInsightsCard = lazy(() =>
+  import("@/components/dashboard/smart-insights-card").then((m) => ({
+    default:
+      m.SmartInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const SmartRecommendationsCard = lazy(() =>
+  import("@/components/dashboard/smart-recommendations-card").then((m) => ({
+    default:
+      m.SmartRecommendationsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+// ── Advanced overflow — everything else, collapsed by default ────
+const PulseBar = lazy(() =>
+  import("@/components/pulse/pulse-bar").then((m) => ({
+    default:
+      m.PulseBar as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const SmartSummaryCard = lazy(() =>
+  import("@/components/dashboard/smart-summary-card").then((m) => ({
+    default:
+      m.SmartSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const SpentThisMonthCard = lazy(() =>
+  import("@/components/dashboard/spent-this-month-card").then((m) => ({
+    default:
+      m.SpentThisMonthCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const AccountBridgeCard = lazy(() =>
+  import("@/components/dashboard/account-bridge-card").then((m) => ({
+    default:
+      m.AccountBridgeCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const ExpectedBalanceCard = lazy(() =>
+  import("@/components/dashboard/expected-balance-card").then((m) => ({
+    default:
+      m.ExpectedBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const CfoSummary = lazy(() =>
+  import("@/components/dashboard/cfo-summary").then((m) => ({
+    default:
+      m.CfoSummary as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const CashflowSummaryCard = lazy(() =>
+  import("@/components/dashboard/cashflow-summary-card").then((m) => ({
+    default:
+      m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const StatsCards = lazy(() =>
+  import("@/components/dashboard/stats-cards").then((m) => ({
+    default:
+      m.StatsCards as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const HealthScoreCard = lazy(() =>
   import("@/components/dashboard/health-score-card").then((m) => ({
-    default: m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const EmergencyFundCard = lazy(() =>
+  import("@/components/dashboard/emergency-fund-card").then((m) => ({
+    default:
+      m.EmergencyFundCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const AnchorTrajectoryCard = lazy(() =>
+  import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
+    default:
+      m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const LiquidityTimelineCard = lazy(() =>
+  import("@/components/dashboard/liquidity-timeline-card").then((m) => ({
+    default:
+      m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const TodayPulseCard = lazy(() =>
+  import("@/components/dashboard/today-pulse-card").then((m) => ({
+    default:
+      m.TodayPulseCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const DailyInsightsCard = lazy(() =>
+  import("@/components/dashboard/daily-insights-card").then((m) => ({
+    default:
+      m.DailyInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const RecentActivity = lazy(() =>
   import("@/components/dashboard/recent-activity").then((m) => ({
-    default: m.RecentActivity as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.RecentActivity as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-
-const CashflowTimeline = lazy(() =>
-  import("@/components/dashboard/cashflow-timeline").then((m) => ({
-    default: m.CashflowTimeline as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SmartSummaryCard = lazy(() =>
-  import("@/components/dashboard/smart-summary-card").then((m) => ({
-    default: m.SmartSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
 const CopilotCard = lazy(() =>
   import("@/components/dashboard/copilot-card").then((m) => ({
-    default: m.CopilotCard as unknown as React.ComponentType<Record<string, unknown>>,
+    default:
+      m.CopilotCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-
-const WelcomeSetupCard = lazy(() =>
-  import("@/components/dashboard/welcome-setup-card").then((m) => ({
-    default: m.WelcomeSetupCard as unknown as React.ComponentType<Record<string, unknown>>,
+const MonthlyDigestCard = lazy(() =>
+  import("@/components/dashboard/monthly-digest-card").then((m) => ({
+    default:
+      m.MonthlyDigestCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-
-const CardsPressureCard = lazy(() =>
-  import("@/components/dashboard/cards-pressure-card").then((m) => ({
-    default: m.CardsPressureCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const HousingCard = lazy(() =>
-  import("@/components/dashboard/housing-card").then((m) => ({
-    default: m.HousingCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const CashflowSummaryCard = lazy(() =>
-  import("@/components/dashboard/cashflow-summary-card").then((m) => ({
-    default: m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const AnomalyBanner = lazy(() =>
-  import("@/components/dashboard/anomaly-banner").then((m) => ({
-    default: m.AnomalyBanner as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const MonthDeltaCard = lazy(() =>
-  import("@/components/dashboard/month-delta-card").then((m) => ({
-    default: m.MonthDeltaCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const UpcomingDebitsBanner = lazy(() =>
-  import("@/components/dashboard/upcoming-debits-banner").then((m) => ({
-    default: m.UpcomingDebitsBanner as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const CashflowTrendCard = lazy(() =>
-  import("@/components/dashboard/cashflow-trend-card").then((m) => ({
-    default: m.CashflowTrendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SmartInsightsCard = lazy(() =>
-  import("@/components/dashboard/smart-insights-card").then((m) => ({
-    default: m.SmartInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const UpcomingOutflowsCard = lazy(() =>
-  import("@/components/dashboard/upcoming-outflows-card").then((m) => ({
-    default: m.UpcomingOutflowsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const LoanSummaryCard = lazy(() =>
-  import("@/components/dashboard/loan-summary-card").then((m) => ({
-    default: m.LoanSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const NetWorthCard = lazy(() =>
-  import("@/components/dashboard/net-worth-card").then((m) => ({
-    default: m.NetWorthCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const EmergencyFundCard = lazy(() =>
-  import("@/components/dashboard/emergency-fund-card").then((m) => ({
-    default: m.EmergencyFundCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const NetWorthTrendCard = lazy(() =>
-  import("@/components/dashboard/net-worth-trend-card").then((m) => ({
-    default: m.NetWorthTrendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const IncomeBreakdownCard = lazy(() =>
-  import("@/components/dashboard/income-breakdown-card").then((m) => ({
-    default: m.IncomeBreakdownCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const IncomeForecastCard = lazy(() =>
-  import("@/components/dashboard/income-forecast-card").then((m) => ({
-    default: m.IncomeForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SmartRecommendationsCard = lazy(() =>
-  import("@/components/dashboard/smart-recommendations-card").then((m) => ({
-    default: m.SmartRecommendationsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SubscriptionReviewCard = lazy(() =>
-  import("@/components/dashboard/subscription-review-card").then((m) => ({
-    default: m.SubscriptionReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SpendingDietCard = lazy(() =>
-  import("@/components/dashboard/spending-diet-card").then((m) => ({
-    default: m.SpendingDietCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SpendingHoursCard = lazy(() =>
-  import("@/components/dashboard/spending-hours-card").then((m) => ({
-    default: m.SpendingHoursCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const DailyFlowCard = lazy(() =>
-  import("@/components/timeline/daily-flow-card").then((m) => ({
-    default: m.DailyFlowCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const DailyInsightsCard = lazy(() =>
-  import("@/components/dashboard/daily-insights-card").then((m) => ({
-    default: m.DailyInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SpentThisMonthCard = lazy(() =>
-  import("@/components/dashboard/spent-this-month-card").then((m) => ({
-    default: m.SpentThisMonthCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const AccountBridgeCard = lazy(() =>
-  import("@/components/dashboard/account-bridge-card").then((m) => ({
-    default: m.AccountBridgeCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const ExpectedBalanceCard = lazy(() =>
-  import("@/components/dashboard/expected-balance-card").then((m) => ({
-    default: m.ExpectedBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const ForecastTimelineCard = lazy(() =>
-  import("@/components/dashboard/forecast-timeline-card").then((m) => ({
-    default: m.ForecastTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const TodayPulseCard = lazy(() =>
-  import("@/components/dashboard/today-pulse-card").then((m) => ({
-    default: m.TodayPulseCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SafeToSpendCard = lazy(() =>
-  import("@/components/dashboard/safe-to-spend-card").then((m) => ({
-    default: m.SafeToSpendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SpendableTodayCard = lazy(() =>
-  import("@/components/dashboard/spendable-today-card").then((m) => ({
-    default: m.SpendableTodayCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const CashflowBucketsCard = lazy(() =>
-  import("@/components/dashboard/cashflow-buckets-card").then((m) => ({
-    default: m.CashflowBucketsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const LiquidityTimelineCard = lazy(() =>
-  import("@/components/dashboard/liquidity-timeline-card").then((m) => ({
-    default: m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const LiquidityCurveCard = lazy(() =>
-  import("@/components/dashboard/liquidity-curve-card").then((m) => ({
-    default: m.LiquidityCurveCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const AnchorTrajectoryCard = lazy(() =>
-  import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
-    default: m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const RunwayCard = lazy(() =>
-  import("@/components/dashboard/runway-card").then((m) => ({
-    default: m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const BankVelocityCard = lazy(() =>
-  import("@/components/dashboard/bank-velocity-card").then((m) => ({
-    default: m.BankVelocityCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SpendSplitCard = lazy(() =>
-  import("@/components/dashboard/spend-split-card").then((m) => ({
-    default: m.SpendSplitCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const WeekendSpendCard = lazy(() =>
-  import("@/components/dashboard/weekend-spend-card").then((m) => ({
-    default: m.WeekendSpendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const SpendConsistencyCard = lazy(() =>
-  import("@/components/dashboard/spend-consistency-card").then((m) => ({
-    default: m.SpendConsistencyCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const AvgTicketCard = lazy(() =>
-  import("@/components/dashboard/avg-ticket-card").then((m) => ({
-    default: m.AvgTicketCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const QuietStreakCard = lazy(() =>
-  import("@/components/dashboard/quiet-streak-card").then((m) => ({
-    default: m.QuietStreakCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const CategoryParetoCard = lazy(() =>
-  import("@/components/dashboard/category-pareto-card").then((m) => ({
-    default: m.CategoryParetoCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const BillingCalendarCard = lazy(() =>
-  import("@/components/dashboard/billing-calendar-card").then((m) => ({
-    default: m.BillingCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const StaleAnchorsBanner = lazy(() =>
-  import("@/components/dashboard/stale-anchors-banner").then((m) => ({
-    default: m.StaleAnchorsBanner as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const FixedCostRatioCard = lazy(() =>
-  import("@/components/dashboard/fixed-cost-ratio-card").then((m) => ({
-    default: m.FixedCostRatioCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const FxSummaryCard = lazy(() =>
-  import("@/components/dashboard/fx-summary-card").then((m) => ({
-    default: m.FxSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const RefundSummaryCard = lazy(() =>
-  import("@/components/dashboard/refund-summary-card").then((m) => ({
-    default: m.RefundSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const TrackingStreakCard = lazy(() =>
-  import("@/components/dashboard/tracking-streak-card").then((m) => ({
-    default: m.TrackingStreakCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const LargestChargeCard = lazy(() =>
-  import("@/components/dashboard/largest-charge-card").then((m) => ({
-    default: m.LargestChargeCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-const TrackingSinceCard = lazy(() =>
-  import("@/components/dashboard/tracking-since-card").then((m) => ({
-    default: m.TrackingSinceCard as unknown as React.ComponentType<Record<string, unknown>>,
+const WhatIfSimulatorCard = lazy(() =>
+  import("@/components/dashboard/what-if-simulator-card").then((m) => ({
+    default:
+      m.WhatIfSimulatorCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 
@@ -476,28 +363,40 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const entries = useFinanceStore((s) => s.entries);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const budgetMode = useFinanceStore((s) => s.budgetMode);
+  const pulseBudget = usePulseBudget({ monthlyBudget, budgetMode });
   const cloudSync = useCloudSyncState();
 
-  // Phase 211 — PulseBar marker now follows the user's budget mode.
-  // Manual users keep the typed monthlyBudget; auto users let the
-  // liquidity engine drive the cap so the marker matches "כמה נשאר
-  // לי לבזבז".
-  const pulseBudget = usePulseBudget({
+  const summaries = useMemo(() => {
+    if (!hydrated) return null;
+    return computeSummaries({
+      accounts,
+      loans,
+      incomes,
+      rules,
+      statuses,
+      entries,
+      monthlyBudget,
+    });
+  }, [
+    hydrated,
+    accounts,
+    loans,
+    incomes,
+    rules,
+    statuses,
+    entries,
     monthlyBudget,
-    budgetMode,
-  });
+  ]);
 
-  // Loading curtain. Covers three windows where rendering the local
-  // cache would be wrong:
-  //   1. Pre-verify: useCloudSync hasn't determined who's signed in
-  //      yet. Could be USER_A's cache on USER_B's session — wait.
-  //   2. Authenticated + hydrating: waiting on the cloud pull.
-  //   3. Ownership mismatch detected: foreign cache, wiping in
-  //      progress. Show curtain until hydration completes so we
-  //      never render the previous user's data even for one frame.
   const showCurtain = Boolean(
     cloudSync?.configured &&
       (!cloudSync.verified ||
@@ -509,351 +408,349 @@ export function DashboardTab() {
   }
 
   return (
-   <SnapshotProvider>
-    <div className="grid grid-cols-1 gap-2.5 pb-28 sm:grid-cols-6 sm:gap-3 sm:pb-32">
-      {/* ── HERO — always-visible top stack ─────────────────────────
-         Onboarding banner + identity narrative → high-signal alert
-         banners → primary Pulse visualization → primary actions row
-         (pending + activity) → split daily-glance row. No section
-         wrapper because the user must see these every time. */}
-      <div className="sm:col-span-6">
-        <Safe name="WelcomeSetupCard"><WelcomeSetupCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="SmartSummaryCard"><SmartSummaryCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="StaleAnchorsBanner"><StaleAnchorsBanner /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="UpcomingDebitsBanner"><UpcomingDebitsBanner /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="PulseBar"><PulseBar budget={pulseBudget} /></Safe>
-      </div>
-      {/* Phase 200 — financial trio: how much I spent, bridge to the
-         bank balance, and the expected EOM position. Placed directly
-         under the Pulse so a user opening the app sees the three
-         numbers that answer "where do I stand?". */}
-      <div className="sm:col-span-6">
-        <Safe name="SpentThisMonthCard"><SpentThisMonthCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="AccountBridgeCard"><AccountBridgeCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="ExpectedBalanceCard"><ExpectedBalanceCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="ForecastTimelineCard"><ForecastTimelineCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="CashflowSummaryCard"><CashflowSummaryCard /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="DailyAllowance"><DailyAllowance /></Safe>
-      </div>
-      <div className="sm:col-span-3">
-        <Safe name="CfoSummary"><CfoSummary /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="SpendableTodayCard"><SpendableTodayCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="SafeToSpendCard"><SafeToSpendCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="CashflowBucketsCard"><CashflowBucketsCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="LiquidityCurveCard"><LiquidityCurveCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="AnchorTrajectoryCard"><AnchorTrajectoryCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="LiquidityTimelineCard"><LiquidityTimelineCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="TodayPulseCard"><TodayPulseCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="PendingTray"><PendingTray /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="DailyInsightsCard"><DailyInsightsCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="DailyFlowCard"><DailyFlowCard /></Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="RecentActivity"><RecentActivity /></Safe>
-      </div>
-
-      {/* ── "החודש שלך" — month-status cluster ──────────────────────
-         Snapshot of where the user stands this month. Open by
-         default because every card here is high-signal. */}
-      <DashboardSection
-        storageKey="this-month"
-        title="החודש שלך"
-        subtitle="עומס חודשי, נכסים והתחייבויות"
-      >
+    <SnapshotProvider>
+      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+        {/* ── Critical banners — render only when relevant ───────── */}
         <div className="sm:col-span-6">
-          <Safe name="CardsPressureCard"><CardsPressureCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="NetWorthCard"><NetWorthCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="EmergencyFundCard"><EmergencyFundCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="NetWorthTrendCard"><NetWorthTrendCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="IncomeBreakdownCard"><IncomeBreakdownCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="IncomeForecastCard"><IncomeForecastCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="RunwayCard"><RunwayCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="BankVelocityCard"><BankVelocityCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SpendSplitCard"><SpendSplitCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="WeekendSpendCard"><WeekendSpendCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SpendConsistencyCard">
-            <SpendConsistencyCard />
+          <Safe name="WelcomeSetupCard">
+            <WelcomeSetupCard />
           </Safe>
         </div>
         <div className="sm:col-span-6">
-          <Safe name="AvgTicketCard"><AvgTicketCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="QuietStreakCard"><QuietStreakCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CategoryParetoCard">
-            <CategoryParetoCard />
+          <Safe name="StaleAnchorsBanner">
+            <StaleAnchorsBanner />
           </Safe>
         </div>
         <div className="sm:col-span-6">
-          <Safe name="FixedCostRatioCard"><FixedCostRatioCard /></Safe>
+          <Safe name="PendingTray">
+            <PendingTray />
+          </Safe>
         </div>
-        <div className="sm:col-span-6">
-          <Safe name="LoanSummaryCard"><LoanSummaryCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="HousingCard"><HousingCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="BillingCalendarCard"><BillingCalendarCard /></Safe>
-        </div>
-      </DashboardSection>
 
-      {/* ── "תזרים עתידי" — forward-looking cluster ─────────────────
-         Pulls obligations, future pressure, active installments,
-         and upcoming expenses up from the advanced drawer so the
-         multi-month picture is one tap below the hero. */}
-      <DashboardSection
-        storageKey="future"
-        title="תזרים עתידי"
-        subtitle="חיובים, תשלומים והוצאות שמגיעות"
-      >
+        {/* ── HERO — the only 3 cards visible on first paint ─────── */}
         <div className="sm:col-span-6">
-          <Safe name="UpcomingOutflowsCard"><UpcomingOutflowsCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CashflowTimeline"><CashflowTimeline /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="ObligationsTimelineCard">
-            <ObligationsTimelineCard />
+          <Safe name="HeroSpendableCard">
+            <HeroSpendableCard />
           </Safe>
         </div>
         <div className="sm:col-span-6">
-          <Safe name="CommitmentBurdenCard">
-            <CommitmentBurdenCard />
+          <Safe name="HeroEomCard">
+            <HeroEomCard />
           </Safe>
         </div>
         <div className="sm:col-span-6">
-          <Safe name="WhatIfSimulatorCard">
-            <WhatIfSimulatorCard />
+          <Safe name="HeroInsightCard">
+            <HeroInsightCard />
           </Safe>
         </div>
-        <div className="sm:col-span-6">
-          <Safe name="RecurringCalendarCard">
-            <RecurringCalendarCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-3">
-          <Safe name="ActiveInstallmentsCard"><ActiveInstallmentsCard /></Safe>
-        </div>
-        <div className="sm:col-span-3">
-          <Safe name="FuturePressureCard"><FuturePressureCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="UpcomingExpenses"><UpcomingExpenses /></Safe>
-        </div>
-      </DashboardSection>
 
-      {/* ── "תובנות חכמות" — analysis cluster ──────────────────────
-         AI / trend / anomaly surfaces. MonthlyDigest moved in. */}
-      <DashboardSection
-        storageKey="insights"
-        title="תובנות חכמות"
-        subtitle="חריגות, מגמות ועזרת ה-CFO"
-      >
-        <div className="sm:col-span-6">
-          <Safe name="SmartRecommendationsCard"><SmartRecommendationsCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SubscriptionReviewCard"><SubscriptionReviewCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SpendingDietCard"><SpendingDietCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SpendingHoursCard"><SpendingHoursCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="RiskWarningsCard"><RiskWarningsCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="WeeklyReviewCard"><WeeklyReviewCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SavingsRateCard"><SavingsRateCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CategoryPaceCard"><CategoryPaceCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="AnomalyBanner"><AnomalyBanner /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="MonthDeltaCard"><MonthDeltaCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CashflowTrendCard"><CashflowTrendCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="SmartInsightsCard"><SmartInsightsCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="CopilotCard"><CopilotCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="MonthlyDigestCard"><MonthlyDigestCard /></Safe>
-        </div>
-      </DashboardSection>
-
-      {/* ── "מבט מהיר" — small recap stats, collapsed by default ─── */}
-      <DashboardSection
-        storageKey="recap"
-        title="מבט מהיר"
-        subtitle="סטטיסטיקות חודש קצרות"
-        defaultCollapsed
-      >
-        <div className="sm:col-span-6">
-          <Safe name="FxSummaryCard"><FxSummaryCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="RefundSummaryCard"><RefundSummaryCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="TrackingStreakCard"><TrackingStreakCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="LargestChargeCard"><LargestChargeCard /></Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="TrackingSinceCard"><TrackingSinceCard /></Safe>
-        </div>
-      </DashboardSection>
-
-      {/* Floating CTA — fixed dock, auto-hides on scroll-down. */}
-      <FloatingCTA onClick={() => setOpen(true)} />
-
-      {/* ADVANCED — collapsed by default so the hero breathes. */}
-      <div className="sm:col-span-6">
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-2xl border border-white/8 bg-surface/40 px-4 py-3 text-[12px] text-muted-foreground transition-colors hover:border-white/16 hover:text-foreground"
-          aria-expanded={advancedOpen}
+        {/* ── Sections — collapsed by default with a summary chip ── */}
+        <DashboardSection
+          storageKey="simple.future"
+          title="תזרים עתידי"
+          subtitle="חיובים, יציאות וזרימה ל-35 ימים"
+          defaultCollapsed
+          summary={summaries?.future ?? undefined}
         >
-          <span className="flex items-center gap-2">
-            <span className="text-[11px] uppercase tracking-[0.22em]">
-              נתונים מתקדמים
-            </span>
-            <span className="text-[10px] text-muted-foreground/70">
-              {advancedOpen ? "סגור" : "פתח"}
-            </span>
-          </span>
-          <motion.span
-            animate={{ rotate: advancedOpen ? 180 : 0 }}
-            transition={{ duration: 0.22 }}
-            className="text-muted-foreground"
-          >
-            ▾
-          </motion.span>
-        </button>
+          <div className="sm:col-span-6">
+            <Safe name="LiquidityCurveCard">
+              <LiquidityCurveCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CashflowBucketsCard">
+              <CashflowBucketsCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="UpcomingOutflowsCard">
+              <UpcomingOutflowsCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="ForecastTimelineCard">
+              <ForecastTimelineCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.cards"
+          title="כרטיסי אשראי"
+          subtitle="לחץ לפי כרטיס, פריסות פעילות"
+          defaultCollapsed
+          summary={summaries?.cards ?? undefined}
+        >
+          <div className="sm:col-span-6">
+            <Safe name="CardsPressureCard">
+              <CardsPressureCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="ActiveInstallmentsCard">
+              <ActiveInstallmentsCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.obligations"
+          title="התחייבויות"
+          subtitle="הלוואות, דיור והוצאות קבועות"
+          defaultCollapsed
+          summary={summaries?.obligations ?? undefined}
+        >
+          <div className="sm:col-span-6">
+            <Safe name="LoanSummaryCard">
+              <LoanSummaryCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="HousingCard">
+              <HousingCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="RecurringCalendarCard">
+              <RecurringCalendarCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="ObligationsTimelineCard">
+              <ObligationsTimelineCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.income"
+          title="הכנסות"
+          subtitle="משכורות, פריסה והכנסה צפויה"
+          defaultCollapsed
+          summary={summaries?.income ?? undefined}
+        >
+          <div className="sm:col-span-6">
+            <Safe name="IncomeBreakdownCard">
+              <IncomeBreakdownCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="IncomeForecastCard">
+              <IncomeForecastCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.analytics"
+          title="ניתוחים וסטטיסטיקות"
+          subtitle="פירוט הוצאות, שווי נטו וקצב"
+          defaultCollapsed
+          summary={summaries?.analytics ?? undefined}
+        >
+          <div className="sm:col-span-3">
+            <Safe name="CategoryDonut">
+              <CategoryDonut />
+            </Safe>
+          </div>
+          <div className="sm:col-span-3">
+            <Safe name="HeatmapMini">
+              <HeatmapMini />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CategoryParetoCard">
+              <CategoryParetoCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CategoryPaceCard">
+              <CategoryPaceCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-3">
+            <Safe name="SpendSplitCard">
+              <SpendSplitCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-3">
+            <Safe name="AvgTicketCard">
+              <AvgTicketCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-3">
+            <Safe name="WeekendSpendCard">
+              <WeekendSpendCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-3">
+            <Safe name="FixedCostRatioCard">
+              <FixedCostRatioCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="NetWorthCard">
+              <NetWorthCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="NetWorthTrendCard">
+              <NetWorthTrendCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="RunwayCard">
+              <RunwayCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.watch"
+          title="בדיקות, מנויים וחריגות"
+          subtitle="התראות, מנויים וחריגות"
+          defaultCollapsed
+          summary={summaries?.watch ?? undefined}
+        >
+          <div className="sm:col-span-6">
+            <Safe name="RiskWarningsCard">
+              <RiskWarningsCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="AnomalyBanner">
+              <AnomalyBanner />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="AnomaliesCard">
+              <AnomaliesCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SubscriptionReviewCard">
+              <SubscriptionReviewCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SubscriptionRadarCard">
+              <SubscriptionRadarCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SmartInsightsCard">
+              <SmartInsightsCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SmartRecommendationsCard">
+              <SmartRecommendationsCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.advanced"
+          title="פירוט מתקדם"
+          subtitle="Pulse, CFO ונתונים נוספים"
+          defaultCollapsed
+        >
+          <div className="sm:col-span-6">
+            <Safe name="PulseBar">
+              <PulseBar budget={pulseBudget} />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SmartSummaryCard">
+              <SmartSummaryCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SpentThisMonthCard">
+              <SpentThisMonthCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="AccountBridgeCard">
+              <AccountBridgeCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="ExpectedBalanceCard">
+              <ExpectedBalanceCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CfoSummary">
+              <CfoSummary />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CashflowSummaryCard">
+              <CashflowSummaryCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="StatsCards">
+              <StatsCards />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="HealthScoreCard">
+              <HealthScoreCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="EmergencyFundCard">
+              <EmergencyFundCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="AnchorTrajectoryCard">
+              <AnchorTrajectoryCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="LiquidityTimelineCard">
+              <LiquidityTimelineCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="TodayPulseCard">
+              <TodayPulseCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="DailyInsightsCard">
+              <DailyInsightsCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="RecentActivity">
+              <RecentActivity />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CopilotCard">
+              <CopilotCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="MonthlyDigestCard">
+              <MonthlyDigestCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="WhatIfSimulatorCard">
+              <WhatIfSimulatorCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        <FloatingCTA onClick={() => setOpen(true)} />
+
+        <ExpenseDialog open={open} onOpenChange={setOpen} />
       </div>
-
-      <AnimatePresence initial={false}>
-        {advancedOpen ? (
-          <motion.div
-            key="advanced"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="sm:col-span-6 grid grid-cols-1 gap-2.5 overflow-hidden sm:grid-cols-6 sm:gap-3"
-          >
-            <div className="sm:col-span-6">
-              <Safe name="HealthScoreCard"><HealthScoreCard /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="BalanceForecastCard"><BalanceForecastCard /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="BalanceHorizonCard"><BalanceHorizonCard /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="AccountForecastCard"><AccountForecastCard /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="StatsCards"><StatsCards /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="AnomaliesCard"><AnomaliesCard /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="SubscriptionRadarCard"><SubscriptionRadarCard /></Safe>
-            </div>
-            <div className="sm:col-span-3">
-              <Safe name="CategoryDonut"><CategoryDonut /></Safe>
-            </div>
-            <div className="sm:col-span-3">
-              <Safe name="HeatmapMini"><HeatmapMini /></Safe>
-            </div>
-            <div className="sm:col-span-6">
-              <Safe name="TimelineSync"><TimelineSync budget={pulseBudget} /></Safe>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <ExpenseDialog open={open} onOpenChange={setOpen} />
-    </div>
-   </SnapshotProvider>
+    </SnapshotProvider>
   );
 }
