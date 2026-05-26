@@ -469,7 +469,7 @@ export function LoansPanel() {
                           <button
                             type="button"
                             onClick={() => startEdit(loan)}
-                            className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                            className="flex h-8 items-center gap-1 rounded-md px-2.5 text-[12px] text-muted-foreground hover:bg-surface hover:text-foreground"
                           >
                             <Pencil className="size-3" />
                             ערוך
@@ -477,7 +477,7 @@ export function LoansPanel() {
                           <button
                             type="button"
                             onClick={() => toggleLoan(loan.id)}
-                            className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                            className="flex h-8 items-center gap-1 rounded-md px-2.5 text-[12px] text-muted-foreground hover:bg-surface hover:text-foreground"
                           >
                             <Power className="size-3" />
                             {loan.active ? "כבה" : "הפעל"}
@@ -489,7 +489,7 @@ export function LoansPanel() {
                                 deleteLoan(loan.id);
                               }
                             }}
-                            className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-destructive/80 hover:bg-destructive/10"
+                            className="flex h-8 items-center gap-1 rounded-md px-2.5 text-[12px] text-destructive/80 hover:bg-destructive/10"
                           >
                             <Trash2 className="size-3" />
                             מחק
