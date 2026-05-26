@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { tap } from "@/lib/haptics";
 import { BudgetModeToggle } from "@/components/settings/budget-mode-toggle";
+import { BudgetPreview } from "@/components/settings/budget-preview";
 
 const formatILS = (value: number) =>
   new Intl.NumberFormat("he-IL", {
@@ -127,11 +128,14 @@ function BudgetEditor({
           type="button"
           disabled={!dirty || value < 0}
           onClick={() => onSave(value)}
-          className="h-9 bg-neon text-[#050505] hover:bg-neon/90 disabled:opacity-40"
+          className="tap-44 h-11 bg-neon text-[#050505] hover:bg-neon/90 disabled:opacity-40"
         >
           שמור
         </Button>
       </motion.div>
+
+      {/* Phase 229 — live preview of what the draft target implies. */}
+      <BudgetPreview draftBudget={value} />
     </div>
   );
 }
