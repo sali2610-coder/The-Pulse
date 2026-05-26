@@ -6,6 +6,7 @@ import {
   Banknote,
   CreditCard,
   Minus,
+  Pencil,
   Plus,
   Power,
   Trash2,
@@ -20,6 +21,7 @@ import type { AccountKind, Issuer } from "@/types/finance";
 import { ISSUERS, getIssuerMeta } from "@/lib/card-issuers";
 
 import { AnchorInput } from "./anchor-input";
+import { AccountEditSheet } from "./account-edit-sheet";
 
 type FormState = {
   kind: AccountKind;
@@ -395,6 +397,8 @@ function AccountList({
   ) => React.ReactNode;
   emptyText: string;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = accounts.find((a) => a.id === editingId) ?? null;
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -428,10 +432,19 @@ function AccountList({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => onToggle(acc.id)}
-                      className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                      onClick={() => setEditingId(acc.id)}
+                      className="flex h-8 items-center gap-1 rounded-md px-2.5 text-[12px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                      aria-label={`ערוך ${acc.label}`}
                     >
-                      <Power className="size-3" />
+                      <Pencil className="size-3.5" />
+                      ערוך
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggle(acc.id)}
+                      className="flex h-8 items-center gap-1 rounded-md px-2 text-[12px] text-muted-foreground hover:bg-surface hover:text-foreground"
+                    >
+                      <Power className="size-3.5" />
                       {acc.active ? "כבה" : "הפעל"}
                     </button>
                     <button
@@ -441,9 +454,10 @@ function AccountList({
                           onDelete(acc.id);
                         }
                       }}
-                      className="flex h-7 items-center gap-1 rounded-md px-2 text-[11px] text-destructive/80 hover:bg-destructive/10"
+                      className="flex h-8 items-center gap-1 rounded-md px-2 text-[12px] text-destructive/80 hover:bg-destructive/10"
+                      aria-label={`מחק ${acc.label}`}
                     >
-                      <Trash2 className="size-3" />
+                      <Trash2 className="size-3.5" />
                     </button>
                   </div>
                 </div>
@@ -453,6 +467,13 @@ function AccountList({
           </AnimatePresence>
         </ul>
       )}
+      <AccountEditSheet
+        account={editing}
+        open={editingId !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingId(null);
+        }}
+      />
     </div>
   );
 }
