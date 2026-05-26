@@ -25,10 +25,12 @@ import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
 import { ReceiptScanCard } from "./receipt-scan-card";
 import { PushDiagnosticsCard } from "./push-diagnostics-card";
 import { SallyCsvImportCard } from "./sally-csv-import-card";
+import { TextSizeCard } from "./text-size-card";
 
 export function SettingsTab() {
   return (
     <div className="flex flex-col gap-4">
+      <TextSizeCard />
       <AuthCard />
       <CloudSyncCard />
       <BackupsCard />

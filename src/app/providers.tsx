@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { NativeShellProvider } from "@/components/app/native-shell-provider";
+import { TextScaleBootstrap } from "@/components/system/text-scale-bootstrap";
 
 // Clerk is intentionally NOT imported here. Auth is disabled at the app
 // level — the dashboard is a single-user public app served straight from
@@ -32,6 +33,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       >
         {/* Phase 202 — native bridge boot. No-op on web. */}
         <NativeShellProvider />
+        {/* Phase 226 — apply persisted text-scale preference at mount. */}
+        <TextScaleBootstrap />
         {children}
         <Toaster richColors position="top-center" dir="rtl" />
       </MotionConfig>

@@ -138,6 +138,39 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
+  /* Phase 226 — global text-scale modes.
+     Switching the root font-size cascades through every rem-based
+     Tailwind class (text-sm/text-base/text-lg/…). Selective rules
+     below lift the smallest fixed-pixel classes we ship in dense
+     UI so the typography stays readable even when an absolute size
+     was set in component code. */
+  html[data-text-scale="compact"] {
+    font-size: 15px;
+  }
+  html[data-text-scale="large"] {
+    font-size: 18px;
+  }
+  html[data-text-scale="large"] .text-\[9px\],
+  html[data-text-scale="large"] .text-\[10px\] {
+    font-size: 12px !important;
+  }
+  html[data-text-scale="large"] .text-\[10\.5px\] {
+    font-size: 12.5px !important;
+  }
+  html[data-text-scale="large"] .text-\[11px\] {
+    font-size: 13px !important;
+  }
+  html[data-text-scale="large"] .text-\[12px\] {
+    font-size: 14px !important;
+  }
+  html[data-text-scale="large"] .text-\[13px\] {
+    font-size: 15px !important;
+  }
+  /* Tab triggers get a 44px floor unconditionally — primary nav. */
+  [data-slot="tabs-trigger"],
+  [role="tab"] {
+    min-height: 44px;
+  }
   body {
     @apply bg-background text-foreground;
     min-height: 100dvh;
@@ -175,6 +208,13 @@
 }
 
 @layer utilities {
+  /* Phase 226 — explicit 44×44 floor for any element that opts in.
+     Use on primary CTAs, list-row tap targets, and consumer-facing
+     pickers. Keeps dense settings rows lean by being opt-in. */
+  .tap-44 {
+    min-height: 44px;
+    min-width: 44px;
+  }
   .text-gold {
     color: var(--gold);
   }
