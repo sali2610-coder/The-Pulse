@@ -89,11 +89,11 @@ export function HeroFutureBalanceCard() {
   );
   if (!hasAnchors) {
     return (
-      <section className="glass-card flex flex-col gap-2 rounded-3xl p-5">
-        <span className="text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+      <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
+        <span className="text-micro text-muted-foreground">
           מצב חשבון בנק עתידי
         </span>
-        <span className="text-[14px] text-muted-foreground/85">
+        <span className="text-body text-muted-foreground/85">
           חסרה יתרה נוכחית. הגדרות → חשבונות → הוסף יתרת בנק.
         </span>
       </section>
@@ -128,32 +128,25 @@ export function HeroFutureBalanceCard() {
 
   return (
     <section
-      className="glass-card relative flex flex-col gap-3 overflow-hidden rounded-3xl p-5"
+      className="glass-card relative flex flex-col gap-3 overflow-hidden rounded-3xl p-6"
       style={{
         background: `linear-gradient(135deg, ${color}14 0%, transparent 60%)`,
       }}
       aria-label="מצב חשבון בנק עתידי"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          מצב בנק בתאריך
-        </span>
-        <span className="text-[12px] text-muted-foreground" dir="rtl">
+        <span className="text-micro text-muted-foreground">מצב בנק בתאריך</span>
+        <span className="text-caption text-muted-foreground" dir="rtl">
           {DAY_FMT.format(new Date(point.whenISO))}
         </span>
       </div>
 
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-[52px] font-extralight leading-none tracking-tight sm:text-[60px]"
-        style={{ color }}
-      >
+      <span data-mono="true" dir="ltr" className="text-hero" style={{ color }}>
         {negative ? "−" : ""}
         {ILS.format(Math.abs(balance))}
       </span>
 
-      <div className="flex items-center justify-between gap-3 text-[13px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
         <span>
           הכנסות{" "}
           <span data-mono="true" dir="ltr" className="text-[#34D399]">
@@ -173,7 +166,7 @@ export function HeroFutureBalanceCard() {
           type="button"
           onClick={() => setOffset(Math.max(minOffset, clamped - 7))}
           disabled={clamped <= minOffset}
-          className="tap-44 flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-[14px] text-foreground hover:bg-white/10 disabled:opacity-40"
+          className="tap-44 text-body flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-foreground hover:bg-white/10 disabled:opacity-40"
           aria-label="הקדם בשבוע"
         >
           −7 ימים
@@ -181,7 +174,7 @@ export function HeroFutureBalanceCard() {
         <button
           type="button"
           onClick={() => setOffset(defaultOffset)}
-          className="tap-44 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-[13px] text-muted-foreground hover:bg-white/10"
+          className="tap-44 text-caption rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-muted-foreground hover:bg-white/10"
         >
           ברירת מחדל
         </button>
@@ -189,7 +182,7 @@ export function HeroFutureBalanceCard() {
           type="button"
           onClick={() => setOffset(Math.min(maxOffset, clamped + 7))}
           disabled={clamped >= maxOffset}
-          className="tap-44 flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-[14px] text-foreground hover:bg-white/10 disabled:opacity-40"
+          className="tap-44 text-body flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-foreground hover:bg-white/10 disabled:opacity-40"
           aria-label="הוסף שבוע"
         >
           +7 ימים
@@ -201,11 +194,11 @@ export function HeroFutureBalanceCard() {
 
 function Skeleton() {
   return (
-    <section className="glass-card flex flex-col gap-2 rounded-3xl p-5">
-      <span className="text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+    <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
+      <span className="text-micro text-muted-foreground">
         מצב חשבון בנק עתידי
       </span>
-      <span className="h-12 w-44 animate-pulse rounded bg-white/5" />
+      <span className="h-14 w-44 animate-pulse rounded bg-white/5" />
     </section>
   );
 }

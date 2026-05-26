@@ -49,11 +49,11 @@ export function HeroEomCard() {
 
   if (!hasAnchors) {
     return (
-      <section className="glass-card flex flex-col gap-2 rounded-3xl p-5">
-        <span className="text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+      <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
+        <span className="text-micro text-muted-foreground">
           מצב סוף חודש צפוי
         </span>
-        <span className="text-[14px] text-muted-foreground/85">
+        <span className="text-body text-muted-foreground/85">
           חסרה יתרת בנק נוכחית. עבור להגדרות → חשבונות → הוסף יתרה.
         </span>
       </section>
@@ -78,36 +78,31 @@ export function HeroEomCard() {
 
   return (
     <section
-      className="glass-card relative flex flex-col gap-2 overflow-hidden rounded-3xl p-5"
+      className="glass-card relative flex flex-col gap-3 overflow-hidden rounded-3xl p-6"
       style={{
         background: `linear-gradient(135deg, ${color}14 0%, transparent 60%)`,
       }}
       aria-label="מצב סוף חודש צפוי"
     >
-      <span className="text-[12px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+      <span className="text-micro text-muted-foreground">
         מצב סוף חודש צפוי
       </span>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-[44px] font-extralight leading-none tracking-tight sm:text-[52px]"
-        style={{ color }}
-      >
+      <span data-mono="true" dir="ltr" className="text-stat" style={{ color }}>
         {value < 0 ? "−" : ""}
         {ILS.format(Math.abs(value))}
       </span>
-      <span className="text-[14px] text-muted-foreground">{subtitle}</span>
+      <span className="text-body text-muted-foreground">{subtitle}</span>
     </section>
   );
 }
 
 function Skeleton() {
   return (
-    <section className="glass-card flex flex-col gap-2 rounded-3xl p-5">
-      <span className="text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+    <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
+      <span className="text-micro text-muted-foreground">
         מצב סוף חודש צפוי
       </span>
-      <span className="h-11 w-44 animate-pulse rounded bg-white/5" />
+      <span className="h-12 w-44 animate-pulse rounded bg-white/5" />
     </section>
   );
 }

@@ -67,11 +67,9 @@ export function SettingsAccordion({
             </span>
           ) : null}
           <div className="flex flex-col leading-tight">
-            <span className="text-[14px] font-medium text-foreground">
-              {title}
-            </span>
+            <span className="text-section text-foreground">{title}</span>
             {subtitle ? (
-              <span className="text-[12px] text-muted-foreground/85">
+              <span className="text-caption text-muted-foreground/85">
                 {subtitle}
               </span>
             ) : null}

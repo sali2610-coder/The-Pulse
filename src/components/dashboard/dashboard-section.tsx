@@ -100,11 +100,9 @@ export function DashboardSection({
             </span>
           ) : null}
           <div className="flex flex-col leading-tight">
-            <span className="text-[13px] font-medium text-foreground">
-              {title}
-            </span>
+            <span className="text-section text-foreground">{title}</span>
             {subtitle ? (
-              <span className="text-[11px] text-muted-foreground/80">
+              <span className="text-caption text-muted-foreground/85">
                 {subtitle}
               </span>
             ) : null}
@@ -115,7 +113,7 @@ export function DashboardSection({
             <span
               data-mono="true"
               dir="ltr"
-              className="rounded-full border px-2.5 py-1 text-[12px] font-medium"
+              className="text-caption rounded-full border px-3 py-1 font-medium"
               style={{
                 color: TONE_COLORS[summary.tone ?? "info"],
                 borderColor: `${TONE_COLORS[summary.tone ?? "info"]}44`,

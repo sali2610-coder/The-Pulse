@@ -106,29 +106,26 @@ export function HeroInsightCard() {
 
   return (
     <section
-      className="glass-card flex items-start gap-3 rounded-3xl p-5"
+      className="glass-card flex items-start gap-4 rounded-3xl p-6"
       style={{
         background: `linear-gradient(135deg, ${color}14 0%, transparent 60%)`,
       }}
       aria-label="התובנה הכי חשובה"
     >
       <span
-        className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
+        className="flex size-12 shrink-0 items-center justify-center rounded-2xl"
         style={{ background: `${color}22`, color }}
       >
         <Icon className="size-5" />
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="text-micro text-muted-foreground">
           התובנה הכי חשובה
         </span>
-        <span
-          className="text-[18px] font-medium leading-tight"
-          style={{ color }}
-        >
+        <span className="text-section" style={{ color }}>
           {insight.title}
         </span>
-        <span className="text-[14px] leading-snug text-muted-foreground/90">
+        <span className="text-body text-muted-foreground/90">
           {insight.detail}
         </span>
       </div>
@@ -138,8 +135,8 @@ export function HeroInsightCard() {
 
 function Skeleton() {
   return (
-    <section className="glass-card flex flex-col gap-2 rounded-3xl p-5">
-      <span className="text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+    <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
+      <span className="text-micro text-muted-foreground">
         התובנה הכי חשובה
       </span>
       <span className="h-6 w-3/4 animate-pulse rounded bg-white/5" />
