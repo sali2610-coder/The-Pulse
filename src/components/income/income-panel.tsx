@@ -78,7 +78,7 @@ export function IncomePanel() {
     <section className="space-y-3">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-foreground">הכנסות צפויות</div>
+          <div className="text-section text-foreground">הכנסות צפויות</div>
           <div className="text-[11px] text-muted-foreground">
             {incomes.length === 0
               ? "ללא הכנסות מוגדרות"
@@ -211,7 +211,7 @@ export function IncomePanel() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
+                      <span className="truncate text-section text-foreground">
                         {inc.label}
                       </span>
                       <span

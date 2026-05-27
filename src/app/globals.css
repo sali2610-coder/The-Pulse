@@ -52,6 +52,16 @@
 }
 
 :root {
+  /* Phase 236 — type scale tokens driven by data-text-scale.
+     Numbers/titles scale aggressively in Large mode; helper text
+     scales gently so the visual hierarchy stays correct. */
+  --t-hero: 3.25rem;     /* 52px */
+  --t-hero-sm: 3.75rem;  /* 60px */
+  --t-stat: 2rem;        /* 32px */
+  --t-section: 0.9375rem;/* 15px */
+  --t-body: 0.875rem;    /* 14px */
+  --t-caption: 0.8125rem;/* 13px */
+  --t-micro: 0.6875rem;  /* 11px */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -138,17 +148,30 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
-  /* Phase 226 — global text-scale modes.
+  /* Phase 226 + 236 — global text-scale modes.
      Switching the root font-size cascades through every rem-based
-     Tailwind class (text-sm/text-base/text-lg/…). Selective rules
-     below lift the smallest fixed-pixel classes we ship in dense
-     UI so the typography stays readable even when an absolute size
-     was set in component code. */
+     Tailwind class. The type-scale CSS vars defined in :root get
+     overridden per scale so titles/numbers scale aggressively while
+     helper text scales gently — preserves the visual hierarchy. */
   html[data-text-scale="compact"] {
     font-size: 15px;
+    --t-hero: 2.75rem;
+    --t-hero-sm: 3.25rem;
+    --t-stat: 1.75rem;
+    --t-section: 0.875rem;
+    --t-body: 0.8125rem;
+    --t-caption: 0.75rem;
+    --t-micro: 0.6875rem;
   }
   html[data-text-scale="large"] {
     font-size: 18px;
+    --t-hero: 4rem;       /* 64px @ root 16 reference */
+    --t-hero-sm: 4.75rem; /* 76px */
+    --t-stat: 2.625rem;   /* 42px */
+    --t-section: 1.125rem;/* 18px */
+    --t-body: 1rem;       /* 16px */
+    --t-caption: 0.9375rem;/* 15px */
+    --t-micro: 0.8125rem; /* 13px */
   }
   html[data-text-scale="large"] .text-\[9px\],
   html[data-text-scale="large"] .text-\[10px\] {
@@ -228,7 +251,7 @@
        text-caption   → muted subtitle / row metadata
        text-micro     → chip text / column header */
   .text-hero {
-    font-size: 3.25rem; /* 52px @ root 16 */
+    font-size: var(--t-hero);
     line-height: 1;
     letter-spacing: -0.02em;
     font-weight: 200;
@@ -237,11 +260,11 @@
   }
   @media (min-width: 640px) {
     .text-hero {
-      font-size: 3.75rem; /* 60px */
+      font-size: var(--t-hero-sm);
     }
   }
   .text-stat {
-    font-size: 2rem; /* 32px */
+    font-size: var(--t-stat);
     line-height: 1.05;
     letter-spacing: -0.015em;
     font-weight: 300;
@@ -249,23 +272,23 @@
     font-feature-settings: "tnum", "lnum";
   }
   .text-section {
-    font-size: 0.9375rem; /* 15px */
+    font-size: var(--t-section);
     line-height: 1.25;
     font-weight: 600;
     letter-spacing: 0;
   }
   .text-body {
-    font-size: 0.875rem; /* 14px */
+    font-size: var(--t-body);
     line-height: 1.45;
     font-weight: 400;
   }
   .text-caption {
-    font-size: 0.8125rem; /* 13px */
+    font-size: var(--t-caption);
     line-height: 1.4;
     font-weight: 400;
   }
   .text-micro {
-    font-size: 0.6875rem; /* 11px */
+    font-size: var(--t-micro);
     line-height: 1.2;
     font-weight: 500;
     letter-spacing: 0.04em;

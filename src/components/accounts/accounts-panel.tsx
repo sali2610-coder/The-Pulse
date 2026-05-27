@@ -92,7 +92,7 @@ export function AccountsPanel() {
     <section className="space-y-4">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-foreground">חשבונות</div>
+          <div className="text-section text-foreground">חשבונות</div>
           <div className="text-[11px] text-muted-foreground">
             בנקים עם anchor חי + כרטיסים שמשייכים אליהם חיובים אוטומטית
           </div>
@@ -426,7 +426,7 @@ function AccountList({
                 }`}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-section text-foreground">
                     {acc.label}
                   </span>
                   <div className="flex items-center gap-1">

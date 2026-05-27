@@ -129,7 +129,7 @@ export function LoansPanel() {
     <section className="space-y-3">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-foreground">הלוואות</div>
+          <div className="text-section text-foreground">הלוואות</div>
           <div className="text-[11px] text-muted-foreground">
             {loans.length === 0
               ? "ללא הלוואות פעילות"
@@ -336,7 +336,7 @@ export function LoansPanel() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">
+                        <span className="truncate text-section text-foreground">
                           {loan.label}
                         </span>
                         <span
