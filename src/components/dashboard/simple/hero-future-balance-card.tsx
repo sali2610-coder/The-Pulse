@@ -21,6 +21,7 @@ import { useMemo, useState } from "react";
 
 import { useFinanceStore } from "@/lib/store";
 import { liquidityCurve } from "@/lib/liquidity-curve";
+import { FutureBalanceExplain } from "@/components/dashboard/simple/future-balance-explain";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -188,6 +189,9 @@ export function HeroFutureBalanceCard() {
           +7 ימים
         </button>
       </div>
+
+      {/* Phase 240 — transparent math breakdown. Collapsed by default. */}
+      <FutureBalanceExplain offset={clamped} />
     </section>
   );
 }
