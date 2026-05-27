@@ -41,9 +41,25 @@ const walletBodySchema = z.object({
   }),
 });
 
+// Phase 246 — iOS Shortcut variant.
+// Permissive on purpose: amount + merchant are OPTIONAL because the
+// Shortcut may only have raw notification text. Server tries the
+// wallet parser as a best effort; whatever cannot be parsed lands
+// as needsConfirmation so the user fills in the gap.
+const shortcutBodySchema = z.object({
+  issuer: z.literal("shortcut"),
+  rawText: z.string().min(1).max(2_000),
+  amount: z.number().positive().optional(),
+  merchant: z.string().max(120).optional(),
+  receivedAt: z.number().int().positive().optional(),
+  deviceTime: z.string().max(40).optional(),
+  appSource: z.enum(["wallet", "cal", "max", "unknown"]).optional(),
+});
+
 const payloadSchema = z.discriminatedUnion("issuer", [
   smsBodySchema,
   walletBodySchema,
+  shortcutBodySchema,
 ]);
 
 /** Echoed back on schema_violation so the client knows the exact contract. */
@@ -71,6 +87,22 @@ const SCHEMA_HELP = {
         body: "Shufersal · ₪42.90",
         receivedAt: 1715000000000,
       },
+    },
+  },
+  shortcut: {
+    issuer: 'string, exactly "shortcut"',
+    rawText: "string, 1-2000 chars (verbatim notification text)",
+    amount: "optional number (₪) — when the Shortcut already parsed it",
+    merchant: "optional string (≤120) — merchant when known",
+    receivedAt: "optional number, unix epoch ms",
+    deviceTime: "optional string — local time from the iPhone",
+    appSource:
+      'optional string: "wallet" | "cal" | "max" | "unknown" — origin app',
+    example: {
+      issuer: "shortcut",
+      rawText: "Apple Pay\nShufersal · ₪42.90",
+      receivedAt: 1715000000000,
+      appSource: "wallet",
     },
   },
 } as const;
@@ -294,6 +326,63 @@ export async function POST(req: Request): Promise<Response> {
       needsConfirmation: true,
       rawNotificationBody: notification.body,
     };
+  } else if (parsed.data.issuer === "shortcut") {
+    // Phase 246 — Shortcut branch. Permissive: any field may be
+    // missing. Run the wallet text parser as a best-effort
+    // augmenter, then merge anything the Shortcut already extracted.
+    // We NEVER reject here — the worst case is a pending row with a
+    // missing amount, which the user fills in from the pending tray.
+    const sc = parsed.data;
+    const augment = parseWalletNotification({
+      title: sc.appSource ?? "shortcut",
+      body: sc.rawText,
+      receivedAt: sc.receivedAt,
+    });
+    const augmentResult = augment.ok ? augment.result : null;
+    const amount = sc.amount ?? augmentResult?.amount;
+    const merchantRaw = sc.merchant ?? augmentResult?.merchant;
+    const merchantClean = merchantRaw
+      ? sanitizeMerchant(merchantRaw)
+      : undefined;
+    const cardLast4 = augmentResult?.cardLast4;
+
+    if (!isKvConfigured()) {
+      return Response.json({
+        ok: true,
+        persisted: false,
+        reason: "kv_not_configured",
+        parsed: { amount, merchant: merchantClean, cardLast4 },
+      });
+    }
+
+    const idSource = `shortcut|${sc.rawText}|${sc.receivedAt ?? ""}`;
+    externalId = await externalIdFor(scope.id, idSource);
+    tx = {
+      externalId,
+      // Persist amount=0 when missing so the entry still shows in
+      // the pending tray. User fills it in during confirmation.
+      amount: amount ?? 0,
+      category: categorize(merchantClean ?? merchantRaw ?? sc.appSource ?? ""),
+      paymentMethod: "credit",
+      installments: 1,
+      issuer:
+        sc.appSource && sc.appSource !== "unknown"
+          ? sc.appSource
+          : "shortcut",
+      source: "wallet",
+      cardLast4,
+      merchant: merchantClean,
+      note: augmentResult?.applePay ? "Apple Pay" : undefined,
+      occurredAt:
+        augmentResult?.occurredAt ??
+        (sc.receivedAt
+          ? new Date(sc.receivedAt).toISOString()
+          : new Date().toISOString()),
+      receivedAt: Date.now(),
+      bankPending: augmentResult?.bankPending || undefined,
+      needsConfirmation: true,
+      rawNotificationBody: sc.rawText,
+    };
   } else {
     const { issuer, smsBody } = parsed.data;
     const sms = parseSmsByIssuer(issuer, smsBody);
@@ -377,6 +466,12 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
+  const channel: "sms" | "wallet" | "shortcut" =
+    parsed.data.issuer === "wallet"
+      ? "wallet"
+      : parsed.data.issuer === "shortcut"
+        ? "shortcut"
+        : "sms";
   const logEntry: WebhookLogEntry = {
     ts: startedAt,
     ok: true,
@@ -385,6 +480,8 @@ export async function POST(req: Request): Promise<Response> {
     externalId,
     pushed,
     merchant: tx.merchant,
+    channel,
+    amount: tx.amount,
   };
   await safeLog(() => appendUserWebhookLog(scope, logEntry));
 

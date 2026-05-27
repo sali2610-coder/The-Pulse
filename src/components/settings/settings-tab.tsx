@@ -46,6 +46,8 @@ import { SallyCsvImportCard } from "./sally-csv-import-card";
 import { TextSizeCard } from "./text-size-card";
 import { DevModeToggleCard } from "./dev-mode-toggle-card";
 import { SettingsAccordion } from "./settings-accordion";
+import { ShortcutHealthCard } from "./shortcut-health-card";
+import { ShortcutOnboardingCard } from "./shortcut-onboarding-card";
 import { useDevMode } from "@/lib/use-dev-mode";
 
 export function SettingsTab() {
@@ -124,6 +126,19 @@ export function SettingsTab() {
           <IphonePushOnboardingCard />
           <PushToggle />
           <AudioToggle />
+        </div>
+      </SettingsAccordion>
+
+      {/* ── Shortcut (iPhone payment automation) ─────────────── */}
+      <SettingsAccordion
+        storageKey="settings.shortcut"
+        title="קיצור iPhone — קליטה אוטומטית"
+        subtitle="חיבור Apple Pay / כרטיסי האשראי לזרימה ב-Pulse"
+        icon={<BellRing className="size-4" />}
+      >
+        <div className="flex flex-col gap-3">
+          <ShortcutOnboardingCard />
+          <ShortcutHealthCard />
         </div>
       </SettingsAccordion>
 

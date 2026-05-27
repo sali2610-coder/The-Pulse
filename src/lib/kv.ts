@@ -73,7 +73,7 @@ export type StoredTransaction = {
   /** Card issuer for SMS rows; `"wallet"` for Wallet notifications where
    *  we don't always know which card was tapped. Widened in Phase 90 to
    *  cover the full Issuer enum so non-CAL/MAX SMS sources fit too. */
-  issuer: Issuer | "wallet";
+  issuer: Issuer | "wallet" | "shortcut";
   /** Channel the row arrived on. New writes always set this; older rows
    *  may be undefined and should be treated as `"sms"`. */
   source?: "sms" | "wallet";
@@ -824,6 +824,11 @@ export type WebhookLogEntry = {
   externalId?: string;
   pushed?: string;
   merchant?: string;
+  /** Phase 246 — origin of the inbound payload. Lets the Shortcut
+   *  health card filter to shortcut events only. */
+  channel?: "sms" | "wallet" | "shortcut";
+  /** Amount parsed (or zero when missing). Surfaced in diagnostics. */
+  amount?: number;
 };
 
 async function logRingPush(

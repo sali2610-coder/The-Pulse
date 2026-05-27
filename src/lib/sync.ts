@@ -118,6 +118,7 @@ export function useAutoSync(): void {
         const memory = buildMerchantMemory(useFinanceStore.getState().entries);
 
         let added = 0;
+        let needsConfirmationAdded = 0;
         for (const tx of out.data.transactions) {
           const memHit = tx.merchant
             ? predictCategory(memory, tx.merchant)
@@ -141,11 +142,28 @@ export function useAutoSync(): void {
             needsConfirmation: tx.needsConfirmation,
             rawNotificationBody: tx.rawNotificationBody,
           });
-          if (!result.duplicate) added += 1;
+          if (!result.duplicate) {
+            added += 1;
+            if (tx.needsConfirmation) needsConfirmationAdded += 1;
+          }
         }
         setLastSyncedAt(out.data.now);
         if (added > 0 && audioEnabled) {
           void playSyncChime();
+        }
+        // Phase 248 — foreground in-app banner. Web Push is suppressed
+        // by iOS when the PWA is foregrounded, so a toast is the right
+        // fallback. Only fires when the new tx needs the user's review.
+        if (needsConfirmationAdded > 0) {
+          toast(
+            needsConfirmationAdded === 1
+              ? "חיוב חדש ממתין לאישור"
+              : `${needsConfirmationAdded} חיובים חדשים ממתינים לאישור`,
+            {
+              description:
+                "פתח את לוח הבקרה — הפריטים מופיעים ב-PendingTray.",
+            },
+          );
         }
       } finally {
         inFlight.current = false;
