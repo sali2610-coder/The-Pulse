@@ -252,8 +252,13 @@ export async function fetchUserSettings(): Promise<
   | {
       ok: true;
       monthlyBudget: number;
-      budgetMode: "manual" | "auto";
-      budgetSafetyBuffer: number;
+      /** Phase 245 — undefined when the row/column has no explicit
+       *  value yet. Callers MUST treat undefined as "cloud has nothing
+       *  to say" and prefer the local value; the previous behaviour
+       *  defaulted to "manual" which silently overwrote a legitimate
+       *  local "auto" on hydrate. */
+      budgetMode?: "manual" | "auto";
+      budgetSafetyBuffer?: number;
     }
   | { ok: false; reason: "not_configured" | "no_session" | "rls"; detail?: string }
 > {
@@ -300,21 +305,28 @@ export async function fetchUserSettings(): Promise<
       return {
         ok: true,
         monthlyBudget: legacy.data ? Number(legacy.data.monthly_budget) : 0,
-        budgetMode: "manual",
-        budgetSafetyBuffer: 0,
+        // Legacy schema has no budget_mode column at all — leave
+        // undefined so the caller defers to the local value.
+        budgetMode: undefined,
+        budgetSafetyBuffer: undefined,
       };
     }
     return { ok: false, reason: "rls", detail: error.message };
   }
+  // Distinguish explicit values from NULL. Cloud returns NULL when
+  // the user hasn't set this preference yet; undefined here tells
+  // the caller "no opinion" so it can preserve the local choice.
+  const rawMode = data?.budget_mode;
+  const budgetMode: "manual" | "auto" | undefined =
+    rawMode === "auto" || rawMode === "manual" ? rawMode : undefined;
+  const rawBuffer = data?.budget_safety_buffer;
+  const budgetSafetyBuffer =
+    typeof rawBuffer === "number" ? Number(rawBuffer) : undefined;
   return {
     ok: true,
     monthlyBudget: data ? Number(data.monthly_budget) : 0,
-    budgetMode:
-      data?.budget_mode === "auto" ? "auto" : "manual",
-    budgetSafetyBuffer:
-      data && typeof data.budget_safety_buffer === "number"
-        ? Number(data.budget_safety_buffer)
-        : 0,
+    budgetMode,
+    budgetSafetyBuffer,
   };
 }
 

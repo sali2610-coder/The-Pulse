@@ -434,9 +434,34 @@ export function useCloudSync(): CloudSyncState {
             partial: Partial<ReturnType<typeof useFinanceStore.getState>>,
           ) => void;
 
+          // Phase 245 — two-part fix.
+          //   1. cloud value undefined → no opinion, never overwrite.
+          //   2. If the local row was written recently (within
+          //      LOCAL_RECENT_MS) the user toggled the setting in
+          //      this session. The debounced cloud push may not have
+          //      reached the server yet, so cloud is stale and MUST
+          //      NOT win — we push local up and keep the user's
+          //      choice. Outside the window we fall back to
+          //      cloud-is-authority.
+          const LOCAL_RECENT_MS = 5 * 60 * 1000;
+          const cloudHasMode = settingsRes.budgetMode !== undefined;
+          const cloudHasBuffer =
+            typeof settingsRes.budgetSafetyBuffer === "number";
+          const localRecent =
+            localState.budgetSettingsUpdatedAt > 0 &&
+            Date.now() - localState.budgetSettingsUpdatedAt <
+              LOCAL_RECENT_MS;
+
           if (cloudBudget > 0) {
-            if (cloudBudget !== localBudget) {
+            if (cloudBudget !== localBudget && !localRecent) {
               api({ monthlyBudget: cloudBudget });
+            } else if (localRecent && localBudget !== cloudBudget) {
+              // Local wins — push our value up.
+              await upsertUserSettings({
+                monthlyBudget: localBudget,
+                budgetMode: localState.budgetMode,
+                budgetSafetyBuffer: localState.budgetSafetyBuffer,
+              });
             }
           } else if (localBudget > 0 && !ownershipMismatchRef.current) {
             await upsertUserSettings({
@@ -446,21 +471,43 @@ export function useCloudSync(): CloudSyncState {
             });
           }
 
-          // Phase 214 — also reconcile budgetMode + buffer. Cloud
-          // is treated as the latest-write authority. We only patch
-          // local when it actually differs, to avoid re-firing the
-          // subscribe handler.
           if (
-            settingsRes.budgetMode &&
+            cloudHasMode &&
             settingsRes.budgetMode !== localState.budgetMode
           ) {
-            api({ budgetMode: settingsRes.budgetMode });
+            if (localRecent && !ownershipMismatchRef.current) {
+              // Local wins — push our mode up instead of accepting
+              // the stale cloud value.
+              await upsertUserSettings({
+                monthlyBudget: useFinanceStore.getState().monthlyBudget,
+                budgetMode: localState.budgetMode,
+                budgetSafetyBuffer: localState.budgetSafetyBuffer,
+              });
+            } else {
+              api({ budgetMode: settingsRes.budgetMode });
+            }
+          } else if (!cloudHasMode && !ownershipMismatchRef.current) {
+            // Cloud has no opinion — push the local choice up so
+            // future hydrations see it.
+            await upsertUserSettings({
+              monthlyBudget: useFinanceStore.getState().monthlyBudget,
+              budgetMode: localState.budgetMode,
+              budgetSafetyBuffer: localState.budgetSafetyBuffer,
+            });
           }
           if (
-            typeof settingsRes.budgetSafetyBuffer === "number" &&
+            cloudHasBuffer &&
             settingsRes.budgetSafetyBuffer !== localState.budgetSafetyBuffer
           ) {
-            api({ budgetSafetyBuffer: settingsRes.budgetSafetyBuffer });
+            if (localRecent && !ownershipMismatchRef.current) {
+              await upsertUserSettings({
+                monthlyBudget: useFinanceStore.getState().monthlyBudget,
+                budgetMode: localState.budgetMode,
+                budgetSafetyBuffer: localState.budgetSafetyBuffer,
+              });
+            } else {
+              api({ budgetSafetyBuffer: settingsRes.budgetSafetyBuffer });
+            }
           }
         }
       } catch (err) {

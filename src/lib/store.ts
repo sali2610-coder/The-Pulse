@@ -103,6 +103,14 @@ type State = {
   /** Phase 210 — optional safety buffer subtracted from auto safe-to-
    *  spend so the user can keep a personal cushion. Default 0. */
   budgetSafetyBuffer: number;
+  /** Phase 245 — epoch ms of the last LOCAL write to monthlyBudget /
+   *  budgetMode / budgetSafetyBuffer. The cloud-sync reconcile uses
+   *  this as a tie-breaker: when a local write happened recently
+   *  (within the 5-minute window) it MUST prefer the local choice
+   *  over a stale cloud row. Without this, a fast "toggle Auto →
+   *  close app" sequence flipped back to Manual on reopen because
+   *  the debounced cloud push didn't reach the server in time. */
+  budgetSettingsUpdatedAt: number;
   lastSyncedAt: number;
   accounts: Account[];
   loans: Loan[];
@@ -259,6 +267,7 @@ export const useFinanceStore = create<State & Actions>()(
       monthlyBudget: 0,
       budgetMode: "manual",
       budgetSafetyBuffer: 0,
+      budgetSettingsUpdatedAt: 0,
       lastSyncedAt: 0,
       accounts: [],
       loans: [],
@@ -941,16 +950,25 @@ export const useFinanceStore = create<State & Actions>()(
 
       setMonthlyBudget: (value) => {
         const safe = Number.isFinite(value) && value >= 0 ? value : 0;
-        set({ monthlyBudget: safe });
+        set({
+          monthlyBudget: safe,
+          budgetSettingsUpdatedAt: Date.now(),
+        });
       },
 
       setBudgetMode: (mode) => {
-        set({ budgetMode: mode === "auto" ? "auto" : "manual" });
+        set({
+          budgetMode: mode === "auto" ? "auto" : "manual",
+          budgetSettingsUpdatedAt: Date.now(),
+        });
       },
 
       setBudgetSafetyBuffer: (value) => {
         const safe = Number.isFinite(value) && value >= 0 ? value : 0;
-        set({ budgetSafetyBuffer: safe });
+        set({
+          budgetSafetyBuffer: safe,
+          budgetSettingsUpdatedAt: Date.now(),
+        });
       },
 
       setAudioEnabled: (v) => set({ audioEnabled: Boolean(v) }),
@@ -976,7 +994,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 10,
+      version: 11,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -985,6 +1003,7 @@ export const useFinanceStore = create<State & Actions>()(
         monthlyBudget: s.monthlyBudget,
         budgetMode: s.budgetMode,
         budgetSafetyBuffer: s.budgetSafetyBuffer,
+        budgetSettingsUpdatedAt: s.budgetSettingsUpdatedAt,
         lastSyncedAt: s.lastSyncedAt,
         accounts: s.accounts,
         loans: s.loans,
@@ -1065,6 +1084,16 @@ export const useFinanceStore = create<State & Actions>()(
             ...migrated,
             budgetMode: migrated.budgetMode ?? "manual",
             budgetSafetyBuffer: migrated.budgetSafetyBuffer ?? 0,
+          };
+        }
+        if (fromVersion < 11) {
+          // Phase 245 — track the last LOCAL write to budget
+          // settings so cloud-sync can break ties without losing a
+          // user choice. 0 means "no local opinion yet"; legitimate
+          // local writes call Date.now() going forward.
+          migrated = {
+            ...migrated,
+            budgetSettingsUpdatedAt: migrated.budgetSettingsUpdatedAt ?? 0,
           };
         }
         return migrated;
