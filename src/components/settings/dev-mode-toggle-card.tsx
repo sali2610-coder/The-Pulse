@@ -9,42 +9,23 @@
 import { Bug } from "lucide-react";
 
 import { useDevMode } from "@/lib/use-dev-mode";
-import { tap } from "@/lib/haptics";
+import { BigSwitch } from "@/components/ui/big-switch";
 
 export function DevModeToggleCard() {
-  const { on, toggle } = useDevMode();
+  const { on, setOn } = useDevMode();
   return (
     <section className="rounded-2xl border border-border/40 bg-surface/30 p-5 backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <Bug className="size-4 text-muted-foreground" />
           <div className="flex flex-col leading-tight">
-            <span className="text-[13px] font-medium text-foreground">
-              מצב פיתוח
-            </span>
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-section text-foreground">מצב פיתוח</span>
+            <span className="text-caption text-muted-foreground/80">
               חושף יומני אבחון, מצב Cloud Sync, מזהי מכשיר
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          onClick={() => {
-            tap();
-            toggle();
-          }}
-          className={`tap-44 flex h-7 w-12 items-center rounded-full p-0.5 transition-colors ${
-            on ? "bg-[color:var(--neon)]/60" : "bg-white/15"
-          }`}
-        >
-          <span
-            className={`size-6 rounded-full bg-foreground transition-transform ${
-              on ? "translate-x-0" : "translate-x-5"
-            }`}
-          />
-        </button>
+        <BigSwitch on={on} onChange={setOn} label="הפעל מצב פיתוח" />
       </div>
     </section>
   );

@@ -21,19 +21,17 @@ export function BudgetModeToggle() {
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/30 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col gap-0.5 leading-tight">
-          <span className="text-[12px] font-medium text-foreground">
-            מצב תקציב
-          </span>
-          <span className="text-[10.5px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5 leading-tight">
+          <span className="text-section text-foreground">מצב תקציב</span>
+          <span className="text-caption text-muted-foreground">
             {isAuto
-              ? "Pulse מחשב את התקציב הבטוח אוטומטית מנתוני הנזילות"
+              ? "Pulse מחשב אוטומטית מנתוני הנזילות"
               : "תקציב ידני — הסכום שהזנת מעל"}
           </span>
         </div>
         <div
-          className="flex rounded-full bg-white/8 p-0.5"
+          className="flex shrink-0 rounded-full bg-white/8 p-1"
           role="radiogroup"
           aria-label="מצב תקציב"
         >
@@ -50,11 +48,12 @@ export function BudgetModeToggle() {
                 type="button"
                 role="radio"
                 aria-checked={active}
+                data-no-min-tap
                 onClick={() => {
                   tap();
                   setMode(opt.id);
                 }}
-                className={`rounded-full px-3 py-1 text-[11px] transition-colors ${
+                className={`text-caption rounded-full px-4 py-2 transition-colors ${
                   active
                     ? "bg-[color:var(--neon)]/30 text-[color:var(--neon)]"
                     : "text-muted-foreground hover:text-foreground"
@@ -68,8 +67,8 @@ export function BudgetModeToggle() {
       </div>
 
       {isAuto ? (
-        <label className="flex items-center justify-between gap-2 border-t border-white/8 pt-2">
-          <span className="text-[10.5px] text-muted-foreground">
+        <label className="flex items-center justify-between gap-2 border-t border-white/8 pt-3">
+          <span className="text-caption text-muted-foreground">
             כרית בטיחות (₪) — מורידה מהסכום הבטוח
           </span>
           <input
@@ -79,7 +78,7 @@ export function BudgetModeToggle() {
             step={50}
             value={buffer}
             onChange={(e) => setBuffer(Number(e.target.value))}
-            className="h-7 w-20 rounded-md border border-white/12 bg-background/60 px-2 text-[12px] text-foreground outline-none focus:border-[color:var(--neon)]/60"
+            className="text-body h-10 w-24 rounded-md border border-white/12 bg-background/60 px-2 text-foreground outline-none focus:border-[color:var(--neon)]/60"
             aria-label="כרית בטיחות"
           />
         </label>
