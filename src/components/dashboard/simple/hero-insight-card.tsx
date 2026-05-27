@@ -18,6 +18,7 @@ import { useFinanceStore } from "@/lib/store";
 import { buildRiskWarnings } from "@/lib/risk-warnings";
 import { liquidityCurve } from "@/lib/liquidity-curve";
 import { monthKeyOf } from "@/lib/dates";
+import { usePulseBudget } from "@/lib/use-pulse-budget";
 
 export function HeroInsightCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
@@ -27,7 +28,15 @@ export function HeroInsightCard() {
   const rules = useFinanceStore((s) => s.rules);
   const entries = useFinanceStore((s) => s.entries);
   const statuses = useFinanceStore((s) => s.statuses);
-  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const monthlyBudgetRaw = useFinanceStore((s) => s.monthlyBudget);
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
+  // Phase 238 — always feed downstream engines the EFFECTIVE budget
+  // so risk-warnings reflect what the user actually sees, not the
+  // legacy raw value that may differ in Auto mode.
+  const monthlyBudget = usePulseBudget({
+    monthlyBudget: monthlyBudgetRaw,
+    budgetMode,
+  });
 
   const insight = useMemo(() => {
     if (!hydrated) return null;

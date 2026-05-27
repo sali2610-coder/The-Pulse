@@ -378,6 +378,9 @@ export function DashboardTab() {
 
   const summaries = useMemo(() => {
     if (!hydrated) return null;
+    // Phase 238 — summaries reflect what the user sees on the hero
+    // stack, so pass the EFFECTIVE budget rather than the raw store
+    // value. Manual mode is a no-op (effective === raw).
     return computeSummaries({
       accounts,
       loans,
@@ -385,7 +388,7 @@ export function DashboardTab() {
       rules,
       statuses,
       entries,
-      monthlyBudget,
+      monthlyBudget: pulseBudget,
     });
   }, [
     hydrated,
@@ -395,7 +398,7 @@ export function DashboardTab() {
     rules,
     statuses,
     entries,
-    monthlyBudget,
+    pulseBudget,
   ]);
 
   const showCurtain = Boolean(
