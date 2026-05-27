@@ -410,7 +410,7 @@ export function DashboardTab() {
 
   return (
     <SnapshotProvider>
-      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+      <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
         {/* ── Critical banners — render only when relevant ───────── */}
         <div className="sm:col-span-6">
           <Safe name="WelcomeSetupCard">
@@ -428,25 +428,15 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* ── HERO — the only cards visible on first paint ───────
-           Order answers the 4 questions in priority order:
-             1. How much can I safely spend?
-             2. What will my account look like later?
-             3. Will I enter overdraft?
-             4. What's the single most important thing right now? */}
+        {/* ── HERO — three cards, the only L1 surfaces on first paint.
+           Phase 235 trim: HeroEomCard removed because HeroFutureBalance
+           covers the same question with a slidable date. Order:
+             1. How much can I safely spend? (action)
+             2. What's the single most important risk? (signal)
+             3. Where will my bank balance be on a future date? (planning) */}
         <div className="sm:col-span-6">
           <Safe name="HeroSpendableCard">
             <HeroSpendableCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="HeroFutureBalanceCard">
-            <HeroFutureBalanceCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="HeroEomCard">
-            <HeroEomCard />
           </Safe>
         </div>
         <div className="sm:col-span-6">
@@ -454,6 +444,15 @@ export function DashboardTab() {
             <HeroInsightCard />
           </Safe>
         </div>
+        <div className="sm:col-span-6">
+          <Safe name="HeroFutureBalanceCard">
+            <HeroFutureBalanceCard />
+          </Safe>
+        </div>
+
+        {/* Visual separator between hero stack and grouped sections —
+           gives the L1 cards breathing room before L2 starts. */}
+        <div className="sm:col-span-6 h-1" aria-hidden />
 
         {/* ── Sections — collapsed by default with a summary chip ── */}
         <DashboardSection
@@ -666,6 +665,11 @@ export function DashboardTab() {
           subtitle="Pulse, CFO ונתונים נוספים"
           defaultCollapsed
         >
+          <div className="sm:col-span-6">
+            <Safe name="HeroEomCard">
+              <HeroEomCard />
+            </Safe>
+          </div>
           <div className="sm:col-span-6">
             <Safe name="PulseBar">
               <PulseBar budget={pulseBudget} />
