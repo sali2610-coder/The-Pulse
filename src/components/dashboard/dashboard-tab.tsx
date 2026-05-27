@@ -89,6 +89,18 @@ const CardsPressureCard = lazy(() =>
       m.CardsPressureCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const CardsHierarchyCard = lazy(() =>
+  import("@/components/dashboard/cards-hierarchy-card").then((m) => ({
+    default:
+      m.CardsHierarchyCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const CategorySpendCard = lazy(() =>
+  import("@/components/dashboard/category-spend-card").then((m) => ({
+    default:
+      m.CategorySpendCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const ActiveInstallmentsCard = lazy(() =>
   import("@/components/dashboard/active-installments-card").then((m) => ({
     default:
@@ -490,10 +502,15 @@ export function DashboardTab() {
         <DashboardSection
           storageKey="simple.cards"
           title="כרטיסי אשראי"
-          subtitle="לחץ לפי כרטיס, פריסות פעילות"
+          subtitle="כל כרטיס בנפרד · קטגוריה · קבוע / תשלום / חד-פעמי"
           defaultCollapsed
           summary={summaries?.cards ?? undefined}
         >
+          <div className="sm:col-span-6">
+            <Safe name="CardsHierarchyCard">
+              <CardsHierarchyCard />
+            </Safe>
+          </div>
           <div className="sm:col-span-6">
             <Safe name="CardsPressureCard">
               <CardsPressureCard />
@@ -561,6 +578,11 @@ export function DashboardTab() {
           defaultCollapsed
           summary={summaries?.analytics ?? undefined}
         >
+          <div className="sm:col-span-6">
+            <Safe name="CategorySpendCard">
+              <CategorySpendCard />
+            </Safe>
+          </div>
           <div className="sm:col-span-3">
             <Safe name="CategoryDonut">
               <CategoryDonut />

@@ -1,21 +1,18 @@
 "use client";
 
-// Phase 228 — Simple-mode hero card: "מצב חשבון בנק בתאריך X".
+// Phase 228 + 241 — Simple-mode hero card: "מצב חשבון בנק בתאריך X".
 //
-// Directly answers the most common consumer question — "what will
-// my bank account look like on the 10th of next month?" — using
-// the liquidity-curve engine that already simulates day-by-day
-// balance.
+// Answers the consumer question "what will my account look like on
+// the Xth?" using the liquidity-curve engine.
 //
-// Date selection:
-//   - Default: the next salary day inside the window (when known).
-//   - Otherwise: today + 30 days.
-//   - −7 / +7 chips let the user shift the snapshot date without a
-//     full date picker, matching the "calm consumer" brief.
-//
-// Render is one big balance figure + the deltas (inflow / outflow)
-// between today and that date. Reuses the existing liquidityCurve
-// — no new financial logic.
+// Phase 241 added the date-picker preset row:
+//   * היום       → offset 0  (a sanity check vs. anchor)
+//   * 1 לחודש    → days until the 1st of the next calendar month
+//   * 10 לחודש   → days until the 10th of the next calendar month
+//   * סוף החודש  → days until the last day of the current month
+//   * מותאם      → free numeric input (clamped to window)
+// The legacy −7 / +7 controls move under a single "כיוון" row so
+// the picker doesn't overflow on small phones.
 
 import { useMemo, useState } from "react";
 
@@ -42,6 +39,32 @@ function sameDay(a: string, b: Date): boolean {
     ad.getMonth() === b.getMonth() &&
     ad.getDate() === b.getDate()
   );
+}
+
+/** Days between today (00:00) and a target absolute date, inclusive
+ *  of the target day. Negative when the target is in the past. */
+function daysBetween(target: Date, now: Date): number {
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** Offset (days from today) to the Xth day of the next/current month
+ *  whichever is still in the future. Falls back to next month when
+ *  today is already past the target day of the current month. */
+function offsetToDayOfMonth(now: Date, day: number): number {
+  const thisMonthTarget = new Date(now.getFullYear(), now.getMonth(), day);
+  if (thisMonthTarget.getTime() > now.getTime()) {
+    return daysBetween(thisMonthTarget, now);
+  }
+  const nextMonthTarget = new Date(now.getFullYear(), now.getMonth() + 1, day);
+  return daysBetween(nextMonthTarget, now);
+}
+
+/** Last day of the current month as an offset from today. */
+function offsetToEndOfMonth(now: Date): number {
+  const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return Math.max(0, daysBetween(eom, now));
 }
 
 export function HeroFutureBalanceCard() {
@@ -162,33 +185,14 @@ export function HeroFutureBalanceCard() {
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <button
-          type="button"
-          onClick={() => setOffset(Math.max(minOffset, clamped - 7))}
-          disabled={clamped <= minOffset}
-          className="tap-44 text-body flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-foreground hover:bg-white/10 disabled:opacity-40"
-          aria-label="הקדם בשבוע"
-        >
-          −7 ימים
-        </button>
-        <button
-          type="button"
-          onClick={() => setOffset(defaultOffset)}
-          className="tap-44 text-caption rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-muted-foreground hover:bg-white/10"
-        >
-          ברירת מחדל
-        </button>
-        <button
-          type="button"
-          onClick={() => setOffset(Math.min(maxOffset, clamped + 7))}
-          disabled={clamped >= maxOffset}
-          className="tap-44 text-body flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-foreground hover:bg-white/10 disabled:opacity-40"
-          aria-label="הוסף שבוע"
-        >
-          +7 ימים
-        </button>
-      </div>
+      {/* Phase 241 — preset date row + custom day-of-month. */}
+      <DatePicker
+        clamped={clamped}
+        defaultOffset={defaultOffset}
+        minOffset={minOffset}
+        maxOffset={maxOffset}
+        onPick={(v) => setOffset(v)}
+      />
 
       {/* Phase 240 — transparent math breakdown. Collapsed by default. */}
       <FutureBalanceExplain offset={clamped} />
@@ -204,5 +208,133 @@ function Skeleton() {
       </span>
       <span className="h-14 w-44 animate-pulse rounded bg-white/5" />
     </section>
+  );
+}
+
+function DatePicker({
+  clamped,
+  defaultOffset,
+  minOffset,
+  maxOffset,
+  onPick,
+}: {
+  clamped: number;
+  defaultOffset: number;
+  minOffset: number;
+  maxOffset: number;
+  onPick: (offset: number) => void;
+}) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customDay, setCustomDay] = useState<string>("");
+
+  const now = new Date();
+  const presets: Array<{ key: string; label: string; offset: number }> = [
+    { key: "default", label: "ברירת מחדל", offset: defaultOffset },
+    {
+      key: "first",
+      label: "1 לחודש הבא",
+      offset: offsetToDayOfMonth(now, 1),
+    },
+    {
+      key: "tenth",
+      label: "10 לחודש הבא",
+      offset: offsetToDayOfMonth(now, 10),
+    },
+    { key: "eom", label: "סוף החודש", offset: offsetToEndOfMonth(now) },
+  ];
+
+  function applyCustom() {
+    const n = Number(customDay.trim());
+    if (!Number.isFinite(n) || n < 1 || n > 31) return;
+    const off = offsetToDayOfMonth(now, n);
+    if (off < minOffset || off > maxOffset) return;
+    onPick(off);
+    setCustomOpen(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      <div className="flex flex-wrap gap-2">
+        {presets.map((p) => {
+          const active = clamped === p.offset;
+          if (p.offset < minOffset || p.offset > maxOffset) return null;
+          return (
+            <button
+              key={p.key}
+              type="button"
+              data-no-min-tap
+              onClick={() => onPick(p.offset)}
+              className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
+                active
+                  ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
+                  : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          data-no-min-tap
+          onClick={() => setCustomOpen((v) => !v)}
+          className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
+            customOpen
+              ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
+              : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          מותאם
+        </button>
+      </div>
+
+      {customOpen ? (
+        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2">
+          <span className="text-caption text-muted-foreground">
+            יום בחודש
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            value={customDay}
+            onChange={(e) =>
+              setCustomDay(e.target.value.replace(/\D/g, "").slice(0, 2))
+            }
+            className="text-body h-10 w-16 rounded-md border border-white/12 bg-background/60 px-2 text-center text-foreground outline-none focus:border-[color:var(--neon)]/60"
+            aria-label="יום בחודש"
+            dir="ltr"
+          />
+          <button
+            type="button"
+            onClick={applyCustom}
+            className="tap-44 text-body rounded-md bg-[color:var(--neon)]/20 px-3 py-2 text-[color:var(--neon)] hover:bg-[color:var(--neon)]/30"
+          >
+            החל
+          </button>
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => onPick(Math.max(minOffset, clamped - 7))}
+          disabled={clamped <= minOffset}
+          className="tap-44 text-caption flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-muted-foreground hover:bg-white/10 disabled:opacity-40"
+          aria-label="הקדם בשבוע"
+        >
+          −7 ימים
+        </button>
+        <button
+          type="button"
+          onClick={() => onPick(Math.min(maxOffset, clamped + 7))}
+          disabled={clamped >= maxOffset}
+          className="tap-44 text-caption flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-muted-foreground hover:bg-white/10 disabled:opacity-40"
+          aria-label="הוסף שבוע"
+        >
+          +7 ימים
+        </button>
+      </div>
+    </div>
   );
 }

@@ -29,16 +29,20 @@ export type Category = {
   accent: string;
 };
 
+// Phase 243 — single source of truth for category colors across the
+// app. The palette matches the brief: health=pink, car=cyan,
+// food=orange, bills=blue, other=gray. Every donut/list/chip reads
+// from this list so the user's brain can scan the dashboard fast.
 export const CATEGORIES: Category[] = [
-  { id: "food", label: "אוכל", icon: Utensils, accent: "#FF6B6B" },
-  { id: "transport", label: "תחבורה", icon: Car, accent: "#4ECDC4" },
-  { id: "shopping", label: "קניות", icon: ShoppingBag, accent: "#FFD166" },
+  { id: "food", label: "אוכל", icon: Utensils, accent: "#F97316" },
+  { id: "transport", label: "תחבורה", icon: Car, accent: "#22D3EE" },
+  { id: "shopping", label: "קניות", icon: ShoppingBag, accent: "#FACC15" },
   { id: "entertainment", label: "בילויים", icon: Film, accent: "#A78BFA" },
   { id: "bills", label: "חשבונות", icon: Receipt, accent: "#60A5FA" },
   { id: "health", label: "בריאות", icon: HeartPulse, accent: "#F472B6" },
   { id: "education", label: "חינוך", icon: GraduationCap, accent: "#34D399" },
-  { id: "gifts", label: "מתנות", icon: Gift, accent: "#FB923C" },
-  { id: "other", label: "אחר", icon: Sparkles, accent: "#D4AF37" },
+  { id: "gifts", label: "מתנות", icon: Gift, accent: "#FB7185" },
+  { id: "other", label: "אחר", icon: Sparkles, accent: "#94A3B8" },
 ];
 
 export const CATEGORY_IDS = CATEGORIES.map((c) => c.id) as [
