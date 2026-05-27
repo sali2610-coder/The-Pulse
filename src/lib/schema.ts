@@ -1,22 +1,48 @@
 import { z } from "zod";
 import { CATEGORY_IDS } from "./categories";
 
-export const expenseFormSchema = z.object({
-  amount: z
-    .number({ message: "יש להזין סכום" })
-    .positive({ message: "הסכום חייב להיות גדול מאפס" })
-    .max(1_000_000, { message: "סכום גבוה מדי" }),
-  category: z.enum(CATEGORY_IDS, { message: "יש לבחור קטגוריה" }),
-  paymentMethod: z.enum(["cash", "credit"], {
-    message: "יש לבחור אמצעי תשלום",
-  }),
-  installments: z
-    .number({ message: "מספר תשלומים לא תקין" })
-    .int({ message: "מספר תשלומים חייב להיות שלם" })
-    .min(1, { message: "מינימום תשלום אחד" })
-    .max(60, { message: "עד 60 תשלומים" }),
-  note: z.string().max(200, { message: "הערה ארוכה מדי" }).optional(),
-});
+// Phase 244 — paymentSource is the user-visible classification
+// (cash / bank / card); the engine still works in PaymentMethod
+// terms (cash | credit). When source === "card" the form REQUIRES
+// a real card account id so every credit expense is connected to
+// an actual financial entity. "bank" → paymentMethod=cash with an
+// accountId pointing at the bank account so debits flow into the
+// right forecast bucket.
+export const expenseFormSchema = z
+  .object({
+    amount: z
+      .number({ message: "יש להזין סכום" })
+      .positive({ message: "הסכום חייב להיות גדול מאפס" })
+      .max(1_000_000, { message: "סכום גבוה מדי" }),
+    category: z.enum(CATEGORY_IDS, { message: "יש לבחור קטגוריה" }),
+    paymentSource: z.enum(["cash", "bank", "card"], {
+      message: "יש לבחור מקור תשלום",
+    }),
+    /** Required when paymentSource is "card" or "bank". */
+    accountId: z.string().optional(),
+    installments: z
+      .number({ message: "מספר תשלומים לא תקין" })
+      .int({ message: "מספר תשלומים חייב להיות שלם" })
+      .min(1, { message: "מינימום תשלום אחד" })
+      .max(60, { message: "עד 60 תשלומים" }),
+    note: z.string().max(200, { message: "הערה ארוכה מדי" }).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.paymentSource === "card" && !val.accountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accountId"],
+        message: "יש לבחור כרטיס אשראי",
+      });
+    }
+    if (val.paymentSource === "bank" && !val.accountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accountId"],
+        message: "יש לבחור חשבון בנק",
+      });
+    }
+  });
 
 export type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
 

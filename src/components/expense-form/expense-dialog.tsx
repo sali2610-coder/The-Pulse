@@ -21,7 +21,8 @@ import type { ExpensePayload } from "@/types/expense";
 
 import { AmountInput } from "./amount-input";
 import { InstallmentsInput } from "./installments-input";
-import { PaymentMethodToggle } from "./payment-method-toggle";
+import { SourceAccountPicker } from "./source-account-picker";
+import { ExpenseImpactPreview } from "./expense-impact-preview";
 import { SuccessOverlay } from "./success-overlay";
 import { CategoryPickerSheet } from "@/components/confirmation/category-picker-sheet";
 
@@ -54,23 +55,35 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
     defaultValues: {
       amount: undefined,
       category: undefined,
-      paymentMethod: "credit",
+      paymentSource: "card",
+      accountId: undefined,
       installments: 1,
       note: "",
     },
   });
 
   const watchedAmount = useWatch({ control, name: "amount" });
+  const watchedCategory = useWatch({ control, name: "category" });
+  const watchedSource = useWatch({ control, name: "paymentSource" });
+  const watchedAccount = useWatch({ control, name: "accountId" });
+  const watchedInstallments = useWatch({ control, name: "installments" });
 
   const mutation = useMutation({
     mutationFn: async (values: ExpenseFormValues) => {
+      // Phase 244 — translate user-facing paymentSource into the
+      // store's PaymentMethod + accountId pair. "bank" maps to
+      // cash + bank-account-id so the future-balance engine debits
+      // the right account.
+      const paymentMethod =
+        values.paymentSource === "card" ? "credit" : "cash";
       const result = addExpense({
         amount: values.amount,
         category: values.category,
         note: values.note?.trim() || undefined,
         installments: values.installments,
-        paymentMethod: values.paymentMethod,
+        paymentMethod,
         source: "manual",
+        accountId: values.accountId,
       });
 
       const payload: ExpensePayload = {
@@ -193,11 +206,20 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
 
             <Controller
               control={control}
-              name="paymentMethod"
+              name="paymentSource"
               render={({ field }) => (
-                <PaymentMethodToggle
-                  value={field.value}
-                  onChange={field.onChange}
+                <Controller
+                  control={control}
+                  name="accountId"
+                  render={({ field: accField }) => (
+                    <SourceAccountPicker
+                      source={field.value}
+                      accountId={accField.value}
+                      onSource={field.onChange}
+                      onAccount={accField.onChange}
+                      errorMessage={errors.accountId?.message}
+                    />
+                  )}
                 />
               )}
             />
@@ -212,6 +234,15 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
                   amount={watchedAmount}
                 />
               )}
+            />
+
+            <ExpenseImpactPreview
+              amount={watchedAmount}
+              category={watchedCategory}
+              paymentMethod={watchedSource === "card" ? "credit" : "cash"}
+              accountId={watchedAccount}
+              installments={watchedInstallments}
+              source={watchedSource}
             />
 
             <Controller
