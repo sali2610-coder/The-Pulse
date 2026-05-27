@@ -127,3 +127,195 @@ export function findMergeTarget(
   }
   return best;
 }
+
+// Phase 249 — duplicate confidence scoring.
+//
+// Surfaces "how sure are we?" so the UI can mark a row as "חשוד
+// ככפול" without silently dropping it. Score is 0..1; each signal
+// contributes a weight. The strongest signal is exact-amount + same
+// merchant + same day; weakest is amount-window + missing merchant.
+
+export type DuplicateSignal =
+  | "exact-amount"
+  | "amount-within-1pct"
+  | "amount-within-1ils"
+  | "same-merchant"
+  | "merchant-prefix"
+  | "same-card-last4"
+  | "same-account"
+  | "same-day"
+  | "day-within-2"
+  | "matching-external-id";
+
+export type DuplicateConfidence = {
+  score: number;
+  signals: DuplicateSignal[];
+};
+
+export function scoreDuplicateConfidence(
+  candidate: FuzzyCandidate & { externalId?: string },
+  entry: ExpenseEntry,
+): DuplicateConfidence {
+  const signals: DuplicateSignal[] = [];
+  let score = 0;
+
+  if (candidate.externalId && candidate.externalId === entry.externalId) {
+    return { score: 1, signals: ["matching-external-id"] };
+  }
+
+  // Hard mismatches → cannot be the same charge.
+  if (
+    candidate.accountId &&
+    entry.accountId &&
+    candidate.accountId !== entry.accountId
+  ) {
+    return { score: 0, signals: [] };
+  }
+  if (
+    candidate.cardLast4 &&
+    entry.cardLast4 &&
+    candidate.cardLast4 !== entry.cardLast4
+  ) {
+    return { score: 0, signals: [] };
+  }
+
+  // Amount tier.
+  const amountDiff = Math.abs(entry.amount - candidate.amount);
+  if (amountDiff === 0) {
+    signals.push("exact-amount");
+    score += 0.35;
+  } else if (amountDiff <= AMOUNT_FLOOR) {
+    signals.push("amount-within-1ils");
+    score += 0.2;
+  } else {
+    const pct = amountDiff / Math.max(entry.amount, candidate.amount);
+    if (pct <= AMOUNT_PCT) {
+      signals.push("amount-within-1pct");
+      score += 0.15;
+    } else {
+      return { score: 0, signals };
+    }
+  }
+
+  // Date tier.
+  const dayDelta = dateDeltaDays(entry.chargeDate, candidate.chargeDate);
+  if (dayDelta < 0.5) {
+    signals.push("same-day");
+    score += 0.25;
+  } else if (dayDelta <= DAY_TOLERANCE_DAYS) {
+    signals.push("day-within-2");
+    score += 0.12;
+  } else {
+    return { score: 0, signals };
+  }
+
+  // Merchant tier.
+  const a = candidate.merchant ? merchantKey(candidate.merchant) : "";
+  const b = entry.merchant ? merchantKey(entry.merchant) : "";
+  if (a && b) {
+    if (a === b) {
+      signals.push("same-merchant");
+      score += 0.2;
+    } else if (a.includes(b) || b.includes(a)) {
+      signals.push("merchant-prefix");
+      score += 0.1;
+    } else {
+      return { score: 0, signals };
+    }
+  }
+
+  // Account / card binding.
+  if (
+    candidate.accountId &&
+    entry.accountId &&
+    candidate.accountId === entry.accountId
+  ) {
+    signals.push("same-account");
+    score += 0.1;
+  }
+  if (
+    candidate.cardLast4 &&
+    entry.cardLast4 &&
+    candidate.cardLast4 === entry.cardLast4
+  ) {
+    signals.push("same-card-last4");
+    score += 0.1;
+  }
+
+  return {
+    score: Math.min(1, round2(score)),
+    signals,
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Phase 249 — runtime scan that flags "חשוד ככפול" rows across the
+ *  live entry list. Pairwise quadratic over a bounded window (only
+ *  entries within 2 days of each other), so the cost stays linear
+ *  in practice. Returns a map from entry id → suspected sibling +
+ *  confidence so the UI can mark either side with a badge.
+ *
+ *  THRESHOLD is the confidence floor for surfacing the warning.
+ *  0.7 == "exact-amount AND same-day AND merchant-prefix" or
+ *  similar — strong enough to merit human review, not a false-pos. */
+export type SuspectedDuplicateMap = Map<
+  string,
+  { siblingId: string; confidence: number; signals: DuplicateSignal[] }
+>;
+
+export function detectSuspectedDuplicates(
+  entries: ExpenseEntry[],
+  threshold = 0.7,
+): SuspectedDuplicateMap {
+  const out: SuspectedDuplicateMap = new Map();
+  const sorted = entries
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(a.chargeDate).getTime() - new Date(b.chargeDate).getTime(),
+    );
+
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    if (a.isRefund) continue;
+    for (let j = i + 1; j < sorted.length; j++) {
+      const b = sorted[j];
+      if (b.isRefund) continue;
+      const dayDelta = dateDeltaDays(a.chargeDate, b.chargeDate);
+      if (dayDelta > DAY_TOLERANCE_DAYS) break; // sorted → no later match
+      const result = scoreDuplicateConfidence(
+        {
+          amount: a.amount,
+          chargeDate: a.chargeDate,
+          merchant: a.merchant,
+          cardLast4: a.cardLast4,
+          accountId: a.accountId,
+          externalId: a.externalId,
+        },
+        b,
+      );
+      if (result.score < threshold) continue;
+      // Mark BOTH sides so either rendering surface can show the badge.
+      const aPrev = out.get(a.id);
+      if (!aPrev || result.score > aPrev.confidence) {
+        out.set(a.id, {
+          siblingId: b.id,
+          confidence: result.score,
+          signals: result.signals,
+        });
+      }
+      const bPrev = out.get(b.id);
+      if (!bPrev || result.score > bPrev.confidence) {
+        out.set(b.id, {
+          siblingId: a.id,
+          confidence: result.score,
+          signals: result.signals,
+        });
+      }
+    }
+  }
+  return out;
+}

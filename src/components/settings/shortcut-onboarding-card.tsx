@@ -69,23 +69,15 @@ export function ShortcutOnboardingCard() {
       if (cancelled) return;
       setStep(readStep());
       if (typeof window !== "undefined") {
-        setWebhookUrl(`${window.location.origin}/api/webhooks/transactions`);
+        setWebhookUrl(
+          `${window.location.origin}/api/webhooks/transactions/shortcut`,
+        );
       }
     });
     return () => {
       cancelled = true;
     };
   }, []);
-
-  const exampleBody = JSON.stringify(
-    {
-      issuer: "shortcut",
-      rawText: "Apple Pay · Shufersal · ₪42.90",
-      appSource: "wallet",
-    },
-    null,
-    2,
-  );
 
   const steps: Step[] = [
     {
@@ -110,21 +102,27 @@ export function ShortcutOnboardingCard() {
     {
       key: "action",
       title: "4. הוסף פעולת Get Contents of URL",
-      body: "בחר Add Action → Web → Get Contents of URL. הגדר Method: POST, Headers: content-type: application/json, Bearer token של Sally.",
+      body: "בחר Add Action → Web → Get Contents of URL. הגדר Method: POST. בכותרות (Headers) הוסף Authorization עם הטוקן שלך.",
+      details: [
+        "פתח Show More → Headers → Add new header.",
+        "Key: Authorization · Value: Bearer <הטוקן שלך מהגדרות>.",
+      ],
     },
     {
       key: "url",
       title: "5. הדבק את כתובת ה-Webhook",
-      body: "השתמש בכתובת זו ב-URL:",
+      body: "השתמש בכתובת זו בשדה URL של הפעולה:",
       copyLabel: "כתובת Webhook",
       copyValue: webhookUrl,
     },
     {
       key: "body",
-      title: "6. הגדר את גוף הבקשה (JSON)",
-      body: "Body של הפעולה — JSON. החלף את rawText במשתנה Notification Body של ההתראה (Magic Variable):",
-      copyLabel: "JSON לדוגמה",
-      copyValue: exampleBody,
+      title: "6. הגדר את גוף הבקשה — בלי לערוך JSON",
+      body: "פתח Show More בפעולת Get Contents of URL → Request Body → File. בשדה File בחר \"Magic Variable\" → Notification → Body. זהו. השרת מקבל את הטקסט כמו שהוא, בלי תבניות.",
+      details: [
+        "Content-Type ייקבע אוטומטית ל-text/plain.",
+        "אין לערוך JSON, אין שדות, אין quotes. רק הטקסט של ההתראה.",
+      ],
     },
     {
       key: "test",

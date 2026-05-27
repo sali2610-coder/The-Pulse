@@ -48,6 +48,7 @@ import { DevModeToggleCard } from "./dev-mode-toggle-card";
 import { SettingsAccordion } from "./settings-accordion";
 import { ShortcutHealthCard } from "./shortcut-health-card";
 import { ShortcutOnboardingCard } from "./shortcut-onboarding-card";
+import { PushDeliveryMatrix } from "./push-delivery-matrix";
 import { useDevMode } from "@/lib/use-dev-mode";
 
 export function SettingsTab() {
@@ -126,6 +127,7 @@ export function SettingsTab() {
           <IphonePushOnboardingCard />
           <PushToggle />
           <AudioToggle />
+          <PushDeliveryMatrix />
         </div>
       </SettingsAccordion>
 
