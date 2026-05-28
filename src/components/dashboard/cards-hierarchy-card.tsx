@@ -1,32 +1,31 @@
 "use client";
 
-// Phase 242 — per-card hierarchy: Card → Categories → kind splits.
+// Phase 242 + 265 — per-card hierarchy, presented as Card-Month
+// folders.
 //
-// Replaces the flat "long list of expenses" inside the cards
-// section with a three-level drill-down. Each card row is
-// collapsible: opening it reveals categories sorted by total;
-// each category opens to show its individual obligations.
-//
-// Reads the cash-flow-bucket engine + per-rule / per-entry
-// categories — no new financial logic.
+// Phase 242 split each card into per-category groups with kind
+// totals. Phase 264 added month grouping inside a card. Phase 265
+// completes the refactor: each (Card × Month) becomes its OWN
+// top-level folder so the brain reads "Hitechzon — June" and
+// "Hitechzon — July" as two distinct envelopes, never as one
+// merged container. Engine unchanged — view restructure only.
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, CreditCard, Layers, Pencil, Trash2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
+import { buildCardCategoryBreakdown } from "@/lib/card-category-breakdown";
 import {
-  buildCardCategoryBreakdown,
-  type CardBreakdown,
-  type CategoryGroup,
-} from "@/lib/card-category-breakdown";
+  buildCardMonthFolders,
+  type CardMonthFolder,
+} from "@/lib/card-month-folders";
 import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
 import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
-import { groupItemsByMonth } from "@/lib/card-month-grouping";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -39,6 +38,18 @@ const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   month: "short",
 });
 
+const TIER_COLOR: Record<CardMonthFolder["kind"], string> = {
+  current: "#34D399",
+  next: "#60A5FA",
+  future: "#A78BFA",
+};
+
+const TIER_LABEL: Record<CardMonthFolder["kind"], string> = {
+  current: "חיובים קרובים",
+  next: "החודש הבא",
+  future: "תשלומים עתידיים",
+};
+
 export function CardsHierarchyCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -47,8 +58,7 @@ export function CardsHierarchyCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const entries = useFinanceStore((s) => s.entries);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const editingEntry =
-    entries.find((e) => e.id === editingId) ?? null;
+  const editingEntry = entries.find((e) => e.id === editingId) ?? null;
   const deleteWithUndo = useDeleteWithUndo();
 
   const report = useMemo(() => {
@@ -62,15 +72,20 @@ export function CardsHierarchyCard() {
     });
   }, [hydrated, accounts, loans, rules, statuses, entries]);
 
+  const folders = useMemo(() => {
+    if (!report) return [];
+    return buildCardMonthFolders(report);
+  }, [report]);
+
   if (!hydrated || !report) return null;
-  if (report.cards.length === 0) {
+  if (folders.length === 0) {
     return (
       <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
-        <SectionHeader icon={<CreditCard />} title="כרטיסי אשראי לפי קטגוריה" />
+        <SectionHeader icon={<CreditCard />} title="כרטיסי אשראי לפי חודש" />
         <CardEmpty
           icon={<Layers className="size-4" />}
-          title="אין חיובי כרטיס לחודש הקרוב"
-          reason="ברגע שתוסיף הוצאות / מנויים שמחויבים בכרטיס, הם יופיעו כאן מקובצים לפי קטגוריה."
+          title="אין חיובי כרטיס לחודשים הקרובים"
+          reason="ברגע שתוסיף הוצאות / מנויים שמחויבים בכרטיס, הם יופיעו כאן בתיקיות לפי כרטיס וחודש."
         />
       </section>
     );
@@ -80,7 +95,7 @@ export function CardsHierarchyCard() {
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
       <SectionHeader
         icon={<CreditCard />}
-        title="כרטיסי אשראי לפי קטגוריה"
+        title="כרטיסי אשראי לפי חודש"
         trailing={
           <span className="text-caption text-muted-foreground" dir="ltr">
             סה״כ {ILS.format(Math.round(report.totalCommitted))}
@@ -88,14 +103,14 @@ export function CardsHierarchyCard() {
         }
       />
       <p className="text-caption text-muted-foreground">
-        כל כרטיס נשמר נפרד. בתוך כרטיס — קטגוריות; בתוך קטגוריה — חיובים
-        קבועים, תשלומים וחד-פעמיים.
+        כל כרטיס × חודש = תיקייה משלו. תקיש על תיקייה כדי לראות פירוט
+        לקטגוריות ולהוצאות.
       </p>
       <ul className="flex flex-col gap-2">
-        {report.cards.map((c) => (
-          <CardRow
-            key={c.cardId}
-            card={c}
+        {folders.map((folder) => (
+          <FolderRow
+            key={folder.id}
+            folder={folder}
             onEditEntry={(id) => setEditingId(id)}
             onDeleteEntry={(id) => deleteWithUndo(id)}
           />
@@ -113,18 +128,24 @@ export function CardsHierarchyCard() {
   );
 }
 
-function CardRow({
-  card,
+function FolderRow({
+  folder,
   onEditEntry,
   onDeleteEntry,
 }: {
-  card: CardBreakdown;
+  folder: CardMonthFolder;
   onEditEntry: (entryId: string) => void;
   onDeleteEntry: (entryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const color = TIER_COLOR[folder.kind];
   return (
-    <li className="overflow-hidden rounded-2xl border border-white/8 bg-black/25">
+    <li
+      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
+      style={{
+        background: `linear-gradient(180deg, ${color}08 0%, rgba(0,0,0,0.25) 80%)`,
+      }}
+    >
       <button
         type="button"
         onClick={() => {
@@ -135,18 +156,27 @@ function CardRow({
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/3"
       >
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[color:var(--neon)]/14 text-[color:var(--neon)]">
+          <span
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: `${color}22`, color }}
+          >
             <CreditCard className="size-4" />
           </span>
           <div className="flex min-w-0 flex-col leading-tight">
             <span className="text-section text-foreground">
-              {card.cardLabel}
+              {folder.cardLabel}
+              <span className="text-foreground/70"> — {folder.monthName}</span>
             </span>
-            <span className="text-caption text-muted-foreground" dir="ltr">
-              {card.cardLast4 ? `····${card.cardLast4} · ` : ""}
-              {card.nextSettlementAt
-                ? `חיוב הבא ${DAY_FMT.format(new Date(card.nextSettlementAt))}`
-                : "אין חיוב צפוי"}
+            <span
+              className="text-caption"
+              style={{ color }}
+            >
+              {TIER_LABEL[folder.kind]}
+              {folder.cardLast4 ? (
+                <span className="text-muted-foreground/80" dir="ltr">
+                  {" "}· ····{folder.cardLast4}
+                </span>
+              ) : null}
             </span>
           </div>
         </div>
@@ -156,11 +186,11 @@ function CardRow({
             dir="ltr"
             className="text-section text-foreground"
           >
-            {ILS.format(Math.round(card.total))}
+            {ILS.format(Math.round(folder.subtotal))}
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.18 }}
             className="text-muted-foreground"
           >
             <ChevronDown className="size-5" />
@@ -179,28 +209,29 @@ function CardRow({
             className="overflow-hidden border-t border-white/8"
           >
             <div className="flex flex-col gap-3 p-4">
-              {/* Per-card totals — recurring / installments / oneTime. */}
+              {/* Stat strip scoped to THIS folder (card × month). */}
               <div className="grid grid-cols-3 gap-2">
                 <Stat
                   label="קבועים"
-                  value={card.recurringTotal}
+                  value={folder.recurringTotal}
                   tone="#A78BFA"
                 />
                 <Stat
                   label="תשלומים"
-                  value={card.installmentsTotal}
+                  value={folder.installmentsTotal}
                   tone="#F59E0B"
                 />
                 <Stat
                   label="חד-פעמיים"
-                  value={card.oneTimeTotal}
+                  value={folder.oneTimeTotal}
                   tone="#60A5FA"
                 />
               </div>
               <ul className="flex flex-col gap-1.5">
-                {card.categories.map((g) => (
+                {folder.categories.map((g) => (
                   <CategoryRow
                     key={g.category}
+                    monthName={folder.monthName}
                     group={g}
                     onEditEntry={onEditEntry}
                     onDeleteEntry={onDeleteEntry}
@@ -240,11 +271,13 @@ function Stat({
 }
 
 function CategoryRow({
+  monthName,
   group,
   onEditEntry,
   onDeleteEntry,
 }: {
-  group: CategoryGroup;
+  monthName: string;
+  group: import("@/lib/card-category-breakdown").CategoryGroup;
   onEditEntry: (entryId: string) => void;
   onDeleteEntry: (entryId: string) => void;
 }) {
@@ -298,7 +331,7 @@ function CategoryRow({
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.18 }}
             className="text-muted-foreground"
           >
             <ChevronDown className="size-4" />
@@ -307,86 +340,46 @@ function CategoryRow({
       </button>
       <AnimatePresence initial={false}>
         {open ? (
-          <motion.div
+          <motion.ul
             key="items"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.18 }}
             className="overflow-hidden border-t border-white/6"
           >
-            {/* Phase 264 — split items into month buckets so the user
-                reads "חיובים קרובים" + "החודש הבא" + "תשלומים עתידיים"
-                separately. Subtotal per group + per-row charge-month
-                label reduces emotional overload from the merged total. */}
-            {groupItemsByMonth(group.items).map((monthGroup) => {
-              const toneColor =
-                monthGroup.kind === "current"
-                  ? "#34D399"
-                  : monthGroup.kind === "next"
-                    ? "#60A5FA"
-                    : "#A78BFA";
+            {group.items.map((it) => {
+              const entryId = it.refId.startsWith("entry:")
+                ? it.refId.split(":")[1]
+                : null;
+              const kindLabel =
+                it.kind === "recurring"
+                  ? "קבוע"
+                  : it.kind === "installments"
+                    ? "תשלום"
+                    : "חד-פעמי";
               return (
-                <section
-                  key={monthGroup.monthKey}
-                  className="border-b border-white/4 last:border-b-0"
+                <li
+                  key={`${it.refId}-${it.effectiveCashAt}`}
+                  className="flex items-center gap-2 px-4 py-2"
                 >
-                  <header
-                    className="flex items-baseline justify-between gap-2 px-4 py-2"
-                    style={{
-                      background: `linear-gradient(90deg, ${toneColor}10 0%, transparent 60%)`,
-                    }}
+                  <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span className="truncate text-caption text-foreground">
+                      {it.label}
+                    </span>
+                    <span className="text-caption text-muted-foreground/80">
+                      {kindLabel} · חיוב {monthName} ·{" "}
+                      {DAY_FMT.format(new Date(it.effectiveCashAt))}
+                    </span>
+                  </div>
+                  <span
+                    data-mono="true"
+                    dir="ltr"
+                    className="text-caption font-medium text-foreground"
                   >
-                    <span
-                      className="text-micro"
-                      style={{ color: toneColor }}
-                    >
-                      {monthGroup.label}
-                    </span>
-                    <span
-                      data-mono="true"
-                      dir="ltr"
-                      className="text-caption font-medium"
-                      style={{ color: toneColor }}
-                    >
-                      {ILS.format(Math.round(monthGroup.subtotal))}
-                    </span>
-                  </header>
-                  <ul className="flex flex-col">
-                    {monthGroup.items.map((it) => {
-                      // Refs: `entry:<id>:<sliceIndex>` for card-entry,
-                      // `rule:<id>` for linked-rule rows. Only entries
-                      // can be edited inline.
-                      const entryId = it.refId.startsWith("entry:")
-                        ? it.refId.split(":")[1]
-                        : null;
-                      const kindLabel =
-                        it.kind === "recurring"
-                          ? "קבוע"
-                          : it.kind === "installments"
-                            ? "תשלום"
-                            : "חד-פעמי";
-                      return (
-                        <li
-                          key={`${it.refId}-${it.effectiveCashAt}`}
-                          className="flex items-center gap-2 px-4 py-2"
-                        >
-                          <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                            <span className="truncate text-caption text-foreground">
-                              {it.label}
-                            </span>
-                            <span className="text-caption text-muted-foreground/80">
-                              {kindLabel} · חיוב {monthGroup.monthName}
-                            </span>
-                          </div>
-                          <span
-                            data-mono="true"
-                            dir="ltr"
-                            className="text-caption font-medium text-foreground"
-                          >
-                            {ILS.format(Math.round(it.amount))}
-                          </span>
-                          {entryId ? (
+                    {ILS.format(Math.round(it.amount))}
+                  </span>
+                  {entryId ? (
                     <>
                       <button
                         type="button"
@@ -411,14 +404,10 @@ function CategoryRow({
                       </button>
                     </>
                   ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
+                </li>
               );
             })}
-          </motion.div>
+          </motion.ul>
         ) : null}
       </AnimatePresence>
     </li>

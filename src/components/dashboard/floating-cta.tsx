@@ -39,6 +39,12 @@ export function FloatingCTA({ onClick }: { onClick: () => void }) {
     // emitted by iOS Safari.
     let frame = 0;
     let pending = false;
+    // Phase 265 — tighter hide (12px instead of 36) so the FAB
+    // never lingers above content the user is reading. Slightly
+    // higher show threshold (24px instead of 8) to dampen the
+    // jitter when the user scrolls down + up rapidly.
+    const HIDE_DELTA = 12;
+    const SHOW_DELTA = 24;
     const evaluate = () => {
       pending = false;
       const y = window.scrollY;
@@ -50,10 +56,10 @@ export function FloatingCTA({ onClick }: { onClick: () => void }) {
         return;
       }
       accumulatedRef.current += dy;
-      if (accumulatedRef.current > 36) {
+      if (accumulatedRef.current > HIDE_DELTA) {
         setVisible(false);
         accumulatedRef.current = 0;
-      } else if (accumulatedRef.current < -8) {
+      } else if (accumulatedRef.current < -SHOW_DELTA) {
         setVisible(true);
         accumulatedRef.current = 0;
       }
@@ -85,11 +91,11 @@ export function FloatingCTA({ onClick }: { onClick: () => void }) {
             paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
           }}
         >
-          {/* Subtle backdrop gradient so the button reads as a dock,
-              not a floating chip stuck on top of content. */}
+          {/* Phase 265 — slimmer backdrop so the dock no longer
+              overlaps two rows of content. 20 (h-20) instead of 28. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-background via-background/85 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background via-background/80 to-transparent"
           />
           <div className="pointer-events-auto relative w-full max-w-md">
             <NewExpenseButton onClick={onClick} />
