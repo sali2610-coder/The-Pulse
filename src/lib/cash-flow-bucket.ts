@@ -32,6 +32,10 @@ import {
   effectiveCashImpactForRule,
   effectiveCashImpactStream,
 } from "@/lib/effective-cash-date";
+import {
+  isRuleCovered,
+  monthsCoveredByMatchedEntries,
+} from "@/lib/rule-coverage";
 
 export type BucketSource = "card" | "loan" | "bank_debit";
 
@@ -111,6 +115,16 @@ export function buildCashFlowBuckets(args: {
       )
       .map((s) => s.ruleId),
   );
+  // Phase 262 — skip a rule for ANY month that's already covered by
+  // a matched entry slice. Without this guard the cash-flow buckets
+  // emit both the rule's expected amount AND the entry's slice for
+  // future months — most painfully on installment plans.
+  const coverage = monthsCoveredByMatchedEntries({
+    rules: args.rules,
+    entries: args.entries,
+    now,
+    windowDays: args.windowDays ?? WINDOW_DAYS,
+  });
   for (const rule of args.rules) {
     if (!rule.active) continue;
     // Evaluate the rule across the months the window spans.
@@ -122,6 +136,7 @@ export function buildCashFlowBuckets(args: {
       ) {
         continue;
       }
+      if (isRuleCovered(coverage, rule.id, monthKey)) continue;
       const impact = effectiveCashImpactForRule({
         rule,
         accounts: args.accounts,

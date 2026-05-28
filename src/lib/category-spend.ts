@@ -87,11 +87,20 @@ export function buildCategorySpend(args: {
   // 2. Recurring rules — fixed cost for the month if not skipped/paid.
   //    Already-paid rules don't add: their `matchedExpenseId` entry was
   //    counted above.
+  //    Phase 262 — also skip when a matched entry slice already covers
+  //    this month (multi-month installment-entry plans need the same
+  //    guard, not just the current-month status row).
+  const matchedRuleHere = new Set<string>();
+  for (const e of args.entries) {
+    if (!e.matchedRuleId) continue;
+    if (sliceForMonth(e, args.monthKey)) matchedRuleHere.add(e.matchedRuleId);
+  }
   for (const r of args.rules) {
     if (!r.active) continue;
     const status = statusMap.get(`${r.id}__${args.monthKey}`);
     if (status?.status === "paid") continue;
     if (isSkippedStatus(status)) continue;
+    if (matchedRuleHere.has(r.id)) continue;
     const grp = ensure(r.category);
     grp.total += r.estimatedAmount;
     grp.recurring += r.estimatedAmount;

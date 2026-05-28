@@ -23,6 +23,10 @@ import {
 } from "@/lib/effective-cash-date";
 import { monthKeyOf } from "@/lib/dates";
 import type { MonthKey } from "@/types/finance";
+import {
+  isRuleCovered,
+  monthsCoveredByMatchedEntries,
+} from "@/lib/rule-coverage";
 
 // Local copy — cash-flow-bucket's monthsInWindow generator isn't
 // exported. Yields every YYYY-MM that contains a millisecond between
@@ -165,6 +169,15 @@ export function buildCardCategoryBreakdown(args: {
       )
       .map((s) => s.ruleId),
   );
+  // Phase 262 — same dedup the cash-flow-bucket engine uses. Skip
+  // rule emission for any month already covered by a matched entry
+  // slice; otherwise card-category totals double-count.
+  const coverage = monthsCoveredByMatchedEntries({
+    rules: args.rules,
+    entries: args.entries,
+    now,
+    windowDays,
+  });
   for (const rule of args.rules) {
     if (!rule.active) continue;
     for (const monthKey of monthsInWindow(now, horizon)) {
@@ -172,6 +185,9 @@ export function buildCardCategoryBreakdown(args: {
         monthKey === monthKeyOf(now) &&
         paidThisMonth.has(rule.id)
       ) {
+        continue;
+      }
+      if (isRuleCovered(coverage, rule.id, monthKey)) {
         continue;
       }
       const impact = effectiveCashImpactForRule({
