@@ -26,6 +26,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
 import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
+import { groupItemsByMonth } from "@/lib/card-month-grouping";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -306,7 +307,7 @@ function CategoryRow({
       </button>
       <AnimatePresence initial={false}>
         {open ? (
-          <motion.ul
+          <motion.div
             key="items"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -314,42 +315,78 @@ function CategoryRow({
             transition={{ duration: 0.2 }}
             className="overflow-hidden border-t border-white/6"
           >
-            {group.items.map((it) => {
-              // Refs land as `entry:<id>:<sliceIndex>` for card-entry
-              // rows or `rule:<id>` for linked-rule rows. Only entries
-              // can be edited inline; rule rows route to the recurring
-              // panel — we leave that path alone here.
-              const entryId =
-                it.refId.startsWith("entry:")
-                  ? it.refId.split(":")[1]
-                  : null;
+            {/* Phase 264 — split items into month buckets so the user
+                reads "חיובים קרובים" + "החודש הבא" + "תשלומים עתידיים"
+                separately. Subtotal per group + per-row charge-month
+                label reduces emotional overload from the merged total. */}
+            {groupItemsByMonth(group.items).map((monthGroup) => {
+              const toneColor =
+                monthGroup.kind === "current"
+                  ? "#34D399"
+                  : monthGroup.kind === "next"
+                    ? "#60A5FA"
+                    : "#A78BFA";
               return (
-                <li
-                  key={`${it.refId}-${it.effectiveCashAt}`}
-                  className="flex items-center gap-2 px-4 py-2"
+                <section
+                  key={monthGroup.monthKey}
+                  className="border-b border-white/4 last:border-b-0"
                 >
-                  <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                    <span className="truncate text-caption text-foreground">
-                      {it.label}
-                    </span>
-                    <span className="text-caption text-muted-foreground/80">
-                      {it.kind === "recurring"
-                        ? "קבוע"
-                        : it.kind === "installments"
-                          ? "תשלום"
-                          : "חד-פעמי"}
-                      {" · "}
-                      {DAY_FMT.format(new Date(it.effectiveCashAt))}
-                    </span>
-                  </div>
-                  <span
-                    data-mono="true"
-                    dir="ltr"
-                    className="text-caption font-medium text-foreground"
+                  <header
+                    className="flex items-baseline justify-between gap-2 px-4 py-2"
+                    style={{
+                      background: `linear-gradient(90deg, ${toneColor}10 0%, transparent 60%)`,
+                    }}
                   >
-                    {ILS.format(Math.round(it.amount))}
-                  </span>
-                  {entryId ? (
+                    <span
+                      className="text-micro"
+                      style={{ color: toneColor }}
+                    >
+                      {monthGroup.label}
+                    </span>
+                    <span
+                      data-mono="true"
+                      dir="ltr"
+                      className="text-caption font-medium"
+                      style={{ color: toneColor }}
+                    >
+                      {ILS.format(Math.round(monthGroup.subtotal))}
+                    </span>
+                  </header>
+                  <ul className="flex flex-col">
+                    {monthGroup.items.map((it) => {
+                      // Refs: `entry:<id>:<sliceIndex>` for card-entry,
+                      // `rule:<id>` for linked-rule rows. Only entries
+                      // can be edited inline.
+                      const entryId = it.refId.startsWith("entry:")
+                        ? it.refId.split(":")[1]
+                        : null;
+                      const kindLabel =
+                        it.kind === "recurring"
+                          ? "קבוע"
+                          : it.kind === "installments"
+                            ? "תשלום"
+                            : "חד-פעמי";
+                      return (
+                        <li
+                          key={`${it.refId}-${it.effectiveCashAt}`}
+                          className="flex items-center gap-2 px-4 py-2"
+                        >
+                          <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                            <span className="truncate text-caption text-foreground">
+                              {it.label}
+                            </span>
+                            <span className="text-caption text-muted-foreground/80">
+                              {kindLabel} · חיוב {monthGroup.monthName}
+                            </span>
+                          </div>
+                          <span
+                            data-mono="true"
+                            dir="ltr"
+                            className="text-caption font-medium text-foreground"
+                          >
+                            {ILS.format(Math.round(it.amount))}
+                          </span>
+                          {entryId ? (
                     <>
                       <button
                         type="button"
@@ -374,10 +411,14 @@ function CategoryRow({
                       </button>
                     </>
                   ) : null}
-                </li>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               );
             })}
-          </motion.ul>
+          </motion.div>
         ) : null}
       </AnimatePresence>
     </li>
