@@ -33,6 +33,9 @@ export function BudgetRecommendationCard() {
   const entries = useFinanceStore((s) => s.entries);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const setMonthlyBudget = useFinanceStore((s) => s.setMonthlyBudget);
+  // Phase 266 — Auto mode derives the budget from the liquidity
+  // engine; nagging the user to set a manual cap is wrong there.
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
 
   const [dismissedTick, setDismissedTick] = useState(0);
 
@@ -47,6 +50,9 @@ export function BudgetRecommendationCard() {
 
   if (!hydrated || !rec || !rec.hasEnoughData) return null;
   if (rec.recommended <= 0) return null;
+  // Auto mode owns the cap. Suppress this manual-only recommendation
+  // so the user never sees "set a budget" while Auto is selected.
+  if (budgetMode === "auto") return null;
 
   // Key the dismissal on the rounded recommendation so a new
   // recommendation amount (e.g., user spending pattern shifted)

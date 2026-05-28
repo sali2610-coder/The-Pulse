@@ -57,6 +57,7 @@ function AppShellContent() {
   const accounts = useFinanceStore((s) => s.accounts);
   const incomes = useFinanceStore((s) => s.incomes);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
 
   useAutoBackup();
   useStoreMutationBridge();
@@ -113,8 +114,13 @@ function AppShellContent() {
     };
   }, []);
 
+  // Phase 266 — Manual: compare against the user-typed cap. Auto:
+  // there's no fixed cap the user committed to, so the ambient
+  // "over budget" highlight stays off.
   const isOverBudget = useMemo(() => {
-    if (!hydrated || monthlyBudget <= 0) return false;
+    if (!hydrated) return false;
+    if (budgetMode !== "manual") return false;
+    if (monthlyBudget <= 0) return false;
     const { actual } = projectMonth({
       entries,
       rules,
@@ -122,7 +128,7 @@ function AppShellContent() {
       monthKey: currentMonthKey(),
     });
     return actual > monthlyBudget;
-  }, [hydrated, entries, rules, statuses, monthlyBudget]);
+  }, [hydrated, entries, rules, statuses, monthlyBudget, budgetMode]);
 
   const [dismissTick, setDismissTick] = useState(0);
   useEffect(() => {
@@ -141,6 +147,7 @@ function AppShellContent() {
       accounts,
       incomes,
       monthlyBudget,
+      budgetMode,
       monthKey: currentMonthKey(),
     }).total;
   }, [
@@ -151,6 +158,7 @@ function AppShellContent() {
     accounts,
     incomes,
     monthlyBudget,
+    budgetMode,
     dismissTick,
   ]);
 

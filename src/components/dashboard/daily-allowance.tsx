@@ -6,6 +6,7 @@ import { Coins } from "lucide-react";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { dailyAllowance } from "@/lib/forecast";
+import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 const formatILS = (value: number) =>
@@ -21,6 +22,11 @@ export function DailyAllowance() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
+  // Phase 266 — always use the effective monthly budget. In Auto
+  // mode the raw `monthlyBudget` can legitimately be 0 — the
+  // liquidity engine drives the cap.
+  const effective = usePulseBudget({ monthlyBudget, budgetMode });
 
   const data = useMemo(() => {
     if (!hydrated) return null;
@@ -28,12 +34,14 @@ export function DailyAllowance() {
       entries,
       rules,
       statuses,
-      monthlyBudget,
+      monthlyBudget: effective,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, entries, rules, statuses, monthlyBudget]);
+  }, [hydrated, entries, rules, statuses, effective]);
 
-  if (!data || monthlyBudget <= 0) return null;
+  // Suppress only when effective budget is missing — works for
+  // both manual (user typed 0) and auto (engine couldn't derive).
+  if (!data || effective <= 0) return null;
 
   const overspentToday = data.spentToday > data.allowance && data.allowance > 0;
   const allowanceColor = overspentToday ? "#F87171" : "#D4AF37";

@@ -39,6 +39,11 @@ export function WelcomeSetupCard() {
   const incomes = useFinanceStore((s) => s.incomes);
   const rules = useFinanceStore((s) => s.rules);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  // Phase 266 — Auto budgetMode is a fully valid setup. The user
+  // doesn't need to type a monthlyBudget number; the engine derives
+  // it from liquidity. Without this guard the onboarding card
+  // nagged Auto users to "set a budget" forever.
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
 
   const steps = useMemo<Step[]>(() => {
     const hasBank = accounts.some(
@@ -46,7 +51,7 @@ export function WelcomeSetupCard() {
     );
     const hasIncome = incomes.some((i) => i.active);
     const hasRecurring = rules.some((r) => r.active);
-    const hasBudget = monthlyBudget > 0;
+    const hasBudget = budgetMode === "auto" || monthlyBudget > 0;
     return [
       {
         id: "bank",
@@ -81,7 +86,7 @@ export function WelcomeSetupCard() {
         href: "settings",
       },
     ];
-  }, [accounts, incomes, rules, monthlyBudget]);
+  }, [accounts, incomes, rules, monthlyBudget, budgetMode]);
 
   if (!hydrated) return null;
   const remaining = steps.filter((s) => !s.done);

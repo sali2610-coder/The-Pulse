@@ -39,6 +39,10 @@ export function gatherSmartInsights(args: {
   incomes: Income[];
   monthlyBudget: number;
   monthKey: MonthKey;
+  /** Phase 266 — when budgetMode === "auto" the engine derives the
+   *  cap. Suppress the "budget needs setup / mismatch" insight so
+   *  the user doesn't see a recommendation they can't act on. */
+  budgetMode?: "manual" | "auto";
 }): SmartInsights {
   void args.incomes;
 
@@ -62,6 +66,7 @@ export function gatherSmartInsights(args: {
     monthKey: args.monthKey,
   });
   const recommendationActionable =
+    args.budgetMode !== "auto" &&
     recommendation.hasEnoughData &&
     recommendation.recommended > 0 &&
     !isInsightDismissed(
