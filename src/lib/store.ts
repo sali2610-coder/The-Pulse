@@ -130,6 +130,11 @@ type Actions = {
     merged?: boolean;
   };
   deleteExpense: (id: string) => void;
+  /** Phase 258 — Undo for a freshly-deleted expense. Re-inserts the
+   *  exact original entry (same id, same createdAt, same flags) and
+   *  re-links any RecurringStatus that pointed at it. Safe to call
+   *  even after the entry was already restored: dedups on id. */
+  restoreExpense: (entry: ExpenseEntry) => void;
   /** Generic post-confirmation edit. Does NOT touch confirmedAt or
    *  needsConfirmation (those are owned by `confirmExpense`/`dismissPending`).
    *  Re-runs rule matching only when a field that affects matching changes
@@ -593,6 +598,32 @@ export const useFinanceStore = create<State & Actions>()(
               : s,
           ),
         }));
+      },
+
+      restoreExpense: (entry) => {
+        set((state) => {
+          // No-op if the same id already exists (idempotent undo).
+          if (state.entries.some((e) => e.id === entry.id)) return state;
+          // Re-link any pending status whose matchedRuleId is set on
+          // the restored entry — keeps the recurring-status table
+          // consistent with the original deletion target.
+          const nextStatuses = entry.matchedRuleId
+            ? state.statuses.map((s) =>
+                s.ruleId === entry.matchedRuleId
+                  ? {
+                      ...s,
+                      status: "paid" as const,
+                      matchedExpenseId: entry.id,
+                      actualAmount: entry.amount,
+                    }
+                  : s,
+              )
+            : state.statuses;
+          return {
+            entries: [entry, ...state.entries],
+            statuses: nextStatuses,
+          };
+        });
       },
 
       addRule: (input) => {

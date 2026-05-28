@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, CreditCard, Layers, Pencil } from "lucide-react";
+import { ChevronDown, CreditCard, Layers, Pencil, Trash2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import {
@@ -25,6 +25,7 @@ import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
+import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -47,6 +48,7 @@ export function CardsHierarchyCard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingEntry =
     entries.find((e) => e.id === editingId) ?? null;
+  const deleteWithUndo = useDeleteWithUndo();
 
   const report = useMemo(() => {
     if (!hydrated) return null;
@@ -94,6 +96,7 @@ export function CardsHierarchyCard() {
             key={c.cardId}
             card={c}
             onEditEntry={(id) => setEditingId(id)}
+            onDeleteEntry={(id) => deleteWithUndo(id)}
           />
         ))}
       </ul>
@@ -112,9 +115,11 @@ export function CardsHierarchyCard() {
 function CardRow({
   card,
   onEditEntry,
+  onDeleteEntry,
 }: {
   card: CardBreakdown;
   onEditEntry: (entryId: string) => void;
+  onDeleteEntry: (entryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -197,6 +202,7 @@ function CardRow({
                     key={g.category}
                     group={g}
                     onEditEntry={onEditEntry}
+                    onDeleteEntry={onDeleteEntry}
                   />
                 ))}
               </ul>
@@ -235,9 +241,11 @@ function Stat({
 function CategoryRow({
   group,
   onEditEntry,
+  onDeleteEntry,
 }: {
   group: CategoryGroup;
   onEditEntry: (entryId: string) => void;
+  onDeleteEntry: (entryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const meta = getCategory(group.category);
@@ -342,18 +350,29 @@ function CategoryRow({
                     {ILS.format(Math.round(it.amount))}
                   </span>
                   {entryId ? (
-                    <button
-                      type="button"
-                      data-no-min-tap
-                      onClick={() => {
-                        tap();
-                        onEditEntry(entryId);
-                      }}
-                      aria-label="ערוך"
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        data-no-min-tap
+                        onClick={() => {
+                          tap();
+                          onEditEntry(entryId);
+                        }}
+                        aria-label="ערוך"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        data-no-min-tap
+                        onClick={() => onDeleteEntry(entryId)}
+                        aria-label="מחק"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-destructive/80 hover:bg-destructive/10"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </>
                   ) : null}
                 </li>
               );

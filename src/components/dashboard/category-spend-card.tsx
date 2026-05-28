@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Pencil, PieChart } from "lucide-react";
+import { ChevronDown, Pencil, PieChart, Trash2 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import {
@@ -23,6 +23,7 @@ import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
+import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -42,6 +43,7 @@ export function CategorySpendCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingEntry = entries.find((e) => e.id === editingId) ?? null;
+  const deleteWithUndo = useDeleteWithUndo();
 
   const report = useMemo(() => {
     if (!hydrated) return null;
@@ -89,6 +91,7 @@ export function CategorySpendCard() {
             group={g}
             total={report.total}
             onEditEntry={(id) => setEditingId(id)}
+            onDeleteEntry={(id) => deleteWithUndo(id)}
           />
         ))}
       </ul>
@@ -108,10 +111,12 @@ function CategoryRow({
   group,
   total,
   onEditEntry,
+  onDeleteEntry,
 }: {
   group: CategorySpendBreakdown;
   total: number;
   onEditEntry: (entryId: string) => void;
+  onDeleteEntry: (entryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const meta = getCategory(group.category);
@@ -205,18 +210,29 @@ function CategoryRow({
                   </span>
                 </div>
                 {it.source === "entry" ? (
-                  <button
-                    type="button"
-                    data-no-min-tap
-                    onClick={() => {
-                      tap();
-                      onEditEntry(it.id);
-                    }}
-                    aria-label="ערוך"
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
-                  >
-                    <Pencil className="size-3.5" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      data-no-min-tap
+                      onClick={() => {
+                        tap();
+                        onEditEntry(it.id);
+                      }}
+                      aria-label="ערוך"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      data-no-min-tap
+                      onClick={() => onDeleteEntry(it.id)}
+                      aria-label="מחק"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-destructive/80 hover:bg-destructive/10"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </>
                 ) : null}
                 <span
                   data-mono="true"
