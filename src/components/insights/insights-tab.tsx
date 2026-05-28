@@ -110,7 +110,7 @@ export function InsightsTab() {
   const top = result?.insights[0];
 
   return (
-    <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
+    <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
       <header className="sm:col-span-6 flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="size-4 text-[color:var(--neon)]" />

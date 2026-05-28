@@ -123,9 +123,11 @@ export function ExpensesTab() {
     : undefined;
 
   return (
-    <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
-      {/* Pending tray surfaces only when there are items needing review. */}
-      <div className="sm:col-span-6">
+    <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+      {/* Pending tray surfaces only when there are items needing review.
+          Phase 276 — `empty:hidden` collapses the wrapper when the
+          lazy child renders null so the grid stays tight. */}
+      <div className="sm:col-span-6 empty:hidden">
         <Safe name="PendingTray">
           <PendingTray />
         </Safe>

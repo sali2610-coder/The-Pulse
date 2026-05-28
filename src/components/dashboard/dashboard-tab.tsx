@@ -406,19 +406,23 @@ export function DashboardTab() {
 
   return (
     <SnapshotProvider>
-      <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
-        {/* ── Critical banners — render only when relevant ───────── */}
-        <div className="sm:col-span-6">
+      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+        {/* ── Critical banners — render only when relevant.
+            Phase 276 — `empty:hidden` collapses the wrapper div when
+            the lazy-loaded child renders null so the grid doesn't
+            accumulate phantom rows (each empty row was still adding
+            a gap-4 between visible cards). */}
+        <div className="sm:col-span-6 empty:hidden">
           <Safe name="WelcomeSetupCard">
             <WelcomeSetupCard />
           </Safe>
         </div>
-        <div className="sm:col-span-6">
+        <div className="sm:col-span-6 empty:hidden">
           <Safe name="StaleAnchorsBanner">
             <StaleAnchorsBanner />
           </Safe>
         </div>
-        <div className="sm:col-span-6">
+        <div className="sm:col-span-6 empty:hidden">
           <Safe name="PendingTray">
             <PendingTray />
           </Safe>
@@ -427,7 +431,7 @@ export function DashboardTab() {
         {/* Phase 275 — "הפעימה של היום" lifted to the very top of
            Home above the hero stack. It's emotionally powerful and
            sets the day's tone before any numbers. */}
-        <div className="sm:col-span-6">
+        <div className="sm:col-span-6 empty:hidden">
           <Safe name="TodayPulseCard">
             <TodayPulseCard />
           </Safe>

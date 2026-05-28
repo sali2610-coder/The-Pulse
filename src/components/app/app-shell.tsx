@@ -189,11 +189,18 @@ function AppShellContent() {
     <main
       data-danger={isOverBudget ? "true" : undefined}
       className="relative flex flex-1 flex-col items-stretch px-5 pb-10 pt-safe sm:items-center"
-      style={{ paddingTop: "max(env(safe-area-inset-top), 2.5rem)" }}
+      // Phase 276 — tightened top breathing room. Safe-area floor cut
+      // from 2.5rem → 1.25rem so the header doesn't float when the
+      // device has no notch.
+      style={{ paddingTop: "max(env(safe-area-inset-top), 1.25rem)" }}
     >
       <AnimatedBackground />
 
-      <div className="mx-auto flex w-full max-w-md flex-col gap-5">
+      {/* Phase 276 — unified vertical rhythm. Outer gap-3 between
+         the brand header and the tabs, then TabsContent picks up the
+         tightened mt-2 (was mt-4) so the first card sits visually
+         connected to the nav. */}
+      <div className="mx-auto flex w-full max-w-md flex-col gap-3">
         <motion.header
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -272,27 +279,27 @@ function AppShellContent() {
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="mt-4">
+          <TabsContent value="dashboard" className="mt-2">
             <ErrorBoundary name="DashboardTab">
               <DashboardTab />
             </ErrorBoundary>
           </TabsContent>
-          <TabsContent value="analytics" className="mt-4">
+          <TabsContent value="analytics" className="mt-2">
             <ErrorBoundary name="ExpensesTab">
               <ExpensesTab />
             </ErrorBoundary>
           </TabsContent>
-          <TabsContent value="history" className="mt-4">
+          <TabsContent value="history" className="mt-2">
             <ErrorBoundary name="FutureTab">
               <FutureTab />
             </ErrorBoundary>
           </TabsContent>
-          <TabsContent value="setup" className="mt-4">
+          <TabsContent value="setup" className="mt-2">
             <ErrorBoundary name="InsightsTab">
               <InsightsTab />
             </ErrorBoundary>
           </TabsContent>
-          <TabsContent value="settings" className="mt-4">
+          <TabsContent value="settings" className="mt-2">
             <ErrorBoundary name="SettingsTab">
               <SettingsTab />
             </ErrorBoundary>

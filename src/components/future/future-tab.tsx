@@ -68,7 +68,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function FutureTab() {
   return (
-    <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
+    <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
       {/* Phase 268 — month-first cashflow folders. Replaces the
          merged "bucket source" list with one folder per month. */}
       <div className="sm:col-span-6">
