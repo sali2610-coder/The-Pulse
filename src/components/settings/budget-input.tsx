@@ -119,11 +119,15 @@ export function BudgetInput() {
                 // Phase 267 — direct cloud push, bypassing the 1.5 s
                 // subscribe debounce so reinstall always restores
                 // the latest mode the user picked.
+                // Phase 274 — mode switches always save locally and
+                // are guarded by the pending-push reconcile, so a
+                // cloud RLS failure is no longer a scary red error.
+                // Show a calm, dismissible note instead.
                 void flushBudgetSettings().then((r) => {
                   if (!r.ok && r.reason === "rls") {
-                    toast.error(
-                      "שמירה בענן נכשלה (RLS). הערך נשמר מקומית.",
-                    );
+                    toast("מצב התקציב נשמר במכשיר. הסנכרון לענן ינסה שוב.", {
+                      duration: 3500,
+                    });
                   }
                 });
               }}

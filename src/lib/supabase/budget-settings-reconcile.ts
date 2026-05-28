@@ -1,4 +1,8 @@
 // Phase 263 — pure reconcile decision for budget settings.
+// Phase 274 — added budgetSettingsCloudAt: when local updatedAt is
+// strictly newer than the last successful cloud push, the user's
+// choice is in-flight (RLS failure / offline / queued) and MUST
+// beat any cloud value regardless of the 5-minute recency window.
 //
 // Extracted from useCloudSync so the rules can be exhaustively
 // tested without mounting the hook. The reconcile decides three
@@ -18,12 +22,20 @@
 //      Local wins → push to cloud.
 //   4. monthlyBudget === 0 in auto mode is VALID and must not be
 //      treated as "no opinion": the timestamp is the discriminator.
+//   5. Phase 274 — when `budgetSettingsUpdatedAt > budgetSettingsCloudAt`
+//      a successful cloud push has NOT happened for the user's most
+//      recent local change. Treat local as authoritative until cloud
+//      catches up — independent of the 5-minute window.
 
 export type LocalSettings = {
   monthlyBudget: number;
   budgetMode: "manual" | "auto";
   budgetSafetyBuffer: number;
   budgetSettingsUpdatedAt: number;
+  /** Phase 274 — last successful cloud upsert of the budget
+   *  settings. 0 means "never synced yet". Optional so older
+   *  callers that haven't been updated keep type-checking. */
+  budgetSettingsCloudAt?: number;
 };
 
 export type CloudSettings = {
@@ -55,8 +67,16 @@ export function reconcileBudgetSettings(args: {
   const cloudHasMode = cloud.budgetMode !== undefined;
   const cloudHasBuffer = typeof cloud.budgetSafetyBuffer === "number";
   const localOpinionated = local.budgetSettingsUpdatedAt > 0;
+  const cloudAt = local.budgetSettingsCloudAt ?? 0;
+  // Phase 274 — pending push: local changed but cloud round-trip
+  // hasn't completed. Treat local as authoritative regardless of
+  // recency.
+  const localPendingPush =
+    localOpinionated && local.budgetSettingsUpdatedAt > cloudAt;
   const localRecent =
-    localOpinionated && now - local.budgetSettingsUpdatedAt < LOCAL_RECENT_MS;
+    localPendingPush ||
+    (localOpinionated &&
+      now - local.budgetSettingsUpdatedAt < LOCAL_RECENT_MS);
 
   const applyLocal: Partial<LocalSettings> = {};
   let pushCloud: ReconcileDecision["pushCloud"] = null;

@@ -52,9 +52,9 @@ import {
   upsertIncome,
   upsertLoan,
   upsertRule,
-  upsertUserSettings,
   verifyCloudAccess,
 } from "./cloud-store";
+import { upsertBudgetSettings } from "./upsert-budget-settings";
 import { getCurrentSession, onAuthStateChange } from "./auth";
 import { isSupabaseConfigured } from "./client";
 
@@ -451,17 +451,26 @@ export function useCloudSync(): CloudSyncState {
             typeof settingsRes.budgetSafetyBuffer === "number";
           const localOpinionated =
             localState.budgetSettingsUpdatedAt > 0;
-          const localRecent =
+          // Phase 274 — "pending push" gate. A local change that
+          // hasn't been confirmed by Supabase (RLS failure, offline,
+          // queued) must NEVER be overridden by cloud, regardless of
+          // recency.
+          const cloudConfirmedAt = localState.budgetSettingsCloudAt ?? 0;
+          const localPendingPush =
             localOpinionated &&
-            Date.now() - localState.budgetSettingsUpdatedAt <
-              LOCAL_RECENT_MS;
+            localState.budgetSettingsUpdatedAt > cloudConfirmedAt;
+          const localRecent =
+            localPendingPush ||
+            (localOpinionated &&
+              Date.now() - localState.budgetSettingsUpdatedAt <
+                LOCAL_RECENT_MS);
 
           if (cloudBudget > 0) {
             if (cloudBudget !== localBudget && !localRecent) {
               api({ monthlyBudget: cloudBudget });
             } else if (localRecent && localBudget !== cloudBudget) {
               // Local wins — push our value up.
-              await upsertUserSettings({
+              await upsertBudgetSettings({
                 monthlyBudget: localBudget,
                 budgetMode: localState.budgetMode,
                 budgetSafetyBuffer: localState.budgetSafetyBuffer,
@@ -472,7 +481,7 @@ export function useCloudSync(): CloudSyncState {
             localOpinionated &&
             !ownershipMismatchRef.current
           ) {
-            await upsertUserSettings({
+            await upsertBudgetSettings({
               monthlyBudget: localBudget,
               budgetMode: localState.budgetMode,
               budgetSafetyBuffer: localState.budgetSafetyBuffer,
@@ -486,7 +495,7 @@ export function useCloudSync(): CloudSyncState {
             if (localRecent && !ownershipMismatchRef.current) {
               // Local wins — push our mode up instead of accepting
               // the stale cloud value.
-              await upsertUserSettings({
+              await upsertBudgetSettings({
                 monthlyBudget: useFinanceStore.getState().monthlyBudget,
                 budgetMode: localState.budgetMode,
                 budgetSafetyBuffer: localState.budgetSafetyBuffer,
@@ -511,7 +520,7 @@ export function useCloudSync(): CloudSyncState {
             // the user → push local up so future hydrations see it.
             // NEVER push when local is still the default — that's the
             // reinstall bug.
-            await upsertUserSettings({
+            await upsertBudgetSettings({
               monthlyBudget: useFinanceStore.getState().monthlyBudget,
               budgetMode: localState.budgetMode,
               budgetSafetyBuffer: localState.budgetSafetyBuffer,
@@ -522,7 +531,7 @@ export function useCloudSync(): CloudSyncState {
             settingsRes.budgetSafetyBuffer !== localState.budgetSafetyBuffer
           ) {
             if (localRecent && !ownershipMismatchRef.current) {
-              await upsertUserSettings({
+              await upsertBudgetSettings({
                 monthlyBudget: useFinanceStore.getState().monthlyBudget,
                 budgetMode: localState.budgetMode,
                 budgetSafetyBuffer: localState.budgetSafetyBuffer,
@@ -695,7 +704,7 @@ export function useCloudSync(): CloudSyncState {
               ? (await upsertIncome(item.payload)).ok
               : (await deleteIncome(item.id)).ok;
         } else if (item.kind === "settings") {
-          ok = (await upsertUserSettings({
+          ok = (await upsertBudgetSettings({
             monthlyBudget: item.monthlyBudget,
             budgetMode: item.budgetMode,
             budgetSafetyBuffer: item.budgetSafetyBuffer,
@@ -790,7 +799,7 @@ export function useCloudSync(): CloudSyncState {
         ) {
           await tryWrite(
             () =>
-              upsertUserSettings({
+              upsertBudgetSettings({
                 monthlyBudget: next.monthlyBudget,
                 budgetMode: next.budgetMode,
                 budgetSafetyBuffer: next.budgetSafetyBuffer,

@@ -111,6 +111,14 @@ type State = {
    *  close app" sequence flipped back to Manual on reopen because
    *  the debounced cloud push didn't reach the server in time. */
   budgetSettingsUpdatedAt: number;
+  /** Phase 274 — epoch ms of the last SUCCESSFUL cloud upsert of
+   *  budget settings. Reconcile uses this together with
+   *  budgetSettingsUpdatedAt to detect a "pending push": when local
+   *  is strictly newer than cloud, the user's choice has not landed
+   *  in Supabase yet (RLS failure, offline, ...) and local must win
+   *  regardless of the 5-minute recency window. Defaults to 0 for
+   *  legacy state. */
+  budgetSettingsCloudAt: number;
   lastSyncedAt: number;
   accounts: Account[];
   loans: Loan[];
@@ -210,6 +218,9 @@ type Actions = {
   setMonthlyBudget: (value: number) => void;
   setBudgetMode: (mode: "manual" | "auto") => void;
   setBudgetSafetyBuffer: (value: number) => void;
+  /** Phase 274 — marks the last successful cloud upsert of budget
+   *  settings so reconcile can detect a still-pending push. */
+  markBudgetSettingsCloudSynced: (ms: number) => void;
   setAudioEnabled: (v: boolean) => void;
   setLastSyncedAt: (ms: number) => void;
   setHydrated: (v: boolean) => void;
@@ -273,6 +284,7 @@ export const useFinanceStore = create<State & Actions>()(
       budgetMode: "manual",
       budgetSafetyBuffer: 0,
       budgetSettingsUpdatedAt: 0,
+      budgetSettingsCloudAt: 0,
       lastSyncedAt: 0,
       accounts: [],
       loans: [],
@@ -988,10 +1000,22 @@ export const useFinanceStore = create<State & Actions>()(
       },
 
       setBudgetMode: (mode) => {
+        // Phase 274 — switching to auto clears any stale manual cap.
+        // Earlier revisions left `monthlyBudget` untouched, so a
+        // previously-typed 7000 lingered in localStorage, got pushed
+        // back to Supabase, and resurrected the old manual value
+        // after reload. Switching to manual leaves the existing
+        // value alone so the user's last typed cap is restored.
+        const next: "manual" | "auto" = mode === "auto" ? "auto" : "manual";
         set({
-          budgetMode: mode === "auto" ? "auto" : "manual",
+          budgetMode: next,
+          ...(next === "auto" ? { monthlyBudget: 0 } : null),
           budgetSettingsUpdatedAt: Date.now(),
         });
+      },
+
+      markBudgetSettingsCloudSynced: (ms) => {
+        set({ budgetSettingsCloudAt: Math.max(0, Math.floor(ms)) });
       },
 
       setBudgetSafetyBuffer: (value) => {
@@ -1025,7 +1049,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 11,
+      version: 12,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -1035,6 +1059,7 @@ export const useFinanceStore = create<State & Actions>()(
         budgetMode: s.budgetMode,
         budgetSafetyBuffer: s.budgetSafetyBuffer,
         budgetSettingsUpdatedAt: s.budgetSettingsUpdatedAt,
+        budgetSettingsCloudAt: s.budgetSettingsCloudAt,
         lastSyncedAt: s.lastSyncedAt,
         accounts: s.accounts,
         loans: s.loans,
@@ -1125,6 +1150,16 @@ export const useFinanceStore = create<State & Actions>()(
           migrated = {
             ...migrated,
             budgetSettingsUpdatedAt: migrated.budgetSettingsUpdatedAt ?? 0,
+          };
+        }
+        if (fromVersion < 12) {
+          // Phase 274 — track the last SUCCESSFUL cloud upsert of
+          // budget settings so reconcile can detect a pending push
+          // and refuse to revert local "auto" back to cloud "manual"
+          // while the upsert hasn't landed (e.g. RLS failure).
+          migrated = {
+            ...migrated,
+            budgetSettingsCloudAt: migrated.budgetSettingsCloudAt ?? 0,
           };
         }
         return migrated;

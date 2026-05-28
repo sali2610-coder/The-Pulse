@@ -91,10 +91,15 @@ describe("set auto + close fast — local recent must win", () => {
   });
 
   it("respects the LOCAL_RECENT_MS window edge", () => {
+    const localTs = NOW - LOCAL_RECENT_MS - 1;
     const d = reconcileBudgetSettings({
       local: local({
         budgetMode: "auto",
-        budgetSettingsUpdatedAt: NOW - LOCAL_RECENT_MS - 1,
+        budgetSettingsUpdatedAt: localTs,
+        // Phase 274 — the push DID complete, so there is no pending
+        // push to defend. Cloud is authoritative outside the recency
+        // window.
+        budgetSettingsCloudAt: localTs,
       }),
       cloud: cloud({ budgetMode: "manual" }),
       now: NOW,
@@ -235,5 +240,42 @@ describe("ownershipMismatch — never push local under another user's id", () =>
       ownershipMismatch: true,
     });
     expect(d.pushCloud).toBeNull();
+  });
+});
+
+describe("Phase 274 — pending push beats stale cloud regardless of age", () => {
+  it("local 'auto' beats cloud 'manual' when push never landed, even past recency", () => {
+    // User switched to auto an hour ago but Supabase rejected the
+    // upsert (RLS). budgetSettingsCloudAt is still 0 (never confirmed).
+    // Cloud still says manual. Without the pending-push gate, the old
+    // logic would have reverted local back to manual after 5 minutes.
+    const d = reconcileBudgetSettings({
+      local: local({
+        budgetMode: "auto",
+        budgetSettingsUpdatedAt: NOW - 60 * 60 * 1000,
+        budgetSettingsCloudAt: 0,
+      }),
+      cloud: cloud({ monthlyBudget: 7000, budgetMode: "manual" }),
+      now: NOW,
+    });
+    expect(d.applyLocal.budgetMode).toBeUndefined();
+    expect(d.pushCloud?.budgetMode).toBe("auto");
+  });
+
+  it("once cloud has caught up, cloud is authoritative again", () => {
+    // Same setup but the push DID succeed: budgetSettingsCloudAt ==
+    // budgetSettingsUpdatedAt. A subsequent reconcile that pulls
+    // back the truly latest cloud value should now apply it.
+    const ts = NOW - 60 * 60 * 1000;
+    const d = reconcileBudgetSettings({
+      local: local({
+        budgetMode: "auto",
+        budgetSettingsUpdatedAt: ts,
+        budgetSettingsCloudAt: ts,
+      }),
+      cloud: cloud({ monthlyBudget: 0, budgetMode: "manual" }),
+      now: NOW,
+    });
+    expect(d.applyLocal.budgetMode).toBe("manual");
   });
 });

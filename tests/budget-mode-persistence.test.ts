@@ -44,4 +44,35 @@ describe("budgetMode persistence markers", () => {
     expect(after).toBeGreaterThanOrEqual(t0);
     expect(useFinanceStore.getState().monthlyBudget).toBe(7200);
   });
+
+  it("Phase 274 — switching to auto clears any stale manual cap", () => {
+    // Simulate the production bug: user typed 7000 in manual, then
+    // switched to auto. Old behavior left 7000 in store + pushed it
+    // back to Supabase, resurrecting the manual value after reload.
+    useFinanceStore.getState().setBudgetMode("manual");
+    useFinanceStore.getState().setMonthlyBudget(7000);
+    expect(useFinanceStore.getState().monthlyBudget).toBe(7000);
+
+    useFinanceStore.getState().setBudgetMode("auto");
+    expect(useFinanceStore.getState().budgetMode).toBe("auto");
+    expect(useFinanceStore.getState().monthlyBudget).toBe(0);
+  });
+
+  it("Phase 274 — switching back to manual does NOT zero the field", () => {
+    // The user's last typed manual cap should survive a round-trip
+    // through auto and back so they don't have to retype it.
+    useFinanceStore.getState().setBudgetMode("manual");
+    useFinanceStore.getState().setMonthlyBudget(4200);
+    useFinanceStore.getState().setBudgetMode("auto");
+    expect(useFinanceStore.getState().monthlyBudget).toBe(0);
+    useFinanceStore.getState().setMonthlyBudget(4200);
+    useFinanceStore.getState().setBudgetMode("manual");
+    expect(useFinanceStore.getState().monthlyBudget).toBe(4200);
+  });
+
+  it("Phase 274 — markBudgetSettingsCloudSynced records cloud round-trip", () => {
+    const t0 = Date.now();
+    useFinanceStore.getState().markBudgetSettingsCloudSynced(t0);
+    expect(useFinanceStore.getState().budgetSettingsCloudAt).toBe(t0);
+  });
 });

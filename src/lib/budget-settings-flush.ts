@@ -18,7 +18,7 @@
 // budget_mode column, RLS error, no session).
 
 import { useFinanceStore } from "@/lib/store";
-import { upsertUserSettings } from "@/lib/supabase/cloud-store";
+import { upsertBudgetSettings } from "@/lib/supabase/upsert-budget-settings";
 
 export type FlushResult =
   | { ok: true }
@@ -44,8 +44,13 @@ export function flushBudgetSettings(): Promise<FlushResult> {
   };
   inFlight = (async (): Promise<FlushResult> => {
     try {
-      const res = await upsertUserSettings(payload);
-      if (res.ok) return { ok: true };
+      // upsertBudgetSettings wraps upsertUserSettings + bumps
+      // budgetSettingsCloudAt on success so reconcile sees the
+      // round-trip even when this flush is the only push path.
+      const res = await upsertBudgetSettings(payload);
+      if (res.ok) {
+        return { ok: true };
+      }
       return {
         ok: false,
         reason: res.reason,

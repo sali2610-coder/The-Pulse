@@ -33,7 +33,7 @@ import type {
 } from "@/types/finance";
 import type { Database } from "./types";
 
-type Status =
+export type Status =
   | { ok: true }
   | { ok: false; reason: "not_configured" | "no_session" | "rls"; detail?: string };
 
