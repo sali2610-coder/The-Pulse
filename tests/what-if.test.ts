@@ -139,4 +139,87 @@ describe("simulateForecast", () => {
     });
     expect(r.delta).toBe(0);
   });
+
+  it("Phase 275 — salaryChangePct multiplies expectedIncome", () => {
+    const r = simulateForecast({
+      ...BASE,
+      incomes: [
+        {
+          id: "i-1",
+          label: "Salary",
+          amount: 10000,
+          dayOfMonth: 28,
+          active: true,
+          createdAt: "2025-01-01T00:00:00.000Z",
+        },
+      ],
+      entries: [],
+      overrides: { salaryChangePct: 0.1 }, // +10%
+    });
+    expect(r.simulated.expectedIncome - r.baseline.expectedIncome).toBe(1000);
+    expect(r.delta).toBe(1000);
+  });
+
+  it("Phase 275 — recurringCutPct shrinks pendingFixed", () => {
+    const r = simulateForecast({
+      ...BASE,
+      rules: [
+        {
+          id: "r-1",
+          label: "Rent",
+          category: "bills",
+          estimatedAmount: 4000,
+          dayOfMonth: 28,
+          keywords: [],
+          active: true,
+          createdAt: "2025-01-01T00:00:00.000Z",
+        },
+      ],
+      entries: [],
+      overrides: { recurringCutPct: 0.25 }, // -25%
+    });
+    expect(r.simulated.pendingFixed).toBe(3000);
+    expect(r.delta).toBe(1000);
+  });
+
+  it("Phase 275 — salary cut + variable cut combine", () => {
+    const r = simulateForecast({
+      ...BASE,
+      incomes: [
+        {
+          id: "i-1",
+          label: "Salary",
+          amount: 10000,
+          dayOfMonth: 28,
+          active: true,
+          createdAt: "2025-01-01T00:00:00.000Z",
+        },
+      ],
+      entries: [
+        entry({ amount: 1000, chargeDate: new Date(2026, 4, 20).toISOString() }),
+      ],
+      overrides: { salaryChangePct: -0.2, variableSpendCut: 0.5 },
+    });
+    // salary delta: -2000 ; variable saved: +500 ; net -1500
+    expect(r.delta).toBe(-1500);
+  });
+
+  it("Phase 275 — salaryChangePct clamps to [-1, +1]", () => {
+    const r = simulateForecast({
+      ...BASE,
+      incomes: [
+        {
+          id: "i-1",
+          label: "Salary",
+          amount: 10000,
+          dayOfMonth: 28,
+          active: true,
+          createdAt: "2025-01-01T00:00:00.000Z",
+        },
+      ],
+      entries: [],
+      overrides: { salaryChangePct: 5 }, // clamped to +1
+    });
+    expect(r.delta).toBe(10000);
+  });
 });

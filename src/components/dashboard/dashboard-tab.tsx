@@ -297,12 +297,6 @@ const ExpectedBalanceCard = lazy(() =>
       m.ExpectedBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const CfoSummary = lazy(() =>
-  import("@/components/dashboard/cfo-summary").then((m) => ({
-    default:
-      m.CfoSummary as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
 const CashflowSummaryCard = lazy(() =>
   import("@/components/dashboard/cashflow-summary-card").then((m) => ({
     default:
@@ -315,12 +309,6 @@ const StatsCards = lazy(() =>
       m.StatsCards as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const HealthScoreCard = lazy(() =>
-  import("@/components/dashboard/health-score-card").then((m) => ({
-    default:
-      m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
 const EmergencyFundCard = lazy(() =>
   import("@/components/dashboard/emergency-fund-card").then((m) => ({
     default:
@@ -331,12 +319,6 @@ const AnchorTrajectoryCard = lazy(() =>
   import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
     default:
       m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const LiquidityTimelineCard = lazy(() =>
-  import("@/components/dashboard/liquidity-timeline-card").then((m) => ({
-    default:
-      m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const TodayPulseCard = lazy(() =>
@@ -369,13 +351,6 @@ const MonthlyDigestCard = lazy(() =>
       m.MonthlyDigestCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const WhatIfSimulatorCard = lazy(() =>
-  import("@/components/dashboard/what-if-simulator-card").then((m) => ({
-    default:
-      m.WhatIfSimulatorCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
@@ -446,6 +421,15 @@ export function DashboardTab() {
         <div className="sm:col-span-6">
           <Safe name="PendingTray">
             <PendingTray />
+          </Safe>
+        </div>
+
+        {/* Phase 275 — "הפעימה של היום" lifted to the very top of
+           Home above the hero stack. It's emotionally powerful and
+           sets the day's tone before any numbers. */}
+        <div className="sm:col-span-6">
+          <Safe name="TodayPulseCard">
+            <TodayPulseCard />
           </Safe>
         </div>
 
@@ -733,11 +717,11 @@ export function DashboardTab() {
               <ExpectedBalanceCard />
             </Safe>
           </div>
-          <div className="sm:col-span-6">
-            <Safe name="CfoSummary">
-              <CfoSummary />
-            </Safe>
-          </div>
+          {/* Phase 275 — CfoSummary, HealthScoreCard, LiquidityTimelineCard
+              relocated to the Expenses tab as the financial-control
+              center. WhatIfSimulatorCard promoted into the AI Insights
+              tab as the CFO Sandbox. TodayPulseCard moved to the top
+              of Home for emotional anchoring. */}
           <div className="sm:col-span-6">
             <Safe name="CashflowSummaryCard">
               <CashflowSummaryCard />
@@ -749,11 +733,6 @@ export function DashboardTab() {
             </Safe>
           </div>
           <div className="sm:col-span-6">
-            <Safe name="HealthScoreCard">
-              <HealthScoreCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
             <Safe name="EmergencyFundCard">
               <EmergencyFundCard />
             </Safe>
@@ -761,16 +740,6 @@ export function DashboardTab() {
           <div className="sm:col-span-6">
             <Safe name="AnchorTrajectoryCard">
               <AnchorTrajectoryCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="LiquidityTimelineCard">
-              <LiquidityTimelineCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="TodayPulseCard">
-              <TodayPulseCard />
             </Safe>
           </div>
           <div className="sm:col-span-6">
@@ -791,11 +760,6 @@ export function DashboardTab() {
           <div className="sm:col-span-6">
             <Safe name="MonthlyDigestCard">
               <MonthlyDigestCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="WhatIfSimulatorCard">
-              <WhatIfSimulatorCard />
             </Safe>
           </div>
         </DashboardSection>

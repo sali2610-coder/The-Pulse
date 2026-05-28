@@ -29,6 +29,7 @@ import {
 import { tap } from "@/lib/haptics";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
+import { CfoSandboxCard } from "@/components/insights/cfo-sandbox-card";
 import {
   GROUP_LABELS,
   GROUP_ORDER,
@@ -134,6 +135,11 @@ export function InsightsTab() {
             return <Group key={group} group={group} items={items} />;
           })
         : null}
+
+      {/* Phase 275 — CFO Sandbox lives here. Was a tiny what-if
+         widget on Home; promoted into the AI brain tab with full
+         multi-lever controls + conversational advice. */}
+      <CfoSandboxCard />
     </div>
   );
 }

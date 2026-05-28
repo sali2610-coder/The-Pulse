@@ -29,6 +29,13 @@ export type WhatIfOverrides = {
   variableSpendCut?: number;
   extraIncome?: number;
   extraOutflow?: number;
+  /** Phase 275 — multiplier delta applied to expected income.
+   *  +0.10 = "salary went up 10%", −0.05 = "5% cut". Combined with
+   *  `extraIncome` (one-time bonus). */
+  salaryChangePct?: number;
+  /** Phase 275 — fraction of recurring fixed obligations the user
+   *  would cut (0..1). 0.2 = "trim 20% of pendingFixed". */
+  recurringCutPct?: number;
 };
 
 export type WhatIfResult = {
@@ -80,24 +87,56 @@ export function simulateForecast(args: {
   const cut = clampCut(args.overrides?.variableSpendCut ?? 0);
   const extraIncome = nonNegative(args.overrides?.extraIncome ?? 0);
   const extraOutflow = nonNegative(args.overrides?.extraOutflow ?? 0);
+  // Phase 275 — salary delta can go negative (cut) and is capped at
+  // [-1, +1] to keep the math sane.
+  const salaryDeltaRaw = args.overrides?.salaryChangePct ?? 0;
+  const salaryDelta = Number.isFinite(salaryDeltaRaw)
+    ? Math.max(-1, Math.min(1, salaryDeltaRaw))
+    : 0;
+  const recurringCut = clampCut(args.overrides?.recurringCutPct ?? 0);
 
   // No-op fast path.
-  if (cut === 0 && extraIncome === 0 && extraOutflow === 0) {
+  if (
+    cut === 0 &&
+    extraIncome === 0 &&
+    extraOutflow === 0 &&
+    salaryDelta === 0 &&
+    recurringCut === 0
+  ) {
     return { baseline, simulated: baseline, delta: 0 };
   }
 
   // Apply the variable-spend cut against the slice projection.
   const trimmedFutureCardSlices = baseline.futureCardSlices * (1 - cut);
   const savedFromCut = baseline.futureCardSlices - trimmedFutureCardSlices;
+  // Phase 275 — recurring cut shrinks pendingFixed.
+  const trimmedPendingFixed = baseline.pendingFixed * (1 - recurringCut);
+  const savedFromRecurring = baseline.pendingFixed - trimmedPendingFixed;
+  // Salary multiplier on expectedIncome — separate from the one-time
+  // injection so the UI can show both levers.
+  const salaryAdjusted = baseline.expectedIncome * (1 + salaryDelta);
+  const salaryDeltaAbs = salaryAdjusted - baseline.expectedIncome;
 
   const simulated: EndOfMonthForecast = {
     ...baseline,
-    expectedIncome: baseline.expectedIncome + extraIncome,
+    expectedIncome: salaryAdjusted + extraIncome,
+    pendingFixed: trimmedPendingFixed,
     futureCardSlices: trimmedFutureCardSlices,
     forecast:
-      baseline.forecast + savedFromCut + extraIncome - extraOutflow,
+      baseline.forecast +
+      savedFromCut +
+      savedFromRecurring +
+      salaryDeltaAbs +
+      extraIncome -
+      extraOutflow,
     // variance mirrors forecast (current model — see forecast.ts).
-    variance: baseline.forecast + savedFromCut + extraIncome - extraOutflow,
+    variance:
+      baseline.forecast +
+      savedFromCut +
+      savedFromRecurring +
+      salaryDeltaAbs +
+      extraIncome -
+      extraOutflow,
   };
 
   return {

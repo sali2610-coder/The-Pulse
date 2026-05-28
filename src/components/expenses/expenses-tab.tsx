@@ -50,6 +50,29 @@ const PendingTray = lazy(() =>
       m.PendingTray as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+// Phase 275 — financial-control-center cards relocated from the
+// Home advanced section. CfoSummary is the "Delta Plus" premium
+// opening analysis. HealthScoreCard sits next to it. Liquidity
+// timeline lives behind a default-collapsed accordion so the page
+// stays scannable but the data is still reachable.
+const CfoSummary = lazy(() =>
+  import("@/components/dashboard/cfo-summary").then((m) => ({
+    default:
+      m.CfoSummary as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const HealthScoreCard = lazy(() =>
+  import("@/components/dashboard/health-score-card").then((m) => ({
+    default:
+      m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const LiquidityTimelineCard = lazy(() =>
+  import("@/components/dashboard/liquidity-timeline-card").then((m) => ({
+    default:
+      m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -108,6 +131,20 @@ export function ExpensesTab() {
         </Safe>
       </div>
 
+      {/* Phase 275 — premium opening analysis. CFO forecast + health
+         score sit at the very top so the user lands on real numbers,
+         not yet another list. */}
+      <div className="sm:col-span-6">
+        <Safe name="CfoSummary">
+          <CfoSummary />
+        </Safe>
+      </div>
+      <div className="sm:col-span-6">
+        <Safe name="HealthScoreCard">
+          <HealthScoreCard />
+        </Safe>
+      </div>
+
       <div className="sm:col-span-6">
         <Safe name="CardsHierarchyCard">
           <CardsHierarchyCard />
@@ -135,6 +172,22 @@ export function ExpensesTab() {
         <div className="sm:col-span-6">
           <Safe name="ActiveInstallmentsCard">
             <ActiveInstallmentsCard />
+          </Safe>
+        </div>
+      </DashboardSection>
+
+      {/* Phase 275 — liquidity timeline kept here but folded behind
+         a quiet accordion. Useful but visually heavy when always
+         expanded. */}
+      <DashboardSection
+        storageKey="expenses.liquidity-timeline"
+        title="ציר נזילות 35 ימים"
+        subtitle="תזרים יומי מצטבר עם הכנסות וחיובים"
+        defaultCollapsed
+      >
+        <div className="sm:col-span-6">
+          <Safe name="LiquidityTimelineCard">
+            <LiquidityTimelineCard />
           </Safe>
         </div>
       </DashboardSection>
