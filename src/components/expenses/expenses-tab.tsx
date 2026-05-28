@@ -1,18 +1,20 @@
 "use client";
 
 // Phase 254 — "הוצאות" tab.
-//
-// Composition of the per-card hierarchy + category breakdown +
-// recurring/installments panel. Engine unchanged — only the
-// arrangement changes. Sections are collapsible so the user can
-// drill from "how much" → "by card" → "by category" → individual
-// rows without leaving this surface.
+// Phase 270 — default-collapsed recurring section + anomaly-gated
+// summary chip. The recurring obligations live in many other views
+// (categories, card breakdown, future cashflow, settings). Showing
+// the panel expanded by default was duplication and noise. Now the
+// header is a quiet one-liner unless an insight needs attention.
 
 import dynamic from "next/dynamic";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { useFinanceStore } from "@/lib/store";
+import { currentMonthKey } from "@/lib/dates";
+import { buildRecurringSectionSummary } from "@/lib/recurring-section-summary";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -49,11 +51,54 @@ const PendingTray = lazy(() =>
   })),
 );
 
+const ILS = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+  maximumFractionDigits: 0,
+});
+
 function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
 
 export function ExpensesTab() {
+  const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+
+  const summary = useMemo(() => {
+    if (!hydrated) return null;
+    return buildRecurringSectionSummary({
+      entries,
+      rules,
+      statuses,
+      monthKey: currentMonthKey(),
+    });
+  }, [hydrated, entries, rules, statuses]);
+
+  const recurringSubtitle = summary
+    ? summary.insights.total > 0
+      ? `${summary.insights.total} ${
+          summary.insights.total === 1 ? "תובנה" : "תובנות"
+        } לבדיקה`
+      : `${summary.sourceCount} מקורות • ${ILS.format(
+          Math.round(summary.monthlyTotal),
+        )} לחודש`
+    : "הוצאות קבועות, מנויים, תשלומים פעילים";
+
+  const recurringSummaryChip = summary
+    ? summary.insights.total > 0
+      ? {
+          value: `${summary.insights.total} לבדיקה`,
+          tone: "warn" as const,
+        }
+      : {
+          value: `${ILS.format(Math.round(summary.monthlyTotal))}/חודש`,
+          tone: "info" as const,
+        }
+    : undefined;
+
   return (
     <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
       {/* Pending tray surfaces only when there are items needing review. */}
@@ -78,8 +123,9 @@ export function ExpensesTab() {
       <DashboardSection
         storageKey="expenses.recurring"
         title="חיובים שיורדים אוטומטית כל חודש"
-        subtitle="הוצאות קבועות, מנויים, תשלומים פעילים"
-        defaultCollapsed={false}
+        subtitle={recurringSubtitle}
+        summary={recurringSummaryChip}
+        defaultCollapsed={true}
       >
         <div className="sm:col-span-6">
           <Safe name="RecurringRulesPanel">
