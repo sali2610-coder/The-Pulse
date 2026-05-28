@@ -1,17 +1,23 @@
 "use client";
 
+// Phase 278 — 7-day forward digest, grouped by day with inline
+// expand. Each day is one folder card. Default state: all closed.
+// User taps a day → its outflows fade-in below the row. Matches the
+// "לאן הולך הכסף" UX language; replaces the long flat list that
+// used to overload the Future tab.
+
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Banknote,
   CalendarDays,
-  ChevronLeft,
+  ChevronDown,
   Receipt,
   Repeat2,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
-import { upcomingOutflows } from "@/lib/upcoming-outflows";
+import { upcomingOutflows, type UpcomingOutflow } from "@/lib/upcoming-outflows";
 import { ExpenseEditSheet } from "@/components/dashboard/expense-edit-sheet";
 import { navigateToTab } from "@/lib/tab-nav";
 import { tap } from "@/lib/haptics";
@@ -24,7 +30,12 @@ const ILS = new Intl.NumberFormat("he-IL", {
 });
 
 const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
-  weekday: "short",
+  weekday: "long",
+  day: "2-digit",
+  month: "2-digit",
+});
+
+const SHORT_FMT = new Intl.DateTimeFormat("he-IL", {
   day: "2-digit",
   month: "2-digit",
 });
@@ -41,12 +52,37 @@ const KIND_META = {
   loan: { Icon: Banknote, color: "#A78BFA", label: "הלוואה" },
 } as const;
 
-/**
- * 7-day forward outflow digest. Aggregates entry slices, pending
- * recurring rules, and active loan installments into a single
- * ordered list so the user knows exactly what's landing on the
- * checking account this week. Renders nothing on a calm week.
- */
+type DayGroup = {
+  key: string;
+  date: Date;
+  daysUntil: number;
+  total: number;
+  items: UpcomingOutflow[];
+};
+
+function groupByDay(outflows: UpcomingOutflow[]): DayGroup[] {
+  const map = new Map<string, DayGroup>();
+  for (const o of outflows) {
+    const key = `${o.date.getFullYear()}-${String(o.date.getMonth() + 1).padStart(2, "0")}-${String(o.date.getDate()).padStart(2, "0")}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.total += o.amount;
+      existing.items.push(o);
+    } else {
+      map.set(key, {
+        key,
+        date: o.date,
+        daysUntil: o.daysUntil,
+        total: o.amount,
+        items: [o],
+      });
+    }
+  }
+  return Array.from(map.values()).sort(
+    (a, b) => a.date.getTime() - b.date.getTime(),
+  );
+}
+
 export function UpcomingOutflowsCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
@@ -67,10 +103,13 @@ export function UpcomingOutflowsCard() {
     });
   }, [hydrated, entries, rules, statuses, loans]);
 
+  const groups = useMemo(() => groupByDay(outflows), [outflows]);
+
   if (!hydrated) return null;
   if (outflows.length === 0) return null;
 
   const total = outflows.reduce((s, o) => s + o.amount, 0);
+  const firstHeavy = groups.find((g) => g.total >= 1000);
 
   function activate(kind: "entry" | "rule" | "loan", id: string) {
     tap();
@@ -82,7 +121,6 @@ export function UpcomingOutflowsCard() {
       navigateToTab("settings", "loans");
       return;
     }
-    // entry — `id` is the synthetic outflow id "e:<entryId>:<monthKey>".
     const entryId = id.split(":")[1];
     const entry = entries.find((e) => e.id === entryId);
     if (entry) setEditEntry(entry);
@@ -100,7 +138,7 @@ export function UpcomingOutflowsCard() {
               השבוע הבא
             </span>
             <span className="text-[11.5px] text-muted-foreground">
-              חיובים שמתוכננים ב־7 הימים הקרובים
+              {groups.length} ימים · {outflows.length} חיובים
             </span>
           </div>
         </div>
@@ -113,67 +151,30 @@ export function UpcomingOutflowsCard() {
         </span>
       </header>
 
-      <ul className="flex flex-col gap-1.5">
-        {outflows.slice(0, 6).map((o, idx) => {
-          const meta = KIND_META[o.kind];
-          const Icon = meta.Icon;
-          return (
-            <motion.li
-              key={o.id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.04, duration: 0.22 }}
-              whileTap={{ scale: 0.99 }}
-              role="button"
-              tabIndex={0}
-              onClick={() => activate(o.kind, o.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  activate(o.kind, o.id);
-                }
-              }}
-              className="flex cursor-pointer items-center gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-2.5 outline-none transition-colors hover:border-white/14 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
-            >
-              <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background: `${meta.color}22`,
-                  color: meta.color,
-                }}
-              >
-                <Icon className="size-3.5" strokeWidth={1.7} />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-[12.5px] font-medium text-foreground">
-                  {o.label}
-                </span>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span>{dayLabel(o.daysUntil)}</span>
-                  <span>·</span>
-                  <span dir="ltr">{DAY_FMT.format(o.date)}</span>
-                  <span>·</span>
-                  <span style={{ color: meta.color }}>{meta.label}</span>
-                </div>
-              </div>
-              <span
-                data-mono="true"
-                dir="ltr"
-                className="shrink-0 text-[12.5px] font-semibold text-foreground"
-              >
-                −{ILS.format(o.amount)}
-              </span>
-              <ChevronLeft className="size-3 shrink-0 text-muted-foreground/70" />
-            </motion.li>
-          );
-        })}
-      </ul>
-
-      {outflows.length > 6 ? (
-        <p className="text-[10px] text-muted-foreground">
-          ועוד {outflows.length - 6} פריטים בשבוע
+      {firstHeavy ? (
+        <p
+          className="rounded-xl border px-3 py-1.5 text-[11px]"
+          style={{
+            background: "#F8717115",
+            borderColor: "#F8717140",
+            color: "#FCA5A5",
+          }}
+        >
+          ⚠️ חיוב כבד מתקרב · {SHORT_FMT.format(firstHeavy.date)} · −
+          {ILS.format(Math.round(firstHeavy.total))}
         </p>
       ) : null}
+
+      <ul className="flex flex-col gap-1.5">
+        {groups.map((g, idx) => (
+          <DayCard
+            key={g.key}
+            group={g}
+            index={idx}
+            onActivate={activate}
+          />
+        ))}
+      </ul>
 
       <ExpenseEditSheet
         key={editEntry?.id ?? "none"}
@@ -185,4 +186,125 @@ export function UpcomingOutflowsCard() {
       />
     </section>
   );
+}
+
+function DayCard({
+  group,
+  index,
+  onActivate,
+}: {
+  group: DayGroup;
+  index: number;
+  onActivate: (kind: "entry" | "rule" | "loan", id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <motion.li
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: idx(index), duration: 0.22 }}
+      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
+    >
+      <button
+        type="button"
+        onClick={() => {
+          tap();
+          setOpen((v) => !v);
+        }}
+        aria-expanded={open}
+        aria-label={`${open ? "סגור" : "פתח"} ${DAY_FMT.format(group.date)}`}
+        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-start hover:bg-white/3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+      >
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="text-[12.5px] font-medium text-foreground">
+            {dayLabel(group.daysUntil)}
+          </span>
+          <span className="text-[10px] text-muted-foreground" dir="ltr">
+            {DAY_FMT.format(group.date)} · {group.items.length} חיובים
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            data-mono="true"
+            dir="ltr"
+            className="text-[13.5px] font-semibold text-foreground"
+          >
+            −{ILS.format(Math.round(group.total))}
+          </span>
+          <motion.span
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.18 }}
+            className="text-muted-foreground"
+            aria-hidden
+          >
+            <ChevronDown className="size-4" />
+          </motion.span>
+        </div>
+      </button>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.ul
+            key="body"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden border-t border-white/6"
+          >
+            {group.items.map((o) => {
+              const meta = KIND_META[o.kind];
+              const Icon = meta.Icon;
+              return (
+                <li
+                  key={o.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onActivate(o.kind, o.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onActivate(o.kind, o.id);
+                    }
+                  }}
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 outline-none transition-colors hover:bg-white/3 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+                >
+                  <span
+                    className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                    style={{
+                      background: `${meta.color}22`,
+                      color: meta.color,
+                    }}
+                  >
+                    <Icon className="size-3.5" strokeWidth={1.7} />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span className="truncate text-[12px] font-medium text-foreground">
+                      {o.label}
+                    </span>
+                    <span
+                      className="text-[10px]"
+                      style={{ color: meta.color }}
+                    >
+                      {meta.label}
+                    </span>
+                  </div>
+                  <span
+                    data-mono="true"
+                    dir="ltr"
+                    className="shrink-0 text-[12px] font-semibold text-foreground"
+                  >
+                    −{ILS.format(Math.round(o.amount))}
+                  </span>
+                </li>
+              );
+            })}
+          </motion.ul>
+        ) : null}
+      </AnimatePresence>
+    </motion.li>
+  );
+}
+
+function idx(i: number): number {
+  return Math.min(i * 0.035, 0.25);
 }

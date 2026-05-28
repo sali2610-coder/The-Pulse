@@ -8,9 +8,10 @@
 // see "which card will hit, when, and how much".
 
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarClock,
+  ChevronDown,
   CreditCard,
   Landmark,
   Layers,
@@ -24,12 +25,11 @@ import {
 } from "@/lib/cash-flow-bucket";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
-import { CashflowBucketDrilldownSheet } from "@/components/dashboard/cashflow-bucket-drilldown-sheet";
 import {
   bucketsToCsv,
   downloadCsv,
 } from "@/lib/csv-export-forecast";
-import { CARD_TAP, listReveal } from "@/lib/motion-tokens";
+import { listReveal } from "@/lib/motion-tokens";
 import { tap } from "@/lib/haptics";
 import { Download } from "lucide-react";
 
@@ -57,7 +57,8 @@ const SOURCE_TONE: Record<CashFlowBucket["source"], string> = {
 };
 
 export function CashflowBucketsCard() {
-  const [active, setActive] = useState<CashFlowBucket | null>(null);
+  // Phase 278 — drilldown sheet replaced with inline expand-in-place
+  // to match the "לאן הולך הכסף" UX language. No more sheet state.
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
   const loans = useFinanceStore((s) => s.loans);
@@ -123,15 +124,7 @@ export function CashflowBucketsCard() {
 
       <ul className="flex flex-col gap-1.5">
         {report.buckets.map((b, idx) => (
-          <BucketRow
-            key={b.id}
-            bucket={b}
-            index={idx}
-            onActivate={() => {
-              tap();
-              setActive(b);
-            }}
-          />
+          <BucketRow key={b.id} bucket={b} index={idx} />
         ))}
       </ul>
 
@@ -139,14 +132,6 @@ export function CashflowBucketsCard() {
         חיובי כרטיס מקובצים לפי הכרטיס המבצע — לא לפי יום החיוב של ההוצאה
         עצמה. הוצאה קבועה המשולמת בכרטיס תופיע כאן תחת הכרטיס.
       </p>
-
-      <CashflowBucketDrilldownSheet
-        bucket={active}
-        open={active !== null}
-        onOpenChange={(o) => {
-          if (!o) setActive(null);
-        }}
-      />
     </section>
   );
 }
@@ -154,69 +139,112 @@ export function CashflowBucketsCard() {
 function BucketRow({
   bucket,
   index,
-  onActivate,
 }: {
   bucket: CashFlowBucket;
   index: number;
-  onActivate: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const tone = SOURCE_TONE[bucket.source];
   return (
     <motion.li
       initial={{ opacity: 0, y: 3 }}
       animate={{ opacity: 1, y: 0 }}
       transition={listReveal(index)}
-      whileTap={CARD_TAP}
-      onClick={onActivate}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onActivate();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`פתח פירוט — ${bucket.label}`}
-      className="flex items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3 cursor-pointer outline-none transition-colors hover:border-white/16 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
     >
-      <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-xl"
-        style={{ background: `${tone}22`, color: tone }}
+      <button
+        type="button"
+        onClick={() => {
+          tap();
+          setOpen((v) => !v);
+        }}
+        aria-expanded={open}
+        aria-label={`${open ? "סגור" : "פתח"} פירוט — ${bucket.label}`}
+        className="flex w-full items-start gap-2.5 p-3 text-start transition-colors hover:bg-white/3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
       >
-        {SOURCE_ICON[bucket.source]}
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-foreground">
-            {bucket.label}
-          </span>
-          {bucket.cardLast4 ? (
-            <span
-              className="rounded-md bg-white/8 px-1.5 py-0.5 text-[9px] text-muted-foreground"
-              dir="ltr"
-            >
-              ····{bucket.cardLast4}
-            </span>
-          ) : null}
-        </div>
-        <span className="text-[10.5px] text-muted-foreground/85">
-          {bucket.obligationCount} התחייבויות
-          {bucket.nextSettlementAt ? (
-            <>
-              {" · "}
-              חיוב הבא ב-{DAY_FMT.format(new Date(bucket.nextSettlementAt))}
-            </>
-          ) : null}
+        <span
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: `${tone}22`, color: tone }}
+        >
+          {SOURCE_ICON[bucket.source]}
         </span>
-      </div>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="shrink-0 text-[14px] font-semibold"
-        style={{ color: "#F87171" }}
-      >
-        −{ILS.format(bucket.monthlyTotal)}
-      </span>
+        <div className="flex min-w-0 flex-1 flex-col leading-tight">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-[13px] font-medium text-foreground">
+              {bucket.label}
+            </span>
+            {bucket.cardLast4 ? (
+              <span
+                className="rounded-md bg-white/8 px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                dir="ltr"
+              >
+                ····{bucket.cardLast4}
+              </span>
+            ) : null}
+          </div>
+          <span className="text-[10.5px] text-muted-foreground/85">
+            {bucket.obligationCount} התחייבויות
+            {bucket.nextSettlementAt ? (
+              <>
+                {" · "}
+                חיוב הבא ב-{DAY_FMT.format(new Date(bucket.nextSettlementAt))}
+              </>
+            ) : null}
+          </span>
+        </div>
+        <span
+          data-mono="true"
+          dir="ltr"
+          className="shrink-0 text-[14px] font-semibold"
+          style={{ color: "#F87171" }}
+        >
+          −{ILS.format(bucket.monthlyTotal)}
+        </span>
+        <motion.span
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.18 }}
+          className="shrink-0 text-muted-foreground"
+          aria-hidden
+        >
+          <ChevronDown className="size-4" />
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.ul
+            key="body"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden border-t border-white/6"
+          >
+            {bucket.obligations.map((ob) => (
+              <li
+                key={ob.refId}
+                className="flex items-baseline justify-between gap-2 px-4 py-2"
+              >
+                <div className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate text-[12px] text-foreground">
+                    {ob.label}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/80">
+                    {DAY_FMT.format(new Date(ob.effectiveCashAt))}
+                  </span>
+                </div>
+                <span
+                  data-mono="true"
+                  dir="ltr"
+                  className="text-[12px] font-medium"
+                  style={{ color: tone }}
+                >
+                  −{ILS.format(Math.round(ob.amount))}
+                </span>
+              </li>
+            ))}
+          </motion.ul>
+        ) : null}
+      </AnimatePresence>
     </motion.li>
   );
 }
