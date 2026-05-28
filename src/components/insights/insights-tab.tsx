@@ -1,53 +1,76 @@
 "use client";
 
-// Phase 254+255 — "תובנות" tab.
+// Phase 273 — AI Financial Copilot surface.
 //
-// Behavioral / predictive surfaces only. Each card is grounded in
-// real engine output — no fake AI. The user reads short Hebrew
-// sentences ("בקצב הזה תיכנס לחריגה בעוד 6 ימים"), an explainer
-// ("מה זה אומר"), and one suggested action.
+// The Insights tab used to be a flat list of status cards. It now
+// renders the prioritized output of `gatherAiInsights` (src/lib/
+// ai-insights.ts), grouped into six bands (Risks / Predictions /
+// Opportunities / Trends / Positive / AI recommendations).
+//
+// Each card carries severity + urgency + confidence chips and an
+// expandable "why this matters" + "recommended action" pair. The
+// engine never emits filler — when nothing notable is happening
+// the screen explicitly says so in a calm, premium tone.
 
 import { useMemo, useState } from "react";
-
-import { tap } from "@/lib/haptics";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
-  CheckCircle2,
-  Info,
+  ChevronDown,
+  Compass,
+  Gauge,
   Lightbulb,
+  ShieldCheck,
   Sparkles,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 
+import { tap } from "@/lib/haptics";
 import { useFinanceStore } from "@/lib/store";
-import { liquidityCurve } from "@/lib/liquidity-curve";
-import { buildRiskWarnings } from "@/lib/risk-warnings";
-import { categoryTrends } from "@/lib/forecast";
-import { detectSuspectedDuplicates } from "@/lib/dedup";
-import { monthKeyOf } from "@/lib/dates";
-import { getCategory } from "@/lib/categories";
+import { currentMonthKey } from "@/lib/dates";
+import {
+  GROUP_LABELS,
+  GROUP_ORDER,
+  gatherAiInsights,
+  type AiInsight,
+  type AiInsightGroup,
+} from "@/lib/ai-insights";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
-
-type InsightCard = {
-  id: string;
-  tone: "info" | "warn" | "danger" | "ok";
-  icon: React.ReactNode;
-  title: string;
-  why: string;
-  action?: string;
+const GROUP_TONE: Record<AiInsightGroup, string> = {
+  risk: "#F87171",
+  prediction: "#A78BFA",
+  opportunity: "#FBBF24",
+  trend: "#60A5FA",
+  positive: "#34D399",
+  recommendation: "#22D3EE",
 };
 
-function tonePalette(tone: InsightCard["tone"]) {
-  if (tone === "danger") return "#F87171";
-  if (tone === "warn") return "#F59E0B";
-  if (tone === "ok") return "#34D399";
-  return "#60A5FA";
+const GROUP_ICON: Record<AiInsightGroup, React.ReactNode> = {
+  risk: <AlertTriangle className="size-4" />,
+  prediction: <Gauge className="size-4" />,
+  opportunity: <Lightbulb className="size-4" />,
+  trend: <Compass className="size-4" />,
+  positive: <ShieldCheck className="size-4" />,
+  recommendation: <Sparkles className="size-4" />,
+};
+
+const SEV_DOT: Record<1 | 2 | 3, string> = {
+  1: "#94A3B8",
+  2: "#FBBF24",
+  3: "#F87171",
+};
+
+const SEV_LABEL: Record<1 | 2 | 3, string> = {
+  1: "רגיע",
+  2: "שים לב",
+  3: "דחוף",
+};
+
+function confidenceLabel(c: number): string {
+  if (c >= 0.85) return "ביטחון גבוה";
+  if (c >= 0.65) return "ביטחון בינוני";
+  return "ביטחון בסיסי";
 }
 
 export function InsightsTab() {
@@ -60,172 +83,18 @@ export function InsightsTab() {
   const entries = useFinanceStore((s) => s.entries);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
-  const cards = useMemo<InsightCard[]>(() => {
-    if (!hydrated) return [];
-    const monthKey = monthKeyOf(new Date());
-    const out: InsightCard[] = [];
-
-    // 1. Liquidity-curve dip warning.
-    const curve = liquidityCurve({
+  const result = useMemo(() => {
+    if (!hydrated) return null;
+    return gatherAiInsights({
       accounts,
       loans,
       incomes,
       rules,
       statuses,
       entries,
-    });
-    if (curve.crossesNegative) {
-      const dipDay = curve.lowestPoint.dayIndex;
-      out.push({
-        id: "liquidity-dip",
-        tone: "danger",
-        icon: <AlertTriangle className="size-5" />,
-        title:
-          dipDay === 0
-            ? "תזרים שלילי צפוי כבר היום"
-            : `תזרים שלילי צפוי בעוד ${dipDay} ימים`,
-        why: `הנקודה הנמוכה הצפויה — ${ILS.format(
-          Math.round(curve.lowestPoint.balance),
-        )}. החישוב לוקח בחשבון משכורות, הלוואות, חיובי כרטיס וקבועים.`,
-        action:
-          "הקפא חיוב גדול או הזרם כסף לחשבון לפני המועד הזה.",
-      });
-    }
-
-    // 2. Risk warnings (existing engine — top 2).
-    const warnings = buildRiskWarnings({
-      accounts,
-      loans,
-      incomes,
-      rules,
-      entries,
-      statuses,
       monthlyBudget,
-      monthKey,
+      monthKey: currentMonthKey(),
     });
-    for (const w of warnings.slice(0, 2)) {
-      const tone: InsightCard["tone"] =
-        w.severity === "alert"
-          ? "danger"
-          : w.severity === "warn"
-            ? "warn"
-            : "info";
-      out.push({
-        id: `risk-${w.id}`,
-        tone,
-        icon:
-          tone === "danger" ? (
-            <AlertTriangle className="size-5" />
-          ) : (
-            <Info className="size-5" />
-          ),
-        title: w.title,
-        why: w.detail,
-        action: undefined,
-      });
-    }
-
-    // 3. Category trend deltas (top 3 by abs change, threshold 25%).
-    const trends = categoryTrends({
-      entries,
-      monthKey,
-      lookback: 3,
-    });
-    const interesting = trends
-      .filter(
-        (t) =>
-          t.priorAverage > 0 &&
-          t.deltaPct !== null &&
-          Math.abs(t.deltaPct) >= 0.25 &&
-          t.thisMonth > 0,
-      )
-      .slice(0, 3);
-    for (const t of interesting) {
-      const meta = getCategory(t.category as ReturnType<typeof getCategory>["id"]);
-      const pct = Math.round(Math.abs(t.deltaPct ?? 0) * 100);
-      const direction = t.delta > 0 ? "עלו" : "ירדו";
-      out.push({
-        id: `trend-${t.category}`,
-        tone: t.delta > 0 ? "warn" : "ok",
-        icon:
-          t.delta > 0 ? (
-            <TrendingUp className="size-5" />
-          ) : (
-            <TrendingDown className="size-5" />
-          ),
-        title: `הוצאות ${meta.label} ${direction} ב-${pct}%`,
-        why: `החודש הוצאת ${ILS.format(
-          Math.round(t.thisMonth),
-        )} לעומת ממוצע 3 חודשים אחרונים של ${ILS.format(
-          Math.round(t.priorAverage),
-        )}.`,
-        action:
-          t.delta > 0
-            ? "בדוק אילו פריטים תרמו לעלייה לפני סוף החודש."
-            : undefined,
-      });
-    }
-
-    // 4. Suspected duplicates (cap at 1 — surface the strongest).
-    const dups = detectSuspectedDuplicates(entries);
-    let topDup: {
-      score: number;
-      ids: [string, string];
-    } | null = null;
-    for (const [id, info] of dups.entries()) {
-      if (!topDup || info.confidence > topDup.score) {
-        topDup = { score: info.confidence, ids: [id, info.siblingId] };
-      }
-    }
-    if (topDup) {
-      const a = entries.find((e) => e.id === topDup!.ids[0]);
-      const b = entries.find((e) => e.id === topDup!.ids[1]);
-      if (a && b) {
-        out.push({
-          id: "dup-suspect",
-          tone: "warn",
-          icon: <AlertTriangle className="size-5" />,
-          title: "ייתכן שיש כפילות בהוצאות שלך",
-          why: `שתי הוצאות דומות נראו ב-${new Date(
-            a.chargeDate,
-          ).toLocaleDateString("he-IL")}: ${a.merchant ?? "ללא שם"} ב-${ILS.format(
-            Math.round(a.amount),
-          )} ו-${b.merchant ?? "ללא שם"} ב-${ILS.format(Math.round(b.amount))}.`,
-          action: "פתח את ההוצאה הכפולה לבדיקה ומחיקה אם צריך.",
-        });
-      }
-    }
-
-    // 5. Pending confirmations.
-    const pendingCount = entries.filter(
-      (e) => e.needsConfirmation && !e.confirmedAt,
-    ).length;
-    if (pendingCount > 0) {
-      out.push({
-        id: "pending",
-        tone: "info",
-        icon: <Sparkles className="size-5" />,
-        title:
-          pendingCount === 1
-            ? "חיוב אחד ממתין לאישור"
-            : `${pendingCount} חיובים ממתינים לאישור`,
-        why: "פעולות שעדיין מחכות לאישור סופי מהמשתמש. עד שלא יאושרו, הן לא נכנסות לתחזית הסופית.",
-        action: "פתח את לוח הבית — Pending Tray ממתין למעלה.",
-      });
-    }
-
-    // 6. Calm fallback when nothing else fires.
-    if (out.length === 0) {
-      out.push({
-        id: "ok",
-        tone: "ok",
-        icon: <CheckCircle2 className="size-5" />,
-        title: "הכל תחת שליטה",
-        why: "אין סיכונים תזרימיים בולטים לחודש הקרוב. המשך כך.",
-      });
-    }
-
-    return out;
   }, [
     hydrated,
     accounts,
@@ -237,106 +106,255 @@ export function InsightsTab() {
     monthlyBudget,
   ]);
 
-  return <InsightsTabInner cards={cards} />;
-}
+  const top = result?.insights[0];
 
-function InsightsTabInner({ cards }: { cards: InsightCard[] }) {
-  // Phase 260 — quick filter chips. Match the preset model from
-  // CategorySpendCard so the user can switch tone class without
-  // scrolling. Count per tone is computed once for badge text.
-  type Filter = "all" | "danger" | "warn" | "info" | "ok";
-  const [filter, setFilter] = useState<Filter>("all");
-  const filtered =
-    filter === "all" ? cards : cards.filter((c) => c.tone === filter);
-  const presets: Array<{ key: Filter; label: string }> = [
-    { key: "all", label: `הכל (${cards.length})` },
-    {
-      key: "danger",
-      label: `סיכון (${cards.filter((c) => c.tone === "danger").length})`,
-    },
-    {
-      key: "warn",
-      label: `אזהרה (${cards.filter((c) => c.tone === "warn").length})`,
-    },
-    {
-      key: "info",
-      label: `מגמות (${cards.filter((c) => c.tone === "info").length})`,
-    },
-  ];
   return (
     <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
-      <div className="sm:col-span-6 flex flex-col gap-3">
+      <header className="sm:col-span-6 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <Lightbulb className="size-4 text-[color:var(--neon)]" />
-          <span className="text-section text-foreground">תובנות חכמות</span>
+          <Sparkles className="size-4 text-[color:var(--neon)]" />
+          <span className="text-section text-foreground">
+            המוח הפיננסי שלך
+          </span>
         </div>
         <p className="text-caption text-muted-foreground">
-          Pulse קורא את הנתונים שלך ומדגיש את הדברים שצריך לשים אליהם
-          לב. כל תובנה כאן נשענת על חישוב אמיתי — לא ניחושים.
+          Pulse לומד את ההתנהגות שלך, משווה בין חודשים, מזהה דפוסים ומציע
+          פעולות. כל תובנה כאן מבוססת על חישוב אמיתי — לא ניחושים.
         </p>
-        <div className="flex flex-wrap gap-2">
-          {presets.map((p) => {
-            const active = filter === p.key;
-            return (
-              <button
-                key={p.key}
-                type="button"
-                data-no-min-tap
-                onClick={() => {
-                  tap();
-                  setFilter(p.key);
-                }}
-                className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
-                  active
-                    ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
-                    : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      </header>
 
-      {filtered.length === 0 ? (
-        <p className="sm:col-span-6 text-caption text-muted-foreground/85">
-          אין תובנות בקטגוריה הזו כרגע.
-        </p>
-      ) : null}
+      {top ? <HeroInsight insight={top} /> : null}
 
-      {filtered.map((c) => {
-        const color = tonePalette(c.tone);
-        return (
-          <section
-            key={c.id}
-            className="glass-card sm:col-span-6 flex items-start gap-3 rounded-3xl p-5"
-            style={{
-              background: `linear-gradient(135deg, ${color}12 0%, transparent 65%)`,
-            }}
-          >
-            <span
-              className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
-              style={{ background: `${color}22`, color }}
-            >
-              {c.icon}
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="text-section" style={{ color }}>
-                {c.title}
-              </span>
-              <span className="text-body text-muted-foreground/90">
-                {c.why}
-              </span>
-              {c.action ? (
-                <span className="text-caption text-foreground/85">
-                  💡 {c.action}
-                </span>
-              ) : null}
-            </div>
-          </section>
-        );
-      })}
+      {!result || result.total === 0 ? <CalmEmpty /> : null}
+
+      {result
+        ? GROUP_ORDER.map((group) => {
+            const items = result.byGroup[group];
+            if (items.length === 0) return null;
+            return <Group key={group} group={group} items={items} />;
+          })
+        : null}
     </div>
   );
 }
+
+function CalmEmpty() {
+  return (
+    <section className="glass-card sm:col-span-6 flex flex-col items-center gap-2 rounded-3xl p-8 text-center">
+      <ShieldCheck className="size-7 text-[#34D399]" />
+      <span className="text-section text-foreground">הכל תחת שליטה</span>
+      <span className="text-caption text-muted-foreground/85">
+        אין תובנות בולטות לחודש הנוכחי. תיהנה מהשקט — Pulse ימשיך לעקוב
+        ויעיר אותך כשמשהו ישתנה.
+      </span>
+    </section>
+  );
+}
+
+function HeroInsight({ insight }: { insight: AiInsight }) {
+  const color = GROUP_TONE[insight.group];
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="glass-card sm:col-span-6 flex flex-col gap-3 rounded-3xl p-6"
+      style={{
+        background: `linear-gradient(135deg, ${color}1d 0%, transparent 70%)`,
+        borderColor: `${color}33`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="flex size-9 items-center justify-center rounded-2xl"
+          style={{ background: `${color}26`, color }}
+        >
+          {GROUP_ICON[insight.group]}
+        </span>
+        <div className="flex flex-col leading-tight">
+          <span className="text-micro uppercase tracking-[0.25em]" style={{ color }}>
+            {GROUP_LABELS[insight.group]} · התובנה החשובה ביותר
+          </span>
+          <span className="text-caption text-muted-foreground">
+            {SEV_LABEL[insight.severity]} · {confidenceLabel(insight.confidence)}
+          </span>
+        </div>
+      </div>
+      <p className="text-section text-foreground">{insight.title}</p>
+      <p className="text-body text-muted-foreground/90">{insight.body}</p>
+      {insight.why ? (
+        <p className="text-caption text-muted-foreground/80">{insight.why}</p>
+      ) : null}
+      {insight.action ? (
+        <p
+          className="rounded-2xl border px-3 py-2 text-caption"
+          style={{
+            background: `${color}10`,
+            borderColor: `${color}33`,
+            color: "var(--foreground)",
+          }}
+        >
+          💡 {insight.action}
+        </p>
+      ) : null}
+    </motion.section>
+  );
+}
+
+function Group({
+  group,
+  items,
+}: {
+  group: AiInsightGroup;
+  items: AiInsight[];
+}) {
+  const color = GROUP_TONE[group];
+  return (
+    <section className="sm:col-span-6 flex flex-col gap-2.5">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex size-7 items-center justify-center rounded-xl"
+            style={{ background: `${color}22`, color }}
+          >
+            {GROUP_ICON[group]}
+          </span>
+          <span className="text-section text-foreground">
+            {GROUP_LABELS[group]}
+          </span>
+        </div>
+        <span
+          className="text-caption rounded-full border px-2.5 py-0.5"
+          style={{
+            color,
+            borderColor: `${color}44`,
+            background: `${color}10`,
+          }}
+        >
+          {items.length}
+        </span>
+      </header>
+      <ul className="flex flex-col gap-2">
+        {items.map((ins) => (
+          <InsightCard key={ins.id} insight={ins} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function InsightCard({ insight }: { insight: AiInsight }) {
+  const [open, setOpen] = useState(false);
+  const color = GROUP_TONE[insight.group];
+  const hasDetails = Boolean(insight.why || insight.action);
+  return (
+    <li
+      className="overflow-hidden rounded-2xl border bg-black/25"
+      style={{ borderColor: "#ffffff14" }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          tap();
+          if (hasDetails) setOpen((v) => !v);
+        }}
+        aria-expanded={open}
+        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/3"
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className="size-1.5 rounded-full"
+              style={{ background: SEV_DOT[insight.severity] }}
+              aria-hidden
+            />
+            <span
+              className="text-micro rounded-full px-2 py-0.5"
+              style={{
+                color,
+                background: `${color}1a`,
+              }}
+            >
+              {GROUP_LABELS[insight.group]}
+            </span>
+            <span className="text-micro text-muted-foreground/80">
+              {SEV_LABEL[insight.severity]}
+            </span>
+            <span className="text-micro text-muted-foreground/60">·</span>
+            <span className="text-micro text-muted-foreground/70">
+              {confidenceLabel(insight.confidence)}
+            </span>
+            <ConfidenceBar value={insight.confidence} color={color} />
+          </div>
+          <span className="text-body text-foreground">{insight.title}</span>
+          <span className="text-caption text-muted-foreground/85">
+            {insight.body}
+          </span>
+        </div>
+        {hasDetails ? (
+          <motion.span
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.18 }}
+            className="text-muted-foreground"
+          >
+            <ChevronDown className="size-4" />
+          </motion.span>
+        ) : null}
+      </button>
+      <AnimatePresence initial={false}>
+        {hasDetails && open ? (
+          <motion.div
+            key="body"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden border-t border-white/8"
+          >
+            <div className="flex flex-col gap-2 p-4">
+              {insight.why ? (
+                <p className="text-caption text-muted-foreground/85">
+                  <span className="text-foreground">למה זה חשוב — </span>
+                  {insight.why}
+                </p>
+              ) : null}
+              {insight.action ? (
+                <p
+                  className="rounded-xl border px-3 py-2 text-caption"
+                  style={{
+                    background: `${color}10`,
+                    borderColor: `${color}33`,
+                    color: "var(--foreground)",
+                  }}
+                >
+                  💡 {insight.action}
+                </p>
+              ) : null}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </li>
+  );
+}
+
+function ConfidenceBar({ value, color }: { value: number; color: string }) {
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
+  return (
+    <span
+      className="ml-1 inline-flex h-1.5 w-12 overflow-hidden rounded-full"
+      style={{ background: `${color}22` }}
+      aria-label={`רמת ביטחון ${pct}%`}
+    >
+      <span
+        className="h-full rounded-full"
+        style={{ width: `${pct}%`, background: color }}
+      />
+    </span>
+  );
+}
+
+// Keep these icons referenced even when no insight uses them this
+// session — avoids dead-import lint warnings on tree-shaken builds.
+void TrendingUp;
+void TrendingDown;
