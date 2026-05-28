@@ -7,7 +7,9 @@
 // sentences ("בקצב הזה תיכנס לחריגה בעוד 6 ימים"), an explainer
 // ("מה זה אומר"), and one suggested action.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+import { tap } from "@/lib/haptics";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -235,9 +237,35 @@ export function InsightsTab() {
     monthlyBudget,
   ]);
 
+  return <InsightsTabInner cards={cards} />;
+}
+
+function InsightsTabInner({ cards }: { cards: InsightCard[] }) {
+  // Phase 260 — quick filter chips. Match the preset model from
+  // CategorySpendCard so the user can switch tone class without
+  // scrolling. Count per tone is computed once for badge text.
+  type Filter = "all" | "danger" | "warn" | "info" | "ok";
+  const [filter, setFilter] = useState<Filter>("all");
+  const filtered =
+    filter === "all" ? cards : cards.filter((c) => c.tone === filter);
+  const presets: Array<{ key: Filter; label: string }> = [
+    { key: "all", label: `הכל (${cards.length})` },
+    {
+      key: "danger",
+      label: `סיכון (${cards.filter((c) => c.tone === "danger").length})`,
+    },
+    {
+      key: "warn",
+      label: `אזהרה (${cards.filter((c) => c.tone === "warn").length})`,
+    },
+    {
+      key: "info",
+      label: `מגמות (${cards.filter((c) => c.tone === "info").length})`,
+    },
+  ];
   return (
     <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
-      <div className="sm:col-span-6 flex flex-col gap-2">
+      <div className="sm:col-span-6 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <Lightbulb className="size-4 text-[color:var(--neon)]" />
           <span className="text-section text-foreground">תובנות חכמות</span>
@@ -246,9 +274,38 @@ export function InsightsTab() {
           Pulse קורא את הנתונים שלך ומדגיש את הדברים שצריך לשים אליהם
           לב. כל תובנה כאן נשענת על חישוב אמיתי — לא ניחושים.
         </p>
+        <div className="flex flex-wrap gap-2">
+          {presets.map((p) => {
+            const active = filter === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                data-no-min-tap
+                onClick={() => {
+                  tap();
+                  setFilter(p.key);
+                }}
+                className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
+                  active
+                    ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
+                    : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {cards.map((c) => {
+      {filtered.length === 0 ? (
+        <p className="sm:col-span-6 text-caption text-muted-foreground/85">
+          אין תובנות בקטגוריה הזו כרגע.
+        </p>
+      ) : null}
+
+      {filtered.map((c) => {
         const color = tonePalette(c.tone);
         return (
           <section

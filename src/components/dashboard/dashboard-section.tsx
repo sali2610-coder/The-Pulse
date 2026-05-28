@@ -140,7 +140,7 @@ export function DashboardSection({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             className="grid grid-cols-1 gap-2.5 overflow-hidden sm:grid-cols-6 sm:gap-3"
           >
             {children}

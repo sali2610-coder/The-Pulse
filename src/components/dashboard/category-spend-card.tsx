@@ -17,7 +17,8 @@ import {
   buildCategorySpend,
   type CategorySpendBreakdown,
 } from "@/lib/category-spend";
-import { currentMonthKey } from "@/lib/dates";
+import { addMonths, currentMonthKey } from "@/lib/dates";
+import type { MonthKey } from "@/types/finance";
 import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -45,29 +46,30 @@ export function CategorySpendCard() {
   const editingEntry = entries.find((e) => e.id === editingId) ?? null;
   const deleteWithUndo = useDeleteWithUndo();
 
+  // Phase 260 — period chips. Default to the current month; chips
+  // for "חודש שעבר" + "לפני 2 חודשים" so the user can compare
+  // patterns without leaving the card. monthKey lives in state so
+  // the buildCategorySpend memo re-runs on switch.
+  const [monthKey, setMonthKey] = useState<MonthKey>(currentMonthKey());
+
   const report = useMemo(() => {
     if (!hydrated) return null;
     return buildCategorySpend({
       entries,
       rules,
       statuses,
-      monthKey: currentMonthKey(),
+      monthKey,
     });
-  }, [hydrated, entries, rules, statuses]);
+  }, [hydrated, entries, rules, statuses, monthKey]);
+
+  const presets: Array<{ key: string; label: string; monthKey: MonthKey }> = [
+    { key: "this", label: "החודש", monthKey: currentMonthKey() },
+    { key: "prev", label: "חודש שעבר", monthKey: addMonths(currentMonthKey(), -1) },
+    { key: "prev2", label: "לפני 2 חודשים", monthKey: addMonths(currentMonthKey(), -2) },
+  ];
 
   if (!hydrated || !report) return null;
-  if (report.byCategory.length === 0) {
-    return (
-      <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
-        <SectionHeader icon={<PieChart />} title="לאן הולך הכסף" />
-        <CardEmpty
-          icon={<PieChart className="size-4" />}
-          title="עדיין אין מספיק מידע כדי לזהות דפוסים"
-          reason="הוסף הוצאה ראשונה כדי שנתחיל לבנות את התמונה הפיננסית שלך — קבועים מול חד-פעמיים."
-        />
-      </section>
-    );
-  }
+  const isEmpty = report.byCategory.length === 0;
 
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
@@ -81,20 +83,52 @@ export function CategorySpendCard() {
         }
       />
       <p className="text-caption text-muted-foreground">
-        חלוקה לפי קטגוריה החודש. כל קטגוריה מפצלת בין חיובים קבועים
-        להוצאות חד-פעמיות, וניתן לפתוח לרשימה מפורטת.
+        חלוקה לפי קטגוריה. כל קטגוריה מפצלת בין חיובים קבועים להוצאות
+        חד-פעמיות, וניתן לפתוח לרשימה מפורטת.
       </p>
-      <ul className="flex flex-col gap-1.5">
-        {report.byCategory.map((g) => (
-          <CategoryRow
-            key={g.category}
-            group={g}
-            total={report.total}
-            onEditEntry={(id) => setEditingId(id)}
-            onDeleteEntry={(id) => deleteWithUndo(id)}
-          />
-        ))}
-      </ul>
+
+      <div className="flex flex-wrap gap-2">
+        {presets.map((p) => {
+          const active = monthKey === p.monthKey;
+          return (
+            <button
+              key={p.key}
+              type="button"
+              data-no-min-tap
+              onClick={() => {
+                tap();
+                setMonthKey(p.monthKey);
+              }}
+              className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
+                active
+                  ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
+                  : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {isEmpty ? (
+        <CardEmpty
+          icon={<PieChart className="size-4" />}
+          title="אין נתונים לחודש שנבחר"
+          reason="נסה חודש אחר או הוסף הוצאה ראשונה כדי שנתחיל לבנות את התמונה."
+        />
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {report.byCategory.map((g) => (
+            <CategoryRow
+              key={g.category}
+              group={g}
+              total={report.total}
+              onEditEntry={(id) => setEditingId(id)}
+              onDeleteEntry={(id) => deleteWithUndo(id)}
+            />
+          ))}
+        </ul>
+      )}
 
       <ExpenseEditSheet
         entry={editingEntry}
