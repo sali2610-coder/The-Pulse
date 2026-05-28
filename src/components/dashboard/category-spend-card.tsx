@@ -198,6 +198,17 @@ function CategoryRow({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </span>
+            {/* Phase 279 — micro-insight chip: ratio of fixed-vs-variable.
+                Surfaces the "how committed is this category" feel without
+                forcing the user to expand the row. */}
+            {group.total > 0 && (group.recurring > 0 || group.discretionary > 0) ? (
+              <span
+                className="mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] text-muted-foreground"
+                aria-label="פילוח קבועים מול משתנים"
+              >
+                {Math.round((group.recurring / group.total) * 100)}% קבוע
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex items-center gap-2">
