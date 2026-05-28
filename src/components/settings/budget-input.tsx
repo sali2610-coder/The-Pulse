@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { tap } from "@/lib/haptics";
 import { BudgetPreview } from "@/components/settings/budget-preview";
 import { autoBudget, effectiveMonthlyBudget } from "@/lib/auto-budget";
+import { flushBudgetSettings } from "@/lib/budget-settings-flush";
+import { toast } from "sonner";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -114,6 +116,16 @@ export function BudgetInput() {
               onClick={() => {
                 tap();
                 setMode(opt.id);
+                // Phase 267 — direct cloud push, bypassing the 1.5 s
+                // subscribe debounce so reinstall always restores
+                // the latest mode the user picked.
+                void flushBudgetSettings().then((r) => {
+                  if (!r.ok && r.reason === "rls") {
+                    toast.error(
+                      "שמירה בענן נכשלה (RLS). הערך נשמר מקומית.",
+                    );
+                  }
+                });
               }}
               className={`text-caption flex-1 rounded-full px-4 py-2 transition-colors ${
                 active
@@ -135,13 +147,20 @@ export function BudgetInput() {
             setMonthlyBudget(v);
             tap();
             setFormKey((k) => k + 1);
+            void flushBudgetSettings();
           }}
         />
       ) : (
         <AutoPanel
           value={autoBudgetValue}
           buffer={buffer}
-          onBuffer={(v) => setBuffer(v)}
+          onBuffer={(v) => {
+            setBuffer(v);
+            // Buffer slider fires per-tick; relies on subscribe
+            // debounce for the eventual push, but we also force a
+            // flush so close-and-go doesn't drop the value.
+            void flushBudgetSettings();
+          }}
         />
       )}
     </section>

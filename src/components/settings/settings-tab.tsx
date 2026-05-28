@@ -49,6 +49,7 @@ import { SettingsAccordion } from "./settings-accordion";
 import { ShortcutHealthCard } from "./shortcut-health-card";
 import { ShortcutOnboardingCard } from "./shortcut-onboarding-card";
 import { PushDeliveryMatrix } from "./push-delivery-matrix";
+import { BudgetSettingsDiagnostics } from "./budget-settings-diagnostics";
 import { useDevMode } from "@/lib/use-dev-mode";
 
 export function SettingsTab() {
@@ -183,6 +184,7 @@ export function SettingsTab() {
             <CloudSyncCard />
             <IntegrationInfo />
             <PushDiagnosticsCard />
+            <BudgetSettingsDiagnostics />
           </div>
         </SettingsAccordion>
       ) : (
