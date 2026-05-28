@@ -104,7 +104,7 @@ export function PendingTray() {
             </span>
             <div className="flex flex-col">
               <span className="text-xs uppercase tracking-[0.24em] text-[color:var(--neon)]">
-                ממתינים לאישור
+                פעולות שעדיין מחכות לאישור סופי
               </span>
               <span className="flex items-center gap-1.5 text-lg font-semibold text-foreground">
                 {pending.length === 1

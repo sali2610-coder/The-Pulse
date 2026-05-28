@@ -115,7 +115,7 @@ export function HeroFutureBalanceCard() {
     return (
       <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
         <span className="text-micro text-muted-foreground">
-          מצב חשבון בנק עתידי
+          איפה הבנק יהיה בתאריך הקרוב
         </span>
         <span className="text-body text-muted-foreground/85">
           חסרה יתרה נוכחית. הגדרות → חשבונות → הוסף יתרת בנק.
@@ -156,10 +156,10 @@ export function HeroFutureBalanceCard() {
       style={{
         background: `linear-gradient(135deg, ${color}14 0%, transparent 60%)`,
       }}
-      aria-label="מצב חשבון בנק עתידי"
+      aria-label="איפה הבנק יהיה בתאריך הקרוב"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-micro text-muted-foreground">מצב בנק בתאריך</span>
+        <span className="text-micro text-muted-foreground">איפה אהיה בתאריך</span>
         <span className="text-caption text-muted-foreground" dir="rtl">
           {DAY_FMT.format(new Date(point.whenISO))}
         </span>
@@ -204,7 +204,7 @@ function Skeleton() {
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
       <span className="text-micro text-muted-foreground">
-        מצב חשבון בנק עתידי
+        איפה הבנק יהיה בתאריך הקרוב
       </span>
       <span className="h-14 w-44 animate-pulse rounded bg-white/5" />
     </section>

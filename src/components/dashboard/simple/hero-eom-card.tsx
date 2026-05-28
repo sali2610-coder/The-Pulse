@@ -1,6 +1,6 @@
 "use client";
 
-// Phase 225 — Simple-mode hero card #2: "מצב סוף חודש צפוי".
+// Phase 225 — Simple-mode hero card #2: "איפה החשבון יהיה בסוף החודש".
 //
 // One number: where the user's cash position lands at the end of
 // the month, after all expected income + remaining card debits +
@@ -51,7 +51,7 @@ export function HeroEomCard() {
     return (
       <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
         <span className="text-micro text-muted-foreground">
-          מצב סוף חודש צפוי
+          איפה החשבון יהיה בסוף החודש
         </span>
         <span className="text-body text-muted-foreground/85">
           חסרה יתרת בנק נוכחית. עבור להגדרות → חשבונות → הוסף יתרה.
@@ -82,10 +82,10 @@ export function HeroEomCard() {
       style={{
         background: `linear-gradient(135deg, ${color}14 0%, transparent 60%)`,
       }}
-      aria-label="מצב סוף חודש צפוי"
+      aria-label="איפה החשבון יהיה בסוף החודש"
     >
       <span className="text-micro text-muted-foreground">
-        מצב סוף חודש צפוי
+        איפה החשבון יהיה בסוף החודש
       </span>
       <span data-mono="true" dir="ltr" className="text-stat" style={{ color }}>
         {value < 0 ? "−" : ""}
@@ -100,7 +100,7 @@ function Skeleton() {
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
       <span className="text-micro text-muted-foreground">
-        מצב סוף חודש צפוי
+        איפה החשבון יהיה בסוף החודש
       </span>
       <span className="h-12 w-44 animate-pulse rounded bg-white/5" />
     </section>

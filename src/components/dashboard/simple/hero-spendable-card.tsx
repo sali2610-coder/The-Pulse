@@ -68,10 +68,10 @@ export function HeroSpendableCard() {
       style={{
         background: `linear-gradient(135deg, ${color}14 0%, transparent 60%)`,
       }}
-      aria-label="כמה נשאר לי לבזבז"
+      aria-label="כמה אפשר להוציא היום בלי להיכנס ללחץ"
     >
       <span className="text-micro text-muted-foreground">
-        כמה נשאר לי לבזבז היום
+        כמה אפשר להוציא היום בלי לחץ
       </span>
       <span data-mono="true" dir="ltr" className="text-hero" style={{ color }}>
         {ILS.format(Math.round(allowance))}
@@ -85,7 +85,7 @@ function Skeleton() {
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-6">
       <span className="text-micro text-muted-foreground">
-        כמה נשאר לי לבזבז היום
+        כמה אפשר להוציא היום בלי לחץ
       </span>
       <span className="h-14 w-40 animate-pulse rounded bg-white/5" />
     </section>

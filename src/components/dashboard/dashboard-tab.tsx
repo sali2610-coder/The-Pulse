@@ -473,7 +473,7 @@ export function DashboardTab() {
         <DashboardSection
           storageKey="simple.future"
           title="תזרים עתידי"
-          subtitle="חיובים, יציאות וזרימה ל-35 ימים"
+          subtitle="חיובים שיגיעו, יציאות צפויות, ומה ייכנס לבנק"
           defaultCollapsed
           summary={summaries?.future ?? undefined}
         >
@@ -525,8 +525,8 @@ export function DashboardTab() {
 
         <DashboardSection
           storageKey="simple.obligations"
-          title="התחייבויות"
-          subtitle="הלוואות, דיור והוצאות קבועות"
+          title="חיובים קבועים והלוואות"
+          subtitle="כל מה שיורד אוטומטית מהבנק כל חודש"
           defaultCollapsed
           summary={summaries?.obligations ?? undefined}
         >
@@ -574,7 +574,7 @@ export function DashboardTab() {
         <DashboardSection
           storageKey="simple.analytics"
           title="ניתוחים וסטטיסטיקות"
-          subtitle="פירוט הוצאות, שווי נטו וקצב"
+          subtitle="לאן הולך הכסף — לפי קטגוריה, קצב ומגמה"
           defaultCollapsed
           summary={summaries?.analytics ?? undefined}
         >

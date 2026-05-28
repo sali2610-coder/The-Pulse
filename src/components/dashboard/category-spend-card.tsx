@@ -60,8 +60,8 @@ export function CategorySpendCard() {
         <SectionHeader icon={<PieChart />} title="לאן הולך הכסף" />
         <CardEmpty
           icon={<PieChart className="size-4" />}
-          title="אין עדיין הוצאות החודש"
-          reason="כשתוסיף הוצאות / כללים חוזרים, נציג כאן את החלוקה לפי קטגוריה — קבוע מול חד-פעמי."
+          title="עדיין אין מספיק מידע כדי לזהות דפוסים"
+          reason="הוסף הוצאה ראשונה כדי שנתחיל לבנות את התמונה הפיננסית שלך — קבועים מול חד-פעמיים."
         />
       </section>
     );
