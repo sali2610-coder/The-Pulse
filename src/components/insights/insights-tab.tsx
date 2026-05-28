@@ -12,10 +12,13 @@
 // engine never emits filler — when nothing notable is happening
 // the screen explicitly says so in a calm, premium tone.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Activity,
   AlertTriangle,
+  CalendarCheck,
   ChevronDown,
   Compass,
   Gauge,
@@ -29,7 +32,48 @@ import {
 import { tap } from "@/lib/haptics";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { CfoSandboxCard } from "@/components/insights/cfo-sandbox-card";
+
+// Phase 277 — monthly summary / EOM forecast / deficit-risk surfaces
+// promoted out of the Home "פירוט מתקדם" dump into the AI Insights
+// tab. They share one narrative container so the user reads them as
+// a connected financial story, not isolated stat cards.
+const lazy = (
+  loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
+) => dynamic(loader, { ssr: false });
+
+const CashflowSummaryCard = lazy(() =>
+  import("@/components/dashboard/cashflow-summary-card").then((m) => ({
+    default:
+      m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const StatsCards = lazy(() =>
+  import("@/components/dashboard/stats-cards").then((m) => ({
+    default:
+      m.StatsCards as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const EmergencyFundCard = lazy(() =>
+  import("@/components/dashboard/emergency-fund-card").then((m) => ({
+    default:
+      m.EmergencyFundCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const AnchorTrajectoryCard = lazy(() =>
+  import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
+    default:
+      m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const MonthlyDigestCard = lazy(() =>
+  import("@/components/dashboard/monthly-digest-card").then((m) => ({
+    default:
+      m.MonthlyDigestCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 import {
   GROUP_LABELS,
   GROUP_ORDER,
@@ -37,6 +81,32 @@ import {
   type AiInsight,
   type AiInsightGroup,
 } from "@/lib/ai-insights";
+
+function Safe({ name, children }: { name: string; children: React.ReactNode }) {
+  return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
+}
+
+function useNowTick(intervalMs: number): number {
+  return useSyncExternalStore(
+    (cb) => {
+      const id = setInterval(cb, intervalMs);
+      return () => clearInterval(id);
+    },
+    () => Date.now(),
+    () => 0,
+  );
+}
+
+function formatRelative(ms: number, now: number): string {
+  const diff = Math.max(0, now - ms);
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return "עודכן כעת";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `עודכן לפני ${min} דק׳`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `עודכן לפני ${hr} שע׳`;
+  return "עודכן היום";
+}
 
 const GROUP_TONE: Record<AiInsightGroup, string> = {
   risk: "#F87171",
@@ -109,22 +179,102 @@ export function InsightsTab() {
 
   const top = result?.insights[0];
 
+  // Phase 277 — "alive" feeling. We re-subscribe to a 60s tick via
+  // useSyncExternalStore so the relative-time label updates without
+  // a setState-in-effect lint violation.
+  const lastSyncedAt = useFinanceStore((s) => s.lastSyncedAt);
+  const now = useNowTick(60_000);
+  const refreshedAt = Math.max(lastSyncedAt, now - 5_000);
+  const counts = result
+    ? {
+        risk: result.byGroup.risk.length,
+        positive: result.byGroup.positive.length,
+      }
+    : { risk: 0, positive: 0 };
+
   return (
     <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
-      <header className="sm:col-span-6 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-[color:var(--neon)]" />
-          <span className="text-section text-foreground">
-            המוח הפיננסי שלך
+      <header className="sm:col-span-6 flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-[color:var(--neon)]" />
+            <span className="text-section text-foreground">
+              המוח הפיננסי שלך
+            </span>
+          </div>
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2.5 py-0.5 text-micro text-muted-foreground"
+            aria-live="polite"
+          >
+            <Activity className="size-3 text-[#34D399]" />
+            {formatRelative(refreshedAt, now)}
           </span>
         </div>
         <p className="text-caption text-muted-foreground">
           Pulse לומד את ההתנהגות שלך, משווה בין חודשים, מזהה דפוסים ומציע
           פעולות. כל תובנה כאן מבוססת על חישוב אמיתי — לא ניחושים.
         </p>
+        {result ? (
+          <div className="flex flex-wrap gap-1.5" aria-label="סטטוס תובנות">
+            <StatusChip
+              tone="#F87171"
+              icon={<AlertTriangle className="size-3" />}
+              label={`${counts.risk} סיכונים`}
+            />
+            <StatusChip
+              tone="#34D399"
+              icon={<ShieldCheck className="size-3" />}
+              label={`${counts.positive} שיפורים`}
+            />
+            <StatusChip
+              tone="#60A5FA"
+              icon={<Compass className="size-3" />}
+              label={`${result.total} תובנות פעילות`}
+            />
+          </div>
+        ) : null}
       </header>
 
       {top ? <HeroInsight insight={top} /> : null}
+
+      {/* Phase 277 — connected financial-narrative band. Monthly
+         summary + EOM forecast + deficit / burn risk + emergency
+         fund all share one section so the user reads them as a
+         single story. Default-expanded because this is now the
+         primary AI surface, not an advanced detail. */}
+      <DashboardSection
+        storageKey="insights.monthly-summary"
+        title="סיכום חודשי ותחזית"
+        subtitle="מצב התזרים, חיוב סוף החודש, וסיכוני גירעון"
+        icon={<CalendarCheck className="size-4" />}
+        defaultCollapsed={false}
+      >
+        <div className="sm:col-span-6">
+          <Safe name="CashflowSummaryCard">
+            <CashflowSummaryCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="StatsCards">
+            <StatsCards />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="EmergencyFundCard">
+            <EmergencyFundCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="AnchorTrajectoryCard">
+            <AnchorTrajectoryCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="MonthlyDigestCard">
+            <MonthlyDigestCard />
+          </Safe>
+        </div>
+      </DashboardSection>
 
       {!result || result.total === 0 ? <CalmEmpty /> : null}
 
@@ -356,6 +506,30 @@ function ConfidenceBar({ value, color }: { value: number; color: string }) {
         className="h-full rounded-full"
         style={{ width: `${pct}%`, background: color }}
       />
+    </span>
+  );
+}
+
+function StatusChip({
+  tone,
+  icon,
+  label,
+}: {
+  tone: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-micro"
+      style={{
+        color: tone,
+        borderColor: `${tone}44`,
+        background: `${tone}12`,
+      }}
+    >
+      {icon}
+      {label}
     </span>
   );
 }

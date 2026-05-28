@@ -297,30 +297,6 @@ const ExpectedBalanceCard = lazy(() =>
       m.ExpectedBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const CashflowSummaryCard = lazy(() =>
-  import("@/components/dashboard/cashflow-summary-card").then((m) => ({
-    default:
-      m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const StatsCards = lazy(() =>
-  import("@/components/dashboard/stats-cards").then((m) => ({
-    default:
-      m.StatsCards as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const EmergencyFundCard = lazy(() =>
-  import("@/components/dashboard/emergency-fund-card").then((m) => ({
-    default:
-      m.EmergencyFundCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const AnchorTrajectoryCard = lazy(() =>
-  import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
-    default:
-      m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
 const TodayPulseCard = lazy(() =>
   import("@/components/dashboard/today-pulse-card").then((m) => ({
     default:
@@ -343,12 +319,6 @@ const CopilotCard = lazy(() =>
   import("@/components/dashboard/copilot-card").then((m) => ({
     default:
       m.CopilotCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const MonthlyDigestCard = lazy(() =>
-  import("@/components/dashboard/monthly-digest-card").then((m) => ({
-    default:
-      m.MonthlyDigestCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 function Safe({ name, children }: { name: string; children: ReactNode }) {
@@ -727,26 +697,11 @@ export function DashboardTab() {
               tab as the CFO Sandbox. TodayPulseCard moved to the top
               of Home for emotional anchoring. */}
           <div className="sm:col-span-6">
-            <Safe name="CashflowSummaryCard">
-              <CashflowSummaryCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="StatsCards">
-              <StatsCards />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="EmergencyFundCard">
-              <EmergencyFundCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="AnchorTrajectoryCard">
-              <AnchorTrajectoryCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
+            {/* Phase 277 — monthly summary / deficit / EOM forecast
+               surfaces (CashflowSummaryCard, StatsCards, EmergencyFundCard,
+               AnchorTrajectoryCard, MonthlyDigestCard) moved into the
+               AI Insights tab as the connected financial-narrative
+               experience. Home keeps lighter, daily-cadence cards. */}
             <Safe name="DailyInsightsCard">
               <DailyInsightsCard />
             </Safe>
@@ -759,11 +714,6 @@ export function DashboardTab() {
           <div className="sm:col-span-6">
             <Safe name="CopilotCard">
               <CopilotCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="MonthlyDigestCard">
-              <MonthlyDigestCard />
             </Safe>
           </div>
         </DashboardSection>
