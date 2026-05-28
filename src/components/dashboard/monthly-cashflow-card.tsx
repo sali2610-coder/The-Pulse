@@ -169,10 +169,9 @@ function Stat({
 }
 
 function FolderRow({ folder }: { folder: MonthlyCashflowFolder }) {
-  // Open by default for current + next month; closed for future.
-  const [open, setOpen] = useState(
-    folder.tone === "current" || folder.tone === "next",
-  );
+  // Phase 271 — every folder defaults to collapsed. The app-wide
+  // calm rule: summary first, details on demand.
+  const [open, setOpen] = useState(false);
   const color = TONE_COLOR[folder.tone];
   const tierLabel =
     folder.tone === "current"

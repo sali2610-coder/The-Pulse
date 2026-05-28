@@ -63,13 +63,13 @@ export function SettingsTab() {
       <BudgetInput />
       <BudgetRecommendationCard />
 
-      {/* ── Data groups (open by default — primary management) ── */}
+      {/* ── Data groups ── */}
       <SettingsAccordion
         storageKey="settings.accounts"
         title="חשבונות בנק וכרטיסים"
         subtitle="ניהול יתרות, חיוב יומי וכרטיסים"
         icon={<Landmark className="size-4" />}
-        defaultCollapsed={false}
+        defaultCollapsed={true}
       >
         <AccountsPanel />
       </SettingsAccordion>
@@ -79,7 +79,7 @@ export function SettingsTab() {
         title="הוצאות קבועות ומנויים"
         subtitle="חיובים חוזרים, מקובצים לפי כרטיס"
         icon={<Repeat className="size-4" />}
-        defaultCollapsed={false}
+        defaultCollapsed={true}
       >
         <RecurringRulesPanel />
       </SettingsAccordion>
@@ -178,7 +178,7 @@ export function SettingsTab() {
           title="אבחון טכני"
           subtitle="Cloud Sync, מזהה מכשיר, יומן Push"
           icon={<ShieldCheck className="size-4" />}
-          defaultCollapsed={false}
+          defaultCollapsed={true}
         >
           <div className="flex flex-col gap-3">
             <CloudSyncCard />

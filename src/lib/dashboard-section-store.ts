@@ -1,64 +1,65 @@
-// localStorage-backed collapse state for <DashboardSection>.
+// Phase 271 — ephemeral, in-memory collapse state for every
+// <DashboardSection> / <SettingsAccordion> / nested folder across
+// the app.
 //
-// Each section identifies itself with a stable string key (chosen by
-// the caller, not the visible label so renames stay backwards-
-// compatible). State is kept in a single JSON map under one key so
-// we never compete with another module's keys.
+// Earlier revisions persisted the open/closed state per section to
+// localStorage so the user's drilldowns survived reload. In practice
+// that meant the app re-opened in a noisy expanded state every
+// session — the opposite of the calm, scan-first surface a premium
+// finance app should feel like.
 //
-// Pure module — safe to import from server contexts; SSR-side calls
-// return defaults without touching window.
+// New rule: collapse state is held ONLY in module-scoped memory.
+// Cold start = automatic clean slate (module re-evaluates). Tab
+// switch / route change / app resume call `resetAllCollapseState()`
+// to wipe the map. Nothing ever touches localStorage / cookies /
+// IndexedDB / cloud.
+//
+// API is unchanged so callers don't need to be rewritten.
 
-const STORAGE_KEY = "sally.dashboard.sections.v1";
+type CollapseMap = Map<string, boolean>;
 
-type CollapseMap = Record<string, boolean>;
-
-function readMap(): CollapseMap {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return {};
-    return parsed as CollapseMap;
-  } catch {
-    return {};
-  }
-}
-
-function writeMap(map: CollapseMap): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    /* quota / disabled — degrade silently */
-  }
-}
+const map: CollapseMap = new Map();
+const listeners = new Set<() => void>();
 
 /** Returns true when the section is currently collapsed. Defaults to
- *  the `defaultCollapsed` arg when the user hasn't toggled it yet. */
+ *  the `defaultCollapsed` arg when the user hasn't toggled it in this
+ *  session. */
 export function readSectionCollapsed(
   key: string,
   defaultCollapsed: boolean,
 ): boolean {
-  const map = readMap();
-  if (Object.prototype.hasOwnProperty.call(map, key)) {
-    return Boolean(map[key]);
+  if (map.has(key)) {
+    return Boolean(map.get(key));
   }
   return defaultCollapsed;
 }
 
 export function writeSectionCollapsed(key: string, collapsed: boolean): void {
-  const map = readMap();
-  map[key] = collapsed;
-  writeMap(map);
+  map.set(key, collapsed);
+  for (const fn of listeners) fn();
 }
 
-/** Test/dev helper — clears every recorded collapse state. */
+/** Wipe every recorded collapse state. Called on tab switch, app
+ *  resume, and explicitly in tests. Returns true if anything was
+ *  cleared — useful for tests / instrumentation. */
+export function resetAllCollapseState(): boolean {
+  const had = map.size > 0;
+  map.clear();
+  for (const fn of listeners) fn();
+  return had;
+}
+
+/** Subscribe to mutations (used by hooks that want to re-render when
+ *  someone else clears the map). Returns an unsubscribe fn. */
+export function subscribeCollapseState(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** Test / dev helper — kept as a named export so existing tests keep
+ *  importing it. Identical to `resetAllCollapseState`. */
 export function _resetDashboardSectionsForTests(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
+  resetAllCollapseState();
 }

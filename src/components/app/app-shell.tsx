@@ -18,6 +18,7 @@ import { useStoreMutationBridge } from "@/lib/store-mutation-bridge";
 import { CloudSyncProvider } from "@/lib/supabase/cloud-sync-context";
 import { installGlobalErrorHandlers } from "@/lib/error-log";
 import { installWebVitals } from "@/lib/web-vitals";
+import { resetAllCollapseState } from "@/lib/dashboard-section-store";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -75,11 +76,23 @@ function AppShellContent() {
     if (typeof window === "undefined") return;
     const onHashChange = () => {
       const next = tabFromHash(window.location.hash);
-      if (next) setActiveTab(next);
+      if (next) {
+        setActiveTab(next);
+        resetAllCollapseState();
+      }
     };
     window.addEventListener("hashchange", onHashChange);
+    // Phase 271 — leaving the tab (browser hidden) wipes collapse state
+    // so coming back lands on the calm, summary-first surface.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        resetAllCollapseState();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     const unsubNav = subscribeTabNav(({ tab: next, section }) => {
       setActiveTab(next);
+      resetAllCollapseState();
       if (next === "dashboard") {
         if (window.location.hash) {
           window.history.replaceState(
@@ -110,6 +123,7 @@ function AppShellContent() {
     });
     return () => {
       window.removeEventListener("hashchange", onHashChange);
+      document.removeEventListener("visibilitychange", onVisibility);
       unsubNav();
     };
   }, []);
@@ -202,6 +216,7 @@ function AppShellContent() {
           onValueChange={(v) => {
             if (typeof v === "string") {
               setActiveTab(v as TabId);
+              resetAllCollapseState();
               if (typeof window !== "undefined") {
                 if (v === "dashboard") {
                   if (window.location.hash) {

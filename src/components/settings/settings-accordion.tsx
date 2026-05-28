@@ -14,6 +14,7 @@ import { ChevronDown } from "lucide-react";
 import { tap } from "@/lib/haptics";
 import {
   readSectionCollapsed,
+  subscribeCollapseState,
   writeSectionCollapsed,
 } from "@/lib/dashboard-section-store";
 
@@ -36,12 +37,17 @@ export function SettingsAccordion({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.resolve().then(() => {
-      if (!cancelled)
-        setCollapsed(readSectionCollapsed(storageKey, defaultCollapsed));
-    });
+    const pull = () => {
+      Promise.resolve().then(() => {
+        if (!cancelled)
+          setCollapsed(readSectionCollapsed(storageKey, defaultCollapsed));
+      });
+    };
+    pull();
+    const unsub = subscribeCollapseState(pull);
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [storageKey, defaultCollapsed]);
 

@@ -18,6 +18,7 @@ import { ChevronDown } from "lucide-react";
 import { tap } from "@/lib/haptics";
 import {
   readSectionCollapsed,
+  subscribeCollapseState,
   writeSectionCollapsed,
 } from "@/lib/dashboard-section-store";
 
@@ -55,7 +56,7 @@ export function DashboardSection({
   storageKey,
   title,
   icon,
-  defaultCollapsed = false,
+  defaultCollapsed = true,
   subtitle,
   summary,
   children,
@@ -67,14 +68,21 @@ export function DashboardSection({
 
   useEffect(() => {
     // Defer to a microtask so React's effect-vs-setState lint doesn't
-    // flag the synchronous setState as state-in-effect.
+    // flag the synchronous setState as state-in-effect. Also subscribe
+    // to map mutations — when `resetAllCollapseState()` fires (tab
+    // switch / app resume) we re-read and snap back to the default.
     let cancelled = false;
-    Promise.resolve().then(() => {
-      if (cancelled) return;
-      setCollapsed(readSectionCollapsed(storageKey, defaultCollapsed));
-    });
+    const pull = () => {
+      Promise.resolve().then(() => {
+        if (cancelled) return;
+        setCollapsed(readSectionCollapsed(storageKey, defaultCollapsed));
+      });
+    };
+    pull();
+    const unsub = subscribeCollapseState(pull);
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [storageKey, defaultCollapsed]);
 
