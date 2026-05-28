@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, CreditCard, Layers } from "lucide-react";
+import { ChevronDown, CreditCard, Layers, Pencil } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import {
@@ -24,6 +24,7 @@ import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
+import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -43,6 +44,9 @@ export function CardsHierarchyCard() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
   const entries = useFinanceStore((s) => s.entries);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingEntry =
+    entries.find((e) => e.id === editingId) ?? null;
 
   const report = useMemo(() => {
     if (!hydrated) return null;
@@ -86,14 +90,32 @@ export function CardsHierarchyCard() {
       </p>
       <ul className="flex flex-col gap-2">
         {report.cards.map((c) => (
-          <CardRow key={c.cardId} card={c} />
+          <CardRow
+            key={c.cardId}
+            card={c}
+            onEditEntry={(id) => setEditingId(id)}
+          />
         ))}
       </ul>
+
+      <ExpenseEditSheet
+        entry={editingEntry}
+        open={editingId !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingId(null);
+        }}
+      />
     </section>
   );
 }
 
-function CardRow({ card }: { card: CardBreakdown }) {
+function CardRow({
+  card,
+  onEditEntry,
+}: {
+  card: CardBreakdown;
+  onEditEntry: (entryId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <li className="overflow-hidden rounded-2xl border border-white/8 bg-black/25">
@@ -171,7 +193,11 @@ function CardRow({ card }: { card: CardBreakdown }) {
               </div>
               <ul className="flex flex-col gap-1.5">
                 {card.categories.map((g) => (
-                  <CategoryRow key={g.category} group={g} />
+                  <CategoryRow
+                    key={g.category}
+                    group={g}
+                    onEditEntry={onEditEntry}
+                  />
                 ))}
               </ul>
             </div>
@@ -206,7 +232,13 @@ function Stat({
   );
 }
 
-function CategoryRow({ group }: { group: CategoryGroup }) {
+function CategoryRow({
+  group,
+  onEditEntry,
+}: {
+  group: CategoryGroup;
+  onEditEntry: (entryId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const meta = getCategory(group.category);
   const Icon = meta.icon;
@@ -274,34 +306,58 @@ function CategoryRow({ group }: { group: CategoryGroup }) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden border-t border-white/6"
           >
-            {group.items.map((it) => (
-              <li
-                key={`${it.refId}-${it.effectiveCashAt}`}
-                className="flex items-baseline justify-between gap-2 px-4 py-2"
-              >
-                <div className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate text-caption text-foreground">
-                    {it.label}
-                  </span>
-                  <span className="text-caption text-muted-foreground/80">
-                    {it.kind === "recurring"
-                      ? "קבוע"
-                      : it.kind === "installments"
-                        ? "תשלום"
-                        : "חד-פעמי"}
-                    {" · "}
-                    {DAY_FMT.format(new Date(it.effectiveCashAt))}
-                  </span>
-                </div>
-                <span
-                  data-mono="true"
-                  dir="ltr"
-                  className="text-caption font-medium text-foreground"
+            {group.items.map((it) => {
+              // Refs land as `entry:<id>:<sliceIndex>` for card-entry
+              // rows or `rule:<id>` for linked-rule rows. Only entries
+              // can be edited inline; rule rows route to the recurring
+              // panel — we leave that path alone here.
+              const entryId =
+                it.refId.startsWith("entry:")
+                  ? it.refId.split(":")[1]
+                  : null;
+              return (
+                <li
+                  key={`${it.refId}-${it.effectiveCashAt}`}
+                  className="flex items-center gap-2 px-4 py-2"
                 >
-                  {ILS.format(Math.round(it.amount))}
-                </span>
-              </li>
-            ))}
+                  <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span className="truncate text-caption text-foreground">
+                      {it.label}
+                    </span>
+                    <span className="text-caption text-muted-foreground/80">
+                      {it.kind === "recurring"
+                        ? "קבוע"
+                        : it.kind === "installments"
+                          ? "תשלום"
+                          : "חד-פעמי"}
+                      {" · "}
+                      {DAY_FMT.format(new Date(it.effectiveCashAt))}
+                    </span>
+                  </div>
+                  <span
+                    data-mono="true"
+                    dir="ltr"
+                    className="text-caption font-medium text-foreground"
+                  >
+                    {ILS.format(Math.round(it.amount))}
+                  </span>
+                  {entryId ? (
+                    <button
+                      type="button"
+                      data-no-min-tap
+                      onClick={() => {
+                        tap();
+                        onEditEntry(entryId);
+                      }}
+                      aria-label="ערוך"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
           </motion.ul>
         ) : null}
       </AnimatePresence>

@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, PieChart } from "lucide-react";
+import { ChevronDown, Pencil, PieChart } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import {
@@ -22,6 +22,7 @@ import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
+import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -39,6 +40,8 @@ export function CategorySpendCard() {
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingEntry = entries.find((e) => e.id === editingId) ?? null;
 
   const report = useMemo(() => {
     if (!hydrated) return null;
@@ -81,9 +84,22 @@ export function CategorySpendCard() {
       </p>
       <ul className="flex flex-col gap-1.5">
         {report.byCategory.map((g) => (
-          <CategoryRow key={g.category} group={g} total={report.total} />
+          <CategoryRow
+            key={g.category}
+            group={g}
+            total={report.total}
+            onEditEntry={(id) => setEditingId(id)}
+          />
         ))}
       </ul>
+
+      <ExpenseEditSheet
+        entry={editingEntry}
+        open={editingId !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingId(null);
+        }}
+      />
     </section>
   );
 }
@@ -91,9 +107,11 @@ export function CategorySpendCard() {
 function CategoryRow({
   group,
   total,
+  onEditEntry,
 }: {
   group: CategorySpendBreakdown;
   total: number;
+  onEditEntry: (entryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const meta = getCategory(group.category);
@@ -175,9 +193,9 @@ function CategoryRow({
             {group.items.map((it) => (
               <li
                 key={`${it.source}-${it.id}`}
-                className="flex items-baseline justify-between gap-2 px-4 py-2"
+                className="flex items-center gap-2 px-4 py-2"
               >
-                <div className="flex min-w-0 flex-col leading-tight">
+                <div className="flex min-w-0 flex-1 flex-col leading-tight">
                   <span className="truncate text-body text-foreground">
                     {it.label}
                   </span>
@@ -186,6 +204,20 @@ function CategoryRow({
                     {DAY_FMT.format(new Date(it.chargeDate))}
                   </span>
                 </div>
+                {it.source === "entry" ? (
+                  <button
+                    type="button"
+                    data-no-min-tap
+                    onClick={() => {
+                      tap();
+                      onEditEntry(it.id);
+                    }}
+                    aria-label="ערוך"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white/8 hover:text-foreground"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                ) : null}
                 <span
                   data-mono="true"
                   dir="ltr"
