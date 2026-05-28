@@ -23,10 +23,10 @@ import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import { DashboardTab } from "@/components/dashboard/dashboard-tab";
-import { AnalyticsTab } from "@/components/analytics/analytics-tab";
-import { HistoryTab } from "@/components/history/history-tab";
+import { ExpensesTab } from "@/components/expenses/expenses-tab";
+import { FutureTab } from "@/components/future/future-tab";
+import { InsightsTab } from "@/components/insights/insights-tab";
 import { SettingsTab } from "@/components/settings/settings-tab";
-import { SetupHub } from "@/components/setup/setup-hub";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
@@ -210,10 +210,13 @@ function AppShellContent() {
             }
           }}
         >
+          {/* Phase 254 — 5-tab consumer hierarchy.
+              IDs preserved for hash-link backward compatibility; the
+              content + labels are remapped. */}
           <TabsList className="w-full bg-surface/60 backdrop-blur-md">
             <TabsTrigger value="dashboard">
               <span className="relative inline-flex items-center gap-1">
-                לוח
+                בית
                 {pendingCount > 0 ? (
                   <span
                     aria-label={`${pendingCount} חיובים ממתינים לאישור`}
@@ -226,12 +229,11 @@ function AppShellContent() {
                 ) : null}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="analytics">ניתוח</TabsTrigger>
-            <TabsTrigger value="history">היסטוריה</TabsTrigger>
-            <TabsTrigger value="setup">מדריך</TabsTrigger>
-            <TabsTrigger value="settings">
+            <TabsTrigger value="analytics">הוצאות</TabsTrigger>
+            <TabsTrigger value="history">עתידי</TabsTrigger>
+            <TabsTrigger value="setup">
               <span className="relative inline-flex items-center gap-1">
-                הגדרות
+                תובנות
                 {insightCount > 0 ? (
                   <span
                     aria-label={`${insightCount} תובנות ממתינות`}
@@ -244,6 +246,7 @@ function AppShellContent() {
                 ) : null}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="mt-4">
@@ -252,18 +255,18 @@ function AppShellContent() {
             </ErrorBoundary>
           </TabsContent>
           <TabsContent value="analytics" className="mt-4">
-            <ErrorBoundary name="AnalyticsTab">
-              <AnalyticsTab />
+            <ErrorBoundary name="ExpensesTab">
+              <ExpensesTab />
             </ErrorBoundary>
           </TabsContent>
           <TabsContent value="history" className="mt-4">
-            <ErrorBoundary name="HistoryTab">
-              <HistoryTab />
+            <ErrorBoundary name="FutureTab">
+              <FutureTab />
             </ErrorBoundary>
           </TabsContent>
           <TabsContent value="setup" className="mt-4">
-            <ErrorBoundary name="SetupHub">
-              <SetupHub />
+            <ErrorBoundary name="InsightsTab">
+              <InsightsTab />
             </ErrorBoundary>
           </TabsContent>
           <TabsContent value="settings" className="mt-4">
