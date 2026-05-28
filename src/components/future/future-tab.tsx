@@ -1,9 +1,19 @@
 "use client";
 
 // Phase 254 — "עתידי" tab.
+// Phase 272 — duplicated hero ("איפה אהיה בתאריך") removed.
 //
-// Forward-looking surfaces: the main future-balance hero, liquidity
-// curve, upcoming outflows, cash-flow buckets, anchor trajectory.
+// That hero is the Home tab's primary identity. Repeating it here
+// blurred the screen's purpose. Future tab now leads straight into
+// forward-looking surfaces — monthly folders, liquidity curve,
+// upcoming obligations, cash-flow buckets, forecast timeline, anchor
+// trajectory. Each tab owns one mental model:
+//   Home    → immediate financial pulse
+//   Expenses→ where money goes
+//   Future  → timeline + cashflow projections   ← we're here
+//   Insights→ behavioral understanding
+//   Settings→ control / configuration
+//
 // Composition only — engines unchanged.
 
 import dynamic from "next/dynamic";
@@ -15,14 +25,6 @@ const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
 ) => dynamic(loader, { ssr: false });
 
-const HeroFutureBalanceCard = lazy(() =>
-  import("@/components/dashboard/simple/hero-future-balance-card").then(
-    (m) => ({
-      default:
-        m.HeroFutureBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
-    }),
-  ),
-);
 const MonthlyCashflowCard = lazy(() =>
   import("@/components/dashboard/monthly-cashflow-card").then((m) => ({
     default:
@@ -67,11 +69,6 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 export function FutureTab() {
   return (
     <div className="grid grid-cols-1 gap-5 pb-28 sm:grid-cols-6 sm:gap-5 sm:pb-32">
-      <div className="sm:col-span-6">
-        <Safe name="HeroFutureBalanceCard">
-          <HeroFutureBalanceCard />
-        </Safe>
-      </div>
       {/* Phase 268 — month-first cashflow folders. Replaces the
          merged "bucket source" list with one folder per month. */}
       <div className="sm:col-span-6">
