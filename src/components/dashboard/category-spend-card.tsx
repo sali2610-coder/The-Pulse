@@ -25,6 +25,11 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
 import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
+import { installmentMetaForSource } from "@/lib/installment-meta";
+import {
+  InstallmentBadge,
+  InstallmentMetaLines,
+} from "@/components/dashboard/installment-row-meta";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -123,6 +128,7 @@ export function CategorySpendCard() {
               key={g.category}
               group={g}
               total={report.total}
+              monthKey={monthKey}
               onEditEntry={(id) => setEditingId(id)}
               onDeleteEntry={(id) => deleteWithUndo(id)}
             />
@@ -144,11 +150,13 @@ export function CategorySpendCard() {
 function CategoryRow({
   group,
   total,
+  monthKey,
   onEditEntry,
   onDeleteEntry,
 }: {
   group: CategorySpendBreakdown;
   total: number;
+  monthKey: MonthKey;
   onEditEntry: (entryId: string) => void;
   onDeleteEntry: (entryId: string) => void;
 }) {
@@ -156,6 +164,8 @@ function CategoryRow({
   const meta = getCategory(group.category);
   const Icon = meta.icon;
   const share = total > 0 ? group.total / total : 0;
+  const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
   return (
     <li className="overflow-hidden rounded-2xl border border-white/8 bg-black/25">
       <button
@@ -229,19 +239,44 @@ function CategoryRow({
             transition={{ duration: 0.2 }}
             className="overflow-hidden border-t border-white/8"
           >
-            {group.items.map((it) => (
+            {group.items.map((it) => {
+              // Phase 269 — pull installment progress so installment
+              // rows show "תשלום 3 מתוך 12" + ₪/חודש · סה״כ.
+              const installmentMeta = installmentMetaForSource({
+                source: it.source,
+                id: it.id,
+                monthKey,
+                entries,
+                rules,
+              });
+              const isInstallment = installmentMeta !== null;
+              const kindLabel = isInstallment
+                ? "תשלום"
+                : it.isRecurring
+                  ? "קבוע"
+                  : "חד-פעמי";
+              return (
               <li
                 key={`${it.source}-${it.id}`}
-                className="flex items-center gap-2 px-4 py-2"
+                className={`flex items-start gap-2 px-4 py-2 ${
+                  isInstallment ? "border-r-2 border-r-[#F59E0B]/60" : ""
+                }`}
               >
                 <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                  <span className="truncate text-body text-foreground">
-                    {it.label}
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-body text-foreground">
+                      {it.label}
+                    </span>
+                    {isInstallment ? <InstallmentBadge /> : null}
                   </span>
-                  <span className="text-caption text-muted-foreground/80">
-                    {it.isRecurring ? "קבוע" : "חד-פעמי"} ·{" "}
-                    {DAY_FMT.format(new Date(it.chargeDate))}
-                  </span>
+                  {installmentMeta ? (
+                    <InstallmentMetaLines meta={installmentMeta} />
+                  ) : (
+                    <span className="text-caption text-muted-foreground/80">
+                      {kindLabel} ·{" "}
+                      {DAY_FMT.format(new Date(it.chargeDate))}
+                    </span>
+                  )}
                 </div>
                 {it.source === "entry" ? (
                   <>
@@ -276,7 +311,8 @@ function CategoryRow({
                   {ILS.format(Math.round(it.amount))}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </motion.ul>
         ) : null}
       </AnimatePresence>

@@ -26,6 +26,11 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
 import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
+import { installmentMetaForRefId } from "@/lib/installment-meta";
+import {
+  InstallmentBadge,
+  InstallmentMetaLines,
+} from "@/components/dashboard/installment-row-meta";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -231,6 +236,7 @@ function FolderRow({
                 {folder.categories.map((g) => (
                   <CategoryRow
                     key={g.category}
+                    monthKey={folder.monthKey}
                     monthName={folder.monthName}
                     group={g}
                     onEditEntry={onEditEntry}
@@ -271,11 +277,13 @@ function Stat({
 }
 
 function CategoryRow({
+  monthKey,
   monthName,
   group,
   onEditEntry,
   onDeleteEntry,
 }: {
+  monthKey: string;
   monthName: string;
   group: import("@/lib/card-category-breakdown").CategoryGroup;
   onEditEntry: (entryId: string) => void;
@@ -284,6 +292,9 @@ function CategoryRow({
   const [open, setOpen] = useState(false);
   const meta = getCategory(group.category);
   const Icon = meta.icon;
+  // Read live store for installment progress lookups.
+  const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
   return (
     <li className="overflow-hidden rounded-xl border border-white/6 bg-black/15">
       <button
@@ -352,25 +363,45 @@ function CategoryRow({
               const entryId = it.refId.startsWith("entry:")
                 ? it.refId.split(":")[1]
                 : null;
+              const isInstallment = it.kind === "installments";
               const kindLabel =
                 it.kind === "recurring"
                   ? "קבוע"
-                  : it.kind === "installments"
+                  : isInstallment
                     ? "תשלום"
                     : "חד-פעמי";
+              // Phase 269 — pull installment progress for stronger
+              // visual identity. null for recurring + oneTime rows.
+              const installmentMeta = isInstallment
+                ? installmentMetaForRefId({
+                    refId: it.refId,
+                    monthKey,
+                    entries,
+                    rules,
+                  })
+                : null;
               return (
                 <li
                   key={`${it.refId}-${it.effectiveCashAt}`}
-                  className="flex items-center gap-2 px-4 py-2"
+                  className={`flex items-start gap-2 px-4 py-2 ${
+                    isInstallment ? "border-r-2 border-r-[#F59E0B]/60" : ""
+                  }`}
                 >
                   <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                    <span className="truncate text-caption text-foreground">
-                      {it.label}
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-caption text-foreground">
+                        {it.label}
+                      </span>
+                      {isInstallment ? <InstallmentBadge /> : null}
                     </span>
-                    <span className="text-caption text-muted-foreground/80">
-                      {kindLabel} · חיוב {monthName} ·{" "}
-                      {DAY_FMT.format(new Date(it.effectiveCashAt))}
-                    </span>
+                    {installmentMeta ? (
+                      <InstallmentMetaLines meta={installmentMeta} />
+                    ) : (
+                      <span className="text-caption text-muted-foreground/80">
+                        {kindLabel} · חיוב {monthName} ·{" "}
+                        {DAY_FMT.format(new Date(it.effectiveCashAt))}
+                      </span>
+                    )}
                   </div>
                   <span
                     data-mono="true"
