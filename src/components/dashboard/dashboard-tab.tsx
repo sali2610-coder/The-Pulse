@@ -69,6 +69,12 @@ const CashflowBucketsCard = lazy(() =>
       m.CashflowBucketsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+const MonthlyCashflowCard = lazy(() =>
+  import("@/components/dashboard/monthly-cashflow-card").then((m) => ({
+    default:
+      m.MonthlyCashflowCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const UpcomingOutflowsCard = lazy(() =>
   import("@/components/dashboard/upcoming-outflows-card").then((m) => ({
     default:
@@ -477,6 +483,13 @@ export function DashboardTab() {
           defaultCollapsed
           summary={summaries?.future ?? undefined}
         >
+          {/* Phase 268 — month-first cashflow folders. June + July
+             never visually merged into one scary block. */}
+          <div className="sm:col-span-6">
+            <Safe name="MonthlyCashflowCard">
+              <MonthlyCashflowCard />
+            </Safe>
+          </div>
           <div className="sm:col-span-6">
             <Safe name="LiquidityCurveCard">
               <LiquidityCurveCard />

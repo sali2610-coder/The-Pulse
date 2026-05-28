@@ -23,6 +23,12 @@ const HeroFutureBalanceCard = lazy(() =>
     }),
   ),
 );
+const MonthlyCashflowCard = lazy(() =>
+  import("@/components/dashboard/monthly-cashflow-card").then((m) => ({
+    default:
+      m.MonthlyCashflowCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const LiquidityCurveCard = lazy(() =>
   import("@/components/dashboard/liquidity-curve-card").then((m) => ({
     default:
@@ -64,6 +70,13 @@ export function FutureTab() {
       <div className="sm:col-span-6">
         <Safe name="HeroFutureBalanceCard">
           <HeroFutureBalanceCard />
+        </Safe>
+      </div>
+      {/* Phase 268 — month-first cashflow folders. Replaces the
+         merged "bucket source" list with one folder per month. */}
+      <div className="sm:col-span-6">
+        <Safe name="MonthlyCashflowCard">
+          <MonthlyCashflowCard />
         </Safe>
       </div>
       <div className="sm:col-span-6">
