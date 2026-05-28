@@ -114,18 +114,23 @@ export function liquidityCurve(args: {
   }
 
   // Salaries inside the window.
+  // Phase 259 — loop until the candidate date passes the horizon so
+  // every salary instance that falls inside the curve gets injected.
+  // The previous hard-coded `m=0..1` bound silently dropped any
+  // salary beyond ~30 days, producing inconsistent month-rollover
+  // numbers in the 60-day Hero-Future-Balance lens.
   const horizon = endOfDay(addDays(startOfDay(now), windowDays));
+  const maxMonths = Math.ceil(windowDays / 28) + 1;
   for (const inc of args.incomes) {
     if (!inc.active) continue;
     if (inc.amount <= 0) continue;
-    // Look at this month + next; pick instances that fall inside
-    // (now, horizon].
-    for (let m = 0; m <= 1; m++) {
+    for (let m = 0; m <= maxMonths; m++) {
       const date = dateOfDayOfMonth({
         ref: addMonths(now, m),
         dayOfMonth: inc.dayOfMonth,
       });
-      if (date.getTime() > now.getTime() && date.getTime() <= horizon.getTime()) {
+      if (date.getTime() > horizon.getTime()) break;
+      if (date.getTime() > now.getTime()) {
         events.push({
           whenISO: date.toISOString(),
           label: inc.label,

@@ -132,10 +132,21 @@ export function HeroFutureBalanceCard() {
   // Sum the deltas between today (idx 0) and the chosen date.
   let inflows = 0;
   let outflows = 0;
+  // Phase 259 — capture the salary boundary so the user can see
+  // exactly where the balance jumped. Tracks the LAST salary day
+  // inside the snapshot range + its balance right after the inflow.
+  let lastSalaryISO: string | null = null;
+  let lastSalaryAmount = 0;
+  let balanceAfterLastSalary: number | null = null;
   for (let i = 1; i <= clamped; i++) {
     for (const ev of curve.points[i].events) {
       if (ev.amount > 0) inflows += ev.amount;
       else outflows += Math.abs(ev.amount);
+      if (ev.kind === "income") {
+        lastSalaryISO = ev.whenISO;
+        lastSalaryAmount = ev.amount;
+        balanceAfterLastSalary = curve.points[i].balance;
+      }
     }
   }
 
@@ -184,6 +195,33 @@ export function HeroFutureBalanceCard() {
           </span>
         </span>
       </div>
+
+      {lastSalaryISO ? (
+        <div
+          className="flex items-baseline justify-between gap-2 rounded-2xl border border-[#34D399]/30 bg-[#34D399]/8 px-3 py-2"
+          aria-label="קפיצת משכורת"
+        >
+          <span className="text-caption text-muted-foreground">
+            ב-{DAY_FMT.format(new Date(lastSalaryISO))} נכנסה משכורת{" "}
+            <span data-mono="true" dir="ltr" className="text-[#34D399]">
+              +{ILS.format(Math.round(lastSalaryAmount))}
+            </span>
+          </span>
+          {balanceAfterLastSalary !== null ? (
+            <span
+              data-mono="true"
+              dir="ltr"
+              className="text-caption font-medium text-foreground"
+            >
+              ↦{" "}
+              {balanceAfterLastSalary < 0 ? "−" : ""}
+              {ILS.format(
+                Math.abs(Math.round(balanceAfterLastSalary)),
+              )}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Phase 241 — preset date row + custom day-of-month. */}
       <DatePicker
