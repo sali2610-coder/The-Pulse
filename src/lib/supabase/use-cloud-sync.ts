@@ -434,21 +434,25 @@ export function useCloudSync(): CloudSyncState {
             partial: Partial<ReturnType<typeof useFinanceStore.getState>>,
           ) => void;
 
-          // Phase 245 — two-part fix.
-          //   1. cloud value undefined → no opinion, never overwrite.
-          //   2. If the local row was written recently (within
-          //      LOCAL_RECENT_MS) the user toggled the setting in
-          //      this session. The debounced cloud push may not have
-          //      reached the server yet, so cloud is stale and MUST
-          //      NOT win — we push local up and keep the user's
-          //      choice. Outside the window we fall back to
-          //      cloud-is-authority.
+          // Phase 245 + 263 — reconciliation rules:
+          //   1. cloud value undefined → no opinion. Never push DEFAULT
+          //      local back up — that's the reinstall bug that
+          //      silently clobbered a previously-saved "auto" with
+          //      the fresh-install "manual" default.
+          //   2. Local is "opinionated" only when
+          //      budgetSettingsUpdatedAt > 0. Default state never
+          //      writes to cloud.
+          //   3. localRecent (≤ 5 min since the user touched the
+          //      toggle) gates "local wins" over a stale explicit
+          //      cloud value — covers "set auto + close app fast".
           const LOCAL_RECENT_MS = 5 * 60 * 1000;
           const cloudHasMode = settingsRes.budgetMode !== undefined;
           const cloudHasBuffer =
             typeof settingsRes.budgetSafetyBuffer === "number";
+          const localOpinionated =
+            localState.budgetSettingsUpdatedAt > 0;
           const localRecent =
-            localState.budgetSettingsUpdatedAt > 0 &&
+            localOpinionated &&
             Date.now() - localState.budgetSettingsUpdatedAt <
               LOCAL_RECENT_MS;
 
@@ -463,7 +467,11 @@ export function useCloudSync(): CloudSyncState {
                 budgetSafetyBuffer: localState.budgetSafetyBuffer,
               });
             }
-          } else if (localBudget > 0 && !ownershipMismatchRef.current) {
+          } else if (
+            localBudget > 0 &&
+            localOpinionated &&
+            !ownershipMismatchRef.current
+          ) {
             await upsertUserSettings({
               monthlyBudget: localBudget,
               budgetMode: localState.budgetMode,
@@ -484,11 +492,25 @@ export function useCloudSync(): CloudSyncState {
                 budgetSafetyBuffer: localState.budgetSafetyBuffer,
               });
             } else {
-              api({ budgetMode: settingsRes.budgetMode });
+              // Cloud is authority. Apply over local. Also bump the
+              // local timestamp so a follow-up reconcile doesn't
+              // treat the just-applied value as "opinionated by the
+              // user" — leaves cloud as the source of truth.
+              api({
+                budgetMode: settingsRes.budgetMode,
+                budgetSettingsUpdatedAt:
+                  localState.budgetSettingsUpdatedAt || Date.now(),
+              });
             }
-          } else if (!cloudHasMode && !ownershipMismatchRef.current) {
-            // Cloud has no opinion — push the local choice up so
-            // future hydrations see it.
+          } else if (
+            !cloudHasMode &&
+            localOpinionated &&
+            !ownershipMismatchRef.current
+          ) {
+            // Cloud has no opinion AND local was explicitly set by
+            // the user → push local up so future hydrations see it.
+            // NEVER push when local is still the default — that's the
+            // reinstall bug.
             await upsertUserSettings({
               monthlyBudget: useFinanceStore.getState().monthlyBudget,
               budgetMode: localState.budgetMode,
