@@ -133,6 +133,13 @@ export function CardsHierarchyCard() {
   );
 }
 
+type KindFilters = { recurring: boolean; installments: boolean; oneTime: boolean };
+const DEFAULT_KIND_FILTERS: KindFilters = {
+  recurring: true,
+  installments: true,
+  oneTime: true,
+};
+
 function FolderRow({
   folder,
   onEditEntry,
@@ -143,6 +150,26 @@ function FolderRow({
   onDeleteEntry: (entryId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Phase 298 — per-folder kind filter. Defaults to all-on every
+  // mount. The parent DashboardSection unmounts on collapse (Phase
+  // 271 ephemeral collapse store) so this resets between sessions /
+  // tab switches without any persistence.
+  const [filters, setFilters] = useState<KindFilters>(DEFAULT_KIND_FILTERS);
+  const filteredSubtotal =
+    (filters.recurring ? folder.recurringTotal : 0) +
+    (filters.installments ? folder.installmentsTotal : 0) +
+    (filters.oneTime ? folder.oneTimeTotal : 0);
+  const filteredCategories = folder.categories
+    .map((g) => {
+      const total =
+        (filters.recurring ? g.recurring : 0) +
+        (filters.installments ? g.installments : 0) +
+        (filters.oneTime ? g.oneTime : 0);
+      return { group: g, total };
+    })
+    .filter((x) => x.total > 0);
+  const allOff =
+    !filters.recurring && !filters.installments && !filters.oneTime;
   const color = TIER_COLOR[folder.kind];
   return (
     <li
@@ -191,7 +218,7 @@ function FolderRow({
             dir="ltr"
             className="text-section text-foreground"
           >
-            {ILS.format(Math.round(folder.subtotal))}
+            {ILS.format(Math.round(filteredSubtotal))}
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
@@ -214,36 +241,78 @@ function FolderRow({
             className="overflow-hidden border-t border-white/8"
           >
             <div className="flex flex-col gap-3 p-4">
-              {/* Stat strip scoped to THIS folder (card × month). */}
+              {/* Phase 298 — Stat tiles are now toggleable filters.
+                 Active = full opacity + colored glow; inactive =
+                 dimmed + softer border. Default all-on; resets when
+                 the parent section unmounts on collapse. */}
               <div className="grid grid-cols-3 gap-2">
-                <Stat
+                <KindFilterTile
                   label="קבועים"
                   value={folder.recurringTotal}
                   tone="#A78BFA"
+                  active={filters.recurring}
+                  onToggle={() => {
+                    tap();
+                    setFilters((f) => ({ ...f, recurring: !f.recurring }));
+                  }}
                 />
-                <Stat
+                <KindFilterTile
                   label="תשלומים"
                   value={folder.installmentsTotal}
                   tone="#F59E0B"
+                  active={filters.installments}
+                  onToggle={() => {
+                    tap();
+                    setFilters((f) => ({
+                      ...f,
+                      installments: !f.installments,
+                    }));
+                  }}
                 />
-                <Stat
+                <KindFilterTile
                   label="חד-פעמיים"
                   value={folder.oneTimeTotal}
                   tone="#60A5FA"
+                  active={filters.oneTime}
+                  onToggle={() => {
+                    tap();
+                    setFilters((f) => ({ ...f, oneTime: !f.oneTime }));
+                  }}
                 />
               </div>
-              <ul className="flex flex-col gap-1.5">
-                {folder.categories.map((g) => (
-                  <CategoryRow
-                    key={g.category}
-                    monthKey={folder.monthKey}
-                    monthName={folder.monthName}
-                    group={g}
-                    onEditEntry={onEditEntry}
-                    onDeleteEntry={onDeleteEntry}
-                  />
-                ))}
-              </ul>
+              {allOff ? (
+                <p className="rounded-2xl border border-white/8 bg-black/25 p-4 text-center text-caption text-muted-foreground">
+                  בחר לפחות סוג חיוב אחד להצגה
+                </p>
+              ) : (
+                <motion.ul
+                  layout
+                  className="flex flex-col gap-1.5"
+                >
+                  <AnimatePresence initial={false}>
+                    {filteredCategories.map(({ group: g, total }) => (
+                      <motion.div
+                        key={g.category}
+                        layout
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <CategoryRow
+                          monthKey={folder.monthKey}
+                          monthName={folder.monthName}
+                          group={g}
+                          filters={filters}
+                          filteredTotal={total}
+                          onEditEntry={onEditEntry}
+                          onDeleteEntry={onDeleteEntry}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </motion.ul>
+              )}
             </div>
           </motion.div>
         ) : null}
@@ -252,17 +321,36 @@ function FolderRow({
   );
 }
 
-function Stat({
+function KindFilterTile({
   label,
   value,
   tone,
+  active,
+  onToggle,
 }: {
   label: string;
   value: number;
   tone: string;
+  active: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-xl border border-white/8 bg-black/30 p-2.5">
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      aria-label={`${active ? "כבה" : "הצג"} ${label}`}
+      className={`flex flex-col gap-0.5 rounded-xl border p-2.5 text-start transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+        active ? "opacity-100" : "opacity-55"
+      }`}
+      style={{
+        background: active ? `${tone}14` : "rgba(0,0,0,0.30)",
+        borderColor: active ? `${tone}55` : "rgba(255,255,255,0.08)",
+        boxShadow: active
+          ? `inset 0 0 0 1px ${tone}44, 0 8px 22px -16px ${tone}88`
+          : undefined,
+      }}
+    >
       <span className="text-micro text-muted-foreground">{label}</span>
       <span
         data-mono="true"
@@ -272,7 +360,7 @@ function Stat({
       >
         {ILS.format(Math.round(value))}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -280,12 +368,16 @@ function CategoryRow({
   monthKey,
   monthName,
   group,
+  filters,
+  filteredTotal,
   onEditEntry,
   onDeleteEntry,
 }: {
   monthKey: string;
   monthName: string;
   group: import("@/lib/card-category-breakdown").CategoryGroup;
+  filters: KindFilters;
+  filteredTotal: number;
   onEditEntry: (entryId: string) => void;
   onDeleteEntry: (entryId: string) => void;
 }) {
@@ -317,13 +409,13 @@ function CategoryRow({
             <span className="text-body text-foreground">{meta.label}</span>
             <span className="text-caption text-muted-foreground">
               {[
-                group.recurring > 0
+                filters.recurring && group.recurring > 0
                   ? `${ILS.format(Math.round(group.recurring))} קבועים`
                   : null,
-                group.installments > 0
+                filters.installments && group.installments > 0
                   ? `${ILS.format(Math.round(group.installments))} תשלומים`
                   : null,
-                group.oneTime > 0
+                filters.oneTime && group.oneTime > 0
                   ? `${ILS.format(Math.round(group.oneTime))} חד-פעמי`
                   : null,
               ]
@@ -338,7 +430,7 @@ function CategoryRow({
             dir="ltr"
             className="text-body font-medium text-foreground"
           >
-            {ILS.format(Math.round(group.total))}
+            {ILS.format(Math.round(filteredTotal))}
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
@@ -359,7 +451,15 @@ function CategoryRow({
             transition={{ duration: 0.18 }}
             className="overflow-hidden border-t border-white/6"
           >
-            {group.items.map((it) => {
+            {group.items
+              .filter((it) =>
+                it.kind === "recurring"
+                  ? filters.recurring
+                  : it.kind === "installments"
+                    ? filters.installments
+                    : filters.oneTime,
+              )
+              .map((it) => {
               const entryId = it.refId.startsWith("entry:")
                 ? it.refId.split(":")[1]
                 : null;
