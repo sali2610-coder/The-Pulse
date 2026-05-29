@@ -15,6 +15,8 @@ import { Activity, Bell, Sparkles } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { todayPulse, type PulseVibe } from "@/lib/today-pulse";
+import { openAttentionCenter } from "@/lib/use-attention-center";
+import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import {
   InsightChip,
@@ -95,11 +97,21 @@ export function TodayPulseCard() {
         title="הפעימה של היום"
         trailing={
           pulse.pendingForReview > 0 ? (
-            <InsightChip
-              severity="watch"
-              icon={<Bell className="size-2.5" />}
-              label={`${pulse.pendingForReview} לאישור`}
-            />
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                openAttentionCenter();
+              }}
+              aria-label={`פתח מרכז תשומת הלב · ${pulse.pendingForReview} לאישור`}
+              className="rounded-full transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 active:scale-95"
+            >
+              <InsightChip
+                severity="watch"
+                icon={<Bell className="size-2.5" />}
+                label={`${pulse.pendingForReview} לאישור`}
+              />
+            </button>
           ) : (
             <InsightChip
               severity={VIBE_SEV[pulse.vibe]}

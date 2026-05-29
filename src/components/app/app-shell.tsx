@@ -20,6 +20,10 @@ import { installGlobalErrorHandlers } from "@/lib/error-log";
 import { installWebVitals } from "@/lib/web-vitals";
 import { resetAllCollapseState } from "@/lib/dashboard-section-store";
 import { flushBudgetSettings } from "@/lib/budget-settings-flush";
+import {
+  AttentionCenter,
+  useAttentionCount,
+} from "@/components/dashboard/attention-center";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -203,6 +207,13 @@ function AppShellContent() {
     return n;
   }, [hydrated, entries]);
 
+  // Phase 294 — Home-tab badge represents the Attention Center
+  // count: pending confirmations + top AI risks + recurring review
+  // items. Tapping the tab navigates to Home; from there the user
+  // hits the "מרכז תשומת הלב" banner at the top to open the sheet.
+  const attentionCount = useAttentionCount();
+  void pendingCount;
+
   return (
     <main
       data-danger={isOverBudget ? "true" : undefined}
@@ -265,14 +276,14 @@ function AppShellContent() {
             <TabsTrigger value="dashboard">
               <span className="relative inline-flex items-center gap-1">
                 בית
-                {pendingCount > 0 ? (
+                {attentionCount > 0 ? (
                   <span
-                    aria-label={`${pendingCount} חיובים ממתינים לאישור`}
+                    aria-label={`${attentionCount} פריטים דורשים תשומת לב`}
                     className="inline-flex min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-bold text-[#050505] tabular-nums leading-none"
                     style={{ height: 16 }}
                     data-mono="true"
                   >
-                    {pendingCount > 9 ? "9+" : pendingCount}
+                    {attentionCount > 9 ? "9+" : attentionCount}
                   </span>
                 ) : null}
               </span>
@@ -328,6 +339,7 @@ function AppShellContent() {
       <AutoSync />
       <PendingConfirmListener />
       <PendingConfirmOverlay />
+      <AttentionCenter />
       {isDev ? <SeedPanel /> : null}
     </main>
   );

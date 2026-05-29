@@ -26,6 +26,11 @@ import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { computeSummaries } from "@/lib/dashboard-section-summaries";
 
 import { FinancialHealthGauge } from "@/components/dashboard/financial-health-gauge";
+import { useAttentionCount } from "@/components/dashboard/attention-center";
+import { openAttentionCenter } from "@/lib/use-attention-center";
+import { motion as fmMotion } from "framer-motion";
+import { Bell as BellIcon, ArrowLeft as ArrowLeftIcon } from "lucide-react";
+import { tap as hapticTap } from "@/lib/haptics";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
 import { HeroEomCard } from "@/components/dashboard/simple/hero-eom-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
@@ -353,6 +358,16 @@ export function DashboardTab() {
           </Safe>
         </div>
 
+        {/* Phase 294 — Attention Center entry banner. Renders only
+           when there's at least one item; opens the bottom sheet
+           that lists pending confirmations, AI risks, and recurring
+           review items. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="AttentionBanner">
+            <AttentionBanner />
+          </Safe>
+        </div>
+
         {/* Phase 275 — "הפעימה של היום" lifted to the very top of
            Home above the hero stack. It's emotionally powerful and
            sets the day's tone before any numbers. */}
@@ -640,5 +655,43 @@ export function DashboardTab() {
         <ExpenseDialog open={open} onOpenChange={setOpen} />
       </div>
     </SnapshotProvider>
+  );
+}
+
+function AttentionBanner() {
+  const count = useAttentionCount();
+  if (count === 0) return null;
+  return (
+    <fmMotion.button
+      type="button"
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      onClick={() => {
+        hapticTap();
+        openAttentionCenter();
+      }}
+      aria-label={`פתח את מרכז תשומת הלב · ${count} פריטים`}
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#FBBF24]/30 bg-[#FBBF24]/8 p-3 text-start transition-colors hover:border-[#FBBF24]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FBBF24]/60"
+      style={{
+        boxShadow:
+          "0 16px 40px -22px rgba(251, 191, 36, 0.45), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#FBBF24]/15 text-[#FBBF24]">
+          <BellIcon className="size-4" />
+        </span>
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="text-[12px] uppercase tracking-[0.22em] text-[#FBBF24]">
+            מרכז תשומת הלב
+          </span>
+          <span className="text-section text-foreground">
+            {count} פריטים דורשים בדיקה
+          </span>
+        </div>
+      </div>
+      <ArrowLeftIcon className="size-4 shrink-0 text-[#FBBF24]" aria-hidden />
+    </fmMotion.button>
   );
 }
