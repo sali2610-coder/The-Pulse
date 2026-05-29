@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Activity, Heart, ShieldAlert, ThumbsUp } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildHealthScore, type HealthTone } from "@/lib/health-score";
+import { tap } from "@/lib/haptics";
 
 const TONE_COLOR: Record<HealthTone, string> = {
   great: "#34D399",
@@ -139,17 +140,50 @@ export function HealthScoreCard() {
         </div>
       </div>
 
-      {/* Sub-score grid */}
+      <SubScoreGrid health={health} />
+    </motion.section>
+  );
+}
+
+type SubKey = "forecast" | "budget" | "anomalies" | "pace";
+
+const SUB_LABELS: Record<SubKey, string> = {
+  forecast: "צפי",
+  budget: "תקציב",
+  anomalies: "חריגים",
+  pace: "קצב",
+};
+
+const SUB_EXPLAIN: Record<SubKey, { title: string; body: string }> = {
+  forecast: {
+    title: "צפי לסוף החודש",
+    body: "מציין כמה כסף צפוי להישאר לך בבנק בסוף החודש, ביחס ליתרה הנוכחית. ככל שהפער חיובי יותר — הציון גבוה יותר.",
+  },
+  budget: {
+    title: "משמעת תקציב",
+    body: "מודד את היחס בין מה שהוצאת (בפועל + עתידי) למה שתכננת. עד 100% התקציב הציון נשאר חזק; מעבר לזה הוא יורד מהר.",
+  },
+  anomalies: {
+    title: "חיובים חריגים",
+    body: "סופר כמה חיובים בולטים מהממוצע זיהינו החודש. ככל שהרשימה ארוכה יותר, הציון יורד.",
+  },
+  pace: {
+    title: "קצב הוצאות",
+    body: "משווה את הקצב היומי שלך החודש לקצב של החודש הקודם, מנורמל ליום בחודש. סטייה של עד ±8% משאירה את הציון מלא.",
+  },
+};
+
+function SubScoreGrid({
+  health,
+}: {
+  health: { sub: Record<SubKey, number>; headline: string };
+}) {
+  const [active, setActive] = useState<SubKey | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
       <div className="grid grid-cols-4 gap-1.5">
-        {(
-          [
-            { key: "forecast", label: "צפי" },
-            { key: "budget", label: "תקציב" },
-            { key: "anomalies", label: "חריגים" },
-            { key: "pace", label: "קצב" },
-          ] as const
-        ).map((sub) => {
-          const v = health.sub[sub.key];
+        {(Object.keys(SUB_LABELS) as SubKey[]).map((key) => {
+          const v = health.sub[key];
           const subAccent =
             v >= 80
               ? TONE_COLOR.great
@@ -158,13 +192,25 @@ export function HealthScoreCard() {
                 : v >= 45
                   ? TONE_COLOR.watch
                   : TONE_COLOR.danger;
+          const isOpen = active === key;
           return (
-            <div
-              key={sub.key}
-              className="flex flex-col gap-1 rounded-xl border border-white/5 bg-black/25 px-2 py-2"
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                tap();
+                setActive(isOpen ? null : key);
+              }}
+              aria-expanded={isOpen}
+              aria-controls={`sub-explain-${key}`}
+              className={`flex flex-col gap-1 rounded-xl border px-2 py-2 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+                isOpen
+                  ? "border-white/20 bg-black/40"
+                  : "border-white/5 bg-black/25 hover:border-white/12"
+              }`}
             >
               <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
-                {sub.label}
+                {SUB_LABELS[key]}
               </span>
               <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/5">
                 <motion.div
@@ -182,10 +228,43 @@ export function HealthScoreCard() {
               >
                 {v}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
-    </motion.section>
+      <AnimatePresence initial={false}>
+        {active ? (
+          <motion.div
+            id={`sub-explain-${active}`}
+            key={active}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-xl border border-white/8 bg-black/30 p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-caption font-medium text-foreground">
+                  {SUB_EXPLAIN[active].title}
+                </span>
+                <span
+                  data-mono="true"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  {health.sub[active]} / 100
+                </span>
+              </div>
+              <p className="mt-1 text-caption text-muted-foreground/85">
+                {SUB_EXPLAIN[active].body}
+              </p>
+              <p className="mt-2 text-[10px] text-muted-foreground/70">
+                {health.headline}
+              </p>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
   );
 }

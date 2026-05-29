@@ -227,6 +227,54 @@ export function CfoSummary() {
         </div>
       </header>
 
+      {/* Phase 284 — permanent formula recap. Spells out the exact
+         arithmetic the headline number comes from so the user reads
+         "why" alongside "what". Items list below each carries the
+         full source breakdown (Phase 279). */}
+      <div
+        className="mt-4 flex flex-col gap-1 rounded-2xl border border-white/8 bg-black/30 p-3 text-[11px]"
+        dir="ltr"
+      >
+        <FormulaLine
+          label="יתרה נוכחית"
+          value={snap.currentBalance}
+          sign="="
+        />
+        <FormulaLine
+          label="הכנסות צפויות"
+          value={snap.expectedIncomeUntilNextMonth}
+          sign="+"
+        />
+        <FormulaLine
+          label="הוצאות קבועות"
+          value={snap.fixedExpensesUntilNextMonth}
+          sign="−"
+        />
+        <FormulaLine
+          label="הלוואות"
+          value={snap.activeLoansPaymentsUntilNextMonth}
+          sign="−"
+        />
+        <FormulaLine
+          label="תשלומים"
+          value={snap.installmentPaymentsUntilNextMonth}
+          sign="−"
+        />
+        <FormulaLine
+          label="חיובי כרטיס עתידיים"
+          value={snap.recurringCommitmentsUntilNextMonth}
+          sign="−"
+        />
+        <div className="mt-1 h-px bg-white/10" />
+        <FormulaLine
+          label={isRed ? "צפי לגירעון" : "צפי לסיום החודש"}
+          value={forecast}
+          sign="="
+          tone={isRed ? "danger" : "ok"}
+          strong
+        />
+      </div>
+
       <div className="mt-5 grid grid-cols-2 gap-2.5 text-[11px]">
         <BreakdownRow
           icon={<Wallet className="size-3.5" />}
@@ -308,6 +356,52 @@ export function CfoSummary() {
         ) : null}
       </AnimatePresence>
     </motion.section>
+  );
+}
+
+function FormulaLine({
+  label,
+  value,
+  sign,
+  tone,
+  strong,
+}: {
+  label: string;
+  value: number;
+  sign: "+" | "−" | "=";
+  tone?: "ok" | "danger";
+  strong?: boolean;
+}) {
+  const color =
+    tone === "danger"
+      ? "#F87171"
+      : tone === "ok"
+        ? "#34D399"
+        : sign === "−"
+          ? "#FCA5A5"
+          : sign === "+"
+            ? "#86EFAC"
+            : "#E5E7EB";
+  const display =
+    sign === "="
+      ? formatILSSign(value)
+      : `${sign}${formatILS(Math.abs(value))}`;
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span
+        className={`text-muted-foreground ${strong ? "text-foreground" : ""}`}
+        dir="rtl"
+      >
+        {label}
+      </span>
+      <span
+        data-mono="true"
+        className={strong ? "text-[13px] font-semibold" : "font-medium"}
+        style={{ color }}
+      >
+        {display}
+      </span>
+    </div>
   );
 }
 
