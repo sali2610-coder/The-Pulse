@@ -7,7 +7,7 @@
 
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { SearchCheck } from "lucide-react";
+import { CheckCircle2, SearchCheck } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import {
@@ -54,7 +54,27 @@ export function SubscriptionReviewCard() {
   }, [hydrated, rules, entries]);
 
   if (!hydrated) return null;
-  if (candidates.length === 0) return null;
+
+  // Phase 296 — proudly surface the "all clear" state instead of
+  // silently hiding. Builds trust that the auditor actually looked.
+  if (candidates.length === 0) {
+    return (
+      <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
+        <SectionHeader icon={<SearchCheck />} title="מנויים לבדיקה" />
+        <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-black/25 p-3">
+          <CheckCircle2 className="size-4 text-[#34D399]" />
+          <div className="flex flex-col leading-tight">
+            <span className="text-caption font-medium text-foreground">
+              לא נמצאו חריגות במנויים
+            </span>
+            <span className="text-micro text-muted-foreground/85">
+              המערכת בדקה את כל החוקים החוזרים שלך.
+            </span>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
@@ -85,6 +105,20 @@ export function SubscriptionReviewCard() {
                   severity={REASON_SEV[c.reason]}
                   label={REASON_LABEL[c.reason]}
                 />
+                {/* Phase 296 — confidence chip. Empty when missing. */}
+                <span
+                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+                  style={{
+                    background:
+                      c.confidence >= 0.9
+                        ? "rgba(52,211,153,0.18)"
+                        : "rgba(96,165,250,0.18)",
+                    color: c.confidence >= 0.9 ? "#34D399" : "#60A5FA",
+                  }}
+                  aria-label={`רמת ביטחון ${Math.round(c.confidence * 100)} אחוז`}
+                >
+                  {Math.round(c.confidence * 100)}%
+                </span>
               </div>
               <span className="text-[10.5px] text-muted-foreground/85">
                 {c.reasonText}

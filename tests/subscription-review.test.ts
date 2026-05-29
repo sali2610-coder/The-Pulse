@@ -116,6 +116,71 @@ describe("subscriptionReview", () => {
     expect(out.find((c) => c.reason === "duplicate_lookalike")).toBeUndefined();
   });
 
+  it("Phase 296 — does NOT flag two rules that share only a short Hebrew token", () => {
+    // The user's complaint: "אחריות רכב" was being flagged as a
+    // duplicate of "רכב" because they shared the token "רכב". Token
+    // length is 3 — passes the old length filter but isn't enough
+    // signal to call a duplicate. After Phase 296 we require either
+    // 2+ shared tokens or a 5+ char shared brand-like token.
+    const a = rule({ id: "r1", label: "רכב", category: "transport" });
+    const b = rule({
+      id: "r2",
+      label: "אחריות רכב",
+      category: "transport",
+      estimatedAmount: 250,
+    });
+    const out = subscriptionReview({
+      rules: [a, b],
+      entries: [
+        matchedEntry(a.id, 600, "2026-05-01T00:00:00.000Z"),
+        matchedEntry(b.id, 250, "2026-05-02T00:00:00.000Z"),
+      ],
+      now: NOW,
+    });
+    expect(out.find((c) => c.reason === "duplicate_lookalike")).toBeUndefined();
+  });
+
+  it("Phase 296 — does NOT flag duplicate when amounts diverge by more than 25% AND >₪50", () => {
+    const a = rule({ id: "r1", label: "Netflix Family", estimatedAmount: 80 });
+    const b = rule({
+      id: "r2",
+      label: "Netflix Premium",
+      estimatedAmount: 200,
+    });
+    const out = subscriptionReview({
+      rules: [a, b],
+      entries: [
+        matchedEntry(a.id, 80, "2026-05-01T00:00:00.000Z"),
+        matchedEntry(b.id, 200, "2026-05-01T00:00:00.000Z"),
+      ],
+      now: NOW,
+    });
+    expect(out.find((c) => c.reason === "duplicate_lookalike")).toBeUndefined();
+  });
+
+  it("Phase 296 — every emitted candidate has confidence ≥ MIN_REVIEW_CONFIDENCE", () => {
+    const a = rule({ id: "r1", label: "Netflix Family" });
+    const b = rule({ id: "r2", label: "Netflix Premium" });
+    const stale = rule({
+      id: "r3",
+      label: "Stale",
+      // matched 90 days ago
+    });
+    const out = subscriptionReview({
+      rules: [a, b, stale],
+      entries: [
+        matchedEntry(a.id, 80, "2026-05-01T00:00:00.000Z"),
+        matchedEntry(b.id, 80, "2026-05-01T00:00:00.000Z"),
+        matchedEntry(stale.id, 30, "2026-02-01T00:00:00.000Z"),
+      ],
+      now: NOW,
+    });
+    expect(out.length).toBeGreaterThan(0);
+    for (const c of out) {
+      expect(c.confidence).toBeGreaterThanOrEqual(0.7);
+    }
+  });
+
   it("flags low_value_signal for small charges with sparse matches", () => {
     const r = rule({ id: "r1", label: "Tiny", estimatedAmount: 12 });
     const out = subscriptionReview({
