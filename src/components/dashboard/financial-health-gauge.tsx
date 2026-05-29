@@ -2,30 +2,27 @@
 
 // Phase 282 — premium financial-health gauge on Home.
 // Phase 309 — wide horizontal redesign + tap-to-explain sheet.
+// Phase 319 — compact luxury speedometer.
 //
-// Reads `buildFinancialSnapshot` + `financialHealthScore` (same
-// engine the rest of the dashboard uses), then presents:
+// The gauge is now a single hero widget: one premium SVG dial with
+// metallic needle, neon-tone progress arc, dynamic color across four
+// score bands, animated sweep on mount, and a center read-out (big
+// score / status word / one smart sentence). The four context chips
+// from Phase 309 are gone — they duplicated info the user already
+// sees elsewhere and dragged the container's height up. Container
+// is ~40% shorter and reads as a luxury HUD, not a report.
 //
-//   • a wide 180° SVG arc with gradient track + animated needle
-//   • 4 live context chips beside the gauge (EOM forecast, charges
-//     this week, next salary, pending count)
-//   • status pill ("מצוין / יציב / כדאי לעקוב / סיכון")
-//   • a "פתח פירוט" call to action that opens a bottom sheet
-//     explaining what hurts / helps the score and the next action
-//
-// No engine math here. Pure presentation + routing.
+// Tap anywhere → BottomSheet with hurts / helps / recommended
+// action (HealthExplainSheet, unchanged engine math).
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertTriangle,
   Activity,
+  AlertTriangle,
   ArrowLeft,
   ChevronLeft,
-  Lightbulb,
   ShieldCheck,
-  TrendingDown,
-  Wallet,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
@@ -40,7 +37,6 @@ import {
 } from "@/lib/financial-health-score";
 import { upcomingOutflows } from "@/lib/upcoming-outflows";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { openAttentionCenter } from "@/lib/use-attention-center";
 import { navigateToTab } from "@/lib/tab-nav";
 import { tap as hapticTap } from "@/lib/haptics";
 
@@ -50,14 +46,13 @@ const ILS = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
 });
 
-// Arc: 180° horizontal sweep from -180° (left, score 0) to 0° (right,
-// score 100). All math in SVG coordinate space.
-const VIEWBOX = { w: 280, h: 150 };
+// 180° horizontal arc from -180° (score 0) to 0° (score 100).
+const VIEWBOX = { w: 280, h: 138 };
 const CX = VIEWBOX.w / 2;
-const CY = 132;
-const R = 110;
-const ARC_START_DEG = 180; // left edge
-const ARC_END_DEG = 360; // right edge (sweeps through top)
+const CY = 128;
+const R = 102;
+const ARC_START_DEG = 180;
+const ARC_END_DEG = 360;
 
 function polar(cx: number, cy: number, r: number, deg: number) {
   const rad = (deg * Math.PI) / 180;
@@ -77,16 +72,26 @@ function describeArc(
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`;
 }
 
-const TONE_COLOR: Record<"ok" | "watch" | "danger", string> = {
-  ok: "#34D399",
-  watch: "#F59E0B",
-  danger: "#F87171",
-};
+// Dynamic palette across four score bands:
+//   0–30   crimson           (danger)
+//   30–60  amber             (watch)
+//   60–80  lime              (steady)
+//   80–100 neon teal / mint  (excellent)
+function pickTone(score: number): {
+  fg: string;
+  glow: string;
+  band: "danger" | "watch" | "steady" | "neon";
+} {
+  if (score < 30) return { fg: "#F87171", glow: "#F87171", band: "danger" };
+  if (score < 60) return { fg: "#F59E0B", glow: "#FBBF24", band: "watch" };
+  if (score < 80) return { fg: "#A3E635", glow: "#84CC16", band: "steady" };
+  return { fg: "#22D3EE", glow: "#34D399", band: "neon" };
+}
 
 function statusLabel(score: number): string {
   if (score >= 80) return "מצוין";
   if (score >= 60) return "יציב";
-  if (score >= 40) return "כדאי לעקוב";
+  if (score >= 40) return "זהירות";
   return "סיכון";
 }
 
@@ -99,7 +104,6 @@ export function FinancialHealthGauge() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
-  const budgetMode = useFinanceStore((s) => s.budgetMode);
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -131,19 +135,365 @@ export function FinancialHealthGauge() {
     monthlyBudget,
   ]);
 
-  const flow = useMemo(() => {
-    if (!hydrated) return [] as ReturnType<typeof upcomingOutflows>;
-    return upcomingOutflows({
-      entries,
-      rules,
-      statuses,
-      loans,
-      horizonDays: 7,
-    });
-  }, [hydrated, entries, rules, statuses, loans]);
+  if (!hydrated || !snap) return null;
 
+  const health = financialHealthScore(snap);
+  const tone = pickTone(health.score);
+  const needleDeg =
+    ARC_START_DEG + ((ARC_END_DEG - ARC_START_DEG) * health.score) / 100;
+  const needleTip = polar(CX, CY, R - 12, needleDeg);
+  const needleBackTail = polar(CX, CY, 12, needleDeg + 180);
+
+  return (
+    <>
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] via-black/45 to-white/[0.01] p-3 backdrop-blur-md"
+        style={{
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px -40px ${tone.glow}88, inset 0 0 60px ${tone.glow}10`,
+        }}
+        aria-label={`מד בריאות פיננסית. ציון ${health.score} מתוך 100. ${statusLabel(health.score)}.`}
+      >
+        {/* Faint radial wash behind the gauge — adds depth without
+           competing with the arc gradient. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(60% 80% at 50% 100%, ${tone.glow}1f, transparent 70%)`,
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={() => {
+            hapticTap();
+            setSheetOpen(true);
+          }}
+          aria-label="פתח פירוט בריאות פיננסית"
+          className="relative flex w-full flex-col items-center gap-1 text-center focus-visible:outline-none"
+        >
+          <header className="flex w-full items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+              <span
+                className="inline-flex size-1.5 rounded-full"
+                style={{
+                  background: tone.fg,
+                  boxShadow: `0 0 10px ${tone.glow}`,
+                }}
+              />
+              בריאות פיננסית
+            </span>
+            <StatusPill score={health.score} tone={tone} />
+          </header>
+
+          <Speedometer
+            score={health.score}
+            tone={tone}
+            needleTip={needleTip}
+            needleBackTail={needleBackTail}
+          />
+
+          <p className="-mt-1 line-clamp-1 text-[11px] text-muted-foreground/85">
+            {health.label}
+          </p>
+
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+            פתח פירוט
+            <ChevronLeft className="size-3" />
+          </span>
+        </button>
+      </motion.section>
+
+      <HealthExplainSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        snap={snap}
+        health={health}
+      />
+    </>
+  );
+}
+
+function Speedometer({
+  score,
+  tone,
+  needleTip,
+  needleBackTail,
+}: {
+  score: number;
+  tone: ReturnType<typeof pickTone>;
+  needleTip: { x: number; y: number };
+  needleBackTail: { x: number; y: number };
+}) {
+  const ticks = [0, 25, 50, 75, 100];
+
+  return (
+    <svg
+      viewBox={`0 0 ${VIEWBOX.w} ${VIEWBOX.h}`}
+      className="block h-[132px] w-full max-w-[300px]"
+      role="img"
+      aria-hidden
+    >
+      <defs>
+        {/* Multi-stop arc — crimson → amber → lime → neon teal. */}
+        <linearGradient id="hg-arc" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#F87171" />
+          <stop offset="33%" stopColor="#F59E0B" />
+          <stop offset="66%" stopColor="#A3E635" />
+          <stop offset="100%" stopColor="#22D3EE" />
+        </linearGradient>
+
+        {/* Soft neon glow under needle + progress arc. */}
+        <filter id="hg-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3.4" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        {/* Metallic gradient for needle — bright edge, cool core. */}
+        <linearGradient id="hg-needle" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="65%" stopColor={tone.fg} />
+          <stop offset="100%" stopColor={tone.glow} />
+        </linearGradient>
+
+        {/* Hub gradient — dark glass dome. */}
+        <radialGradient id="hg-hub" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#1A1A1A" />
+          <stop offset="80%" stopColor="#0A0A0A" />
+        </radialGradient>
+      </defs>
+
+      {/* Outer dim ring — depth. */}
+      <path
+        d={describeArc(CX, CY, R + 8, ARC_START_DEG, ARC_END_DEG)}
+        stroke="#ffffff08"
+        strokeWidth={1}
+        fill="none"
+      />
+
+      {/* Inner track. */}
+      <path
+        d={describeArc(CX, CY, R, ARC_START_DEG, ARC_END_DEG)}
+        stroke="#ffffff14"
+        strokeWidth={14}
+        strokeLinecap="round"
+        fill="none"
+      />
+
+      {/* Gradient arc — full sweep with depth via filter. */}
+      <path
+        d={describeArc(CX, CY, R, ARC_START_DEG, ARC_END_DEG)}
+        stroke="url(#hg-arc)"
+        strokeWidth={14}
+        strokeLinecap="round"
+        fill="none"
+        opacity={0.95}
+        filter="url(#hg-glow)"
+      />
+
+      {/* Tick marks + labels at 0/25/50/75/100. */}
+      {ticks.map((p) => {
+        const deg =
+          ARC_START_DEG + ((ARC_END_DEG - ARC_START_DEG) * p) / 100;
+        const outer = polar(CX, CY, R + 10, deg);
+        const inner = polar(CX, CY, R - 2, deg);
+        const label = polar(CX, CY, R + 22, deg);
+        return (
+          <g key={p}>
+            <line
+              x1={outer.x}
+              y1={outer.y}
+              x2={inner.x}
+              y2={inner.y}
+              stroke="#ffffff55"
+              strokeWidth={1.25}
+            />
+            <text
+              x={label.x}
+              y={label.y + 3}
+              textAnchor="middle"
+              style={{
+                font: "500 9px ui-sans-serif, system-ui",
+                fill: "rgba(255,255,255,0.55)",
+              }}
+            >
+              {p}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Sweep pulse — runs once on mount; fades. */}
+      <motion.path
+        d={describeArc(CX, CY, R, ARC_START_DEG, ARC_END_DEG)}
+        stroke={tone.glow}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        initial={{ pathLength: 0, opacity: 0.6 }}
+        animate={{ pathLength: 1, opacity: 0 }}
+        transition={{ duration: 1.2, ease: "easeOut" }}
+        style={{ filter: `drop-shadow(0 0 4px ${tone.glow})` }}
+      />
+
+      {/* Needle — outer glow stroke + bright metallic stroke. */}
+      <motion.line
+        x1={needleBackTail.x}
+        y1={needleBackTail.y}
+        x2={needleTip.x}
+        y2={needleTip.y}
+        stroke={tone.glow}
+        strokeWidth={7}
+        strokeLinecap="round"
+        opacity={0.45}
+        initial={false}
+        animate={{
+          x1: needleBackTail.x,
+          y1: needleBackTail.y,
+          x2: needleTip.x,
+          y2: needleTip.y,
+        }}
+        transition={{ type: "spring", stiffness: 70, damping: 14 }}
+        filter="url(#hg-glow)"
+      />
+      <motion.line
+        x1={needleBackTail.x}
+        y1={needleBackTail.y}
+        x2={needleTip.x}
+        y2={needleTip.y}
+        stroke="url(#hg-needle)"
+        strokeWidth={3}
+        strokeLinecap="round"
+        initial={false}
+        animate={{
+          x1: needleBackTail.x,
+          y1: needleBackTail.y,
+          x2: needleTip.x,
+          y2: needleTip.y,
+        }}
+        transition={{ type: "spring", stiffness: 70, damping: 14 }}
+      />
+
+      {/* Hub — concentric metallic dome. */}
+      <circle
+        cx={CX}
+        cy={CY}
+        r={10}
+        fill="url(#hg-hub)"
+        stroke={`${tone.fg}88`}
+        strokeWidth={1}
+      />
+      <circle cx={CX} cy={CY} r={3.5} fill={tone.fg} opacity={0.9} />
+
+      {/* Center read-out — score + /100 + status. */}
+      <motion.text
+        x={CX}
+        y={CY - 40}
+        textAnchor="middle"
+        initial={{ opacity: 0, y: CY - 30 }}
+        animate={{ opacity: 1, y: CY - 40 }}
+        transition={{ delay: 0.15, duration: 0.4 }}
+        style={{
+          font: "300 36px ui-sans-serif, system-ui",
+          fill: tone.fg,
+          letterSpacing: "-0.02em",
+        }}
+      >
+        {score}
+      </motion.text>
+      <text
+        x={CX}
+        y={CY - 22}
+        textAnchor="middle"
+        style={{
+          font: "10px ui-sans-serif, system-ui",
+          fill: "rgba(255,255,255,0.5)",
+          letterSpacing: "0.15em",
+        }}
+      >
+        / 100
+      </text>
+    </svg>
+  );
+}
+
+function StatusPill({
+  score,
+  tone,
+}: {
+  score: number;
+  tone: ReturnType<typeof pickTone>;
+}) {
+  const label = statusLabel(score);
+  return (
+    <AnimatePresence mode="popLayout">
+      <motion.span
+        key={tone.band}
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 4 }}
+        transition={{ duration: 0.2 }}
+        className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+        style={{
+          background: `${tone.fg}1f`,
+          color: tone.fg,
+          boxShadow: `inset 0 0 0 1px ${tone.fg}33`,
+        }}
+      >
+        {tone.band === "neon" ? (
+          <ShieldCheck className="size-2.5" />
+        ) : tone.band === "danger" ? (
+          <AlertTriangle className="size-2.5" />
+        ) : (
+          <Activity className="size-2.5" />
+        )}
+        {label}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+function HealthExplainSheet({
+  open,
+  onOpenChange,
+  snap,
+  health,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  snap: FinancialSnapshot;
+  health: FinancialHealthScore;
+}) {
+  const tone = pickTone(health.score);
+
+  // Compute supplemental context on demand — kept inside the sheet so
+  // the main gauge stays a single-engine read.
+  const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+
+  const flow = useMemo(
+    () =>
+      upcomingOutflows({
+        entries,
+        rules,
+        statuses,
+        loans,
+        horizonDays: 7,
+      }),
+    [entries, rules, statuses, loans],
+  );
+  const chargesCount = flow.length;
+  const bigCharges = flow.filter((o) => o.amount >= 1000).length;
   const nextIncomeDays = useMemo(() => {
-    if (!hydrated) return null;
     const now = new Date();
     const todayDay = now.getDate();
     const daysInThisMonth = new Date(
@@ -161,383 +511,8 @@ export function FinancialHealthGauge() {
       if (best === null || remaining < best) best = remaining;
     }
     return best;
-  }, [hydrated, incomes]);
+  }, [incomes]);
 
-  const pendingCount = useMemo(() => {
-    if (!hydrated) return 0;
-    let n = 0;
-    for (const e of entries) {
-      if (e.needsConfirmation && !e.confirmedAt) n += 1;
-    }
-    return n;
-  }, [hydrated, entries]);
-
-  if (!hydrated || !snap) return null;
-
-  const health = financialHealthScore(snap);
-  const color = TONE_COLOR[health.tone];
-  const needleDeg =
-    ARC_START_DEG + ((ARC_END_DEG - ARC_START_DEG) * health.score) / 100;
-  const needleEnd = polar(CX, CY, R - 14, needleDeg);
-  const bigCharges = flow.filter((o) => o.amount >= 1000).length;
-  const chargesCount = flow.length;
-
-  return (
-    <>
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] via-black/40 to-white/[0.01] p-4 backdrop-blur-md"
-        style={{
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 30px 60px -40px ${color}66`,
-        }}
-        aria-label={`מד בריאות פיננסית. ציון ${health.score} מתוך 100. ${health.label}.`}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            hapticTap();
-            setSheetOpen(true);
-          }}
-          aria-label="פתח פירוט בריאות פיננסית"
-          className="flex w-full items-stretch gap-3 text-start"
-        >
-          {/* Gauge */}
-          <div className="relative shrink-0">
-            <svg
-              viewBox={`0 0 ${VIEWBOX.w} ${VIEWBOX.h}`}
-              className="block h-[120px] w-[210px]"
-              role="img"
-              aria-hidden
-            >
-              <defs>
-                <linearGradient
-                  id="hg-arc"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="0%"
-                >
-                  <stop offset="0%" stopColor="#F87171" />
-                  <stop offset="55%" stopColor="#F59E0B" />
-                  <stop offset="100%" stopColor="#34D399" />
-                </linearGradient>
-                <filter
-                  id="hg-glow"
-                  x="-50%"
-                  y="-50%"
-                  width="200%"
-                  height="200%"
-                >
-                  <feGaussianBlur stdDeviation="2.6" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-
-              {/* Track */}
-              <path
-                d={describeArc(CX, CY, R, ARC_START_DEG, ARC_END_DEG)}
-                stroke="#ffffff10"
-                strokeWidth={14}
-                strokeLinecap="round"
-                fill="none"
-              />
-              {/* Gradient arc */}
-              <path
-                d={describeArc(CX, CY, R, ARC_START_DEG, ARC_END_DEG)}
-                stroke="url(#hg-arc)"
-                strokeWidth={14}
-                strokeLinecap="round"
-                fill="none"
-                opacity={0.9}
-              />
-
-              {/* Tick marks at 0/25/50/75/100 */}
-              {[0, 25, 50, 75, 100].map((p) => {
-                const deg =
-                  ARC_START_DEG +
-                  ((ARC_END_DEG - ARC_START_DEG) * p) / 100;
-                const a = polar(CX, CY, R + 8, deg);
-                const b = polar(CX, CY, R - 2, deg);
-                return (
-                  <line
-                    key={p}
-                    x1={a.x}
-                    y1={a.y}
-                    x2={b.x}
-                    y2={b.y}
-                    stroke="#ffffff44"
-                    strokeWidth={1}
-                  />
-                );
-              })}
-
-              {/* Needle */}
-              <motion.line
-                x1={CX}
-                y1={CY}
-                x2={needleEnd.x}
-                y2={needleEnd.y}
-                stroke={color}
-                strokeWidth={3}
-                strokeLinecap="round"
-                filter="url(#hg-glow)"
-                initial={false}
-                animate={{ x2: needleEnd.x, y2: needleEnd.y }}
-                transition={{ type: "spring", stiffness: 85, damping: 16 }}
-              />
-              {/* Pivot */}
-              <circle
-                cx={CX}
-                cy={CY}
-                r={5}
-                fill="#0A0A0A"
-                stroke={color}
-                strokeWidth={2}
-              />
-              {/* Score text under pivot */}
-              <text
-                x={CX}
-                y={CY - 28}
-                textAnchor="middle"
-                style={{
-                  font: "300 28px ui-sans-serif, system-ui",
-                  fill: color,
-                }}
-              >
-                {health.score}
-              </text>
-              <text
-                x={CX}
-                y={CY - 12}
-                textAnchor="middle"
-                style={{
-                  font: "10px ui-sans-serif, system-ui",
-                  fill: "rgba(255,255,255,0.55)",
-                }}
-              >
-                / 100
-              </text>
-            </svg>
-          </div>
-
-          {/* Right column — status + chips */}
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex size-1.5 rounded-full"
-                style={{
-                  background: color,
-                  boxShadow: `0 0 10px ${color}`,
-                }}
-              />
-              <span className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
-                בריאות פיננסית
-              </span>
-            </div>
-            <StatusPill tone={health.tone} label={statusLabel(health.score)} />
-            <p className="text-caption text-muted-foreground/85">
-              {health.label}
-            </p>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-              <Lightbulb className="size-3" />
-              פתח פירוט מלא
-              <ChevronLeft className="size-3" />
-            </div>
-          </div>
-        </button>
-
-        {/* Chip strip — outside the tap target so chips remain
-           independently clickable. */}
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <ChipButton
-            icon={<TrendingDown className="size-3" />}
-            label="צפי לסוף החודש"
-            value={ILS.format(
-              Math.round(snap.projectedBalanceWithoutDiscretionary),
-            )}
-            tone={
-              snap.projectedBalanceWithoutDiscretionary < 0
-                ? "#F87171"
-                : "#60A5FA"
-            }
-            onClick={() => {
-              hapticTap();
-              navigateToTab("analytics");
-            }}
-          />
-          <ChipButton
-            icon={<AlertTriangle className="size-3" />}
-            label="חיובים השבוע"
-            value={
-              chargesCount > 0
-                ? `${chargesCount}${bigCharges > 0 ? " · " + bigCharges + " גדולים" : ""}`
-                : "—"
-            }
-            tone={bigCharges > 0 ? "#F87171" : "#A78BFA"}
-            onClick={() => {
-              hapticTap();
-              navigateToTab("history");
-            }}
-          />
-          <ChipButton
-            icon={<Wallet className="size-3" />}
-            label="משכורת הבאה"
-            value={
-              nextIncomeDays === null
-                ? "—"
-                : nextIncomeDays === 0
-                  ? "היום"
-                  : nextIncomeDays === 1
-                    ? "מחר"
-                    : `בעוד ${nextIncomeDays} ימים`
-            }
-            tone="#34D399"
-            onClick={() => {
-              hapticTap();
-              navigateToTab("history");
-            }}
-          />
-          <ChipButton
-            icon={<Activity className="size-3" />}
-            label={
-              pendingCount > 0
-                ? "ממתינים לאישור"
-                : `תקציב ${budgetMode === "auto" ? "אוטומטי" : "ידני"}`
-            }
-            value={
-              pendingCount > 0
-                ? `${pendingCount}`
-                : budgetMode === "auto"
-                  ? "auto"
-                  : ILS.format(Math.round(monthlyBudget))
-            }
-            tone={pendingCount > 0 ? "#FBBF24" : "#22D3EE"}
-            onClick={() => {
-              hapticTap();
-              if (pendingCount > 0) openAttentionCenter();
-              else navigateToTab("settings");
-            }}
-          />
-        </div>
-      </motion.section>
-
-      <HealthExplainSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        snap={snap}
-        health={health}
-        chargesCount={chargesCount}
-        bigCharges={bigCharges}
-        nextIncomeDays={nextIncomeDays}
-      />
-    </>
-  );
-}
-
-function StatusPill({
-  tone,
-  label,
-}: {
-  tone: "ok" | "watch" | "danger";
-  label: string;
-}) {
-  const color = TONE_COLOR[tone];
-  return (
-    <AnimatePresence mode="popLayout">
-      <motion.span
-        key={tone}
-        initial={{ opacity: 0, y: -4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 4 }}
-        transition={{ duration: 0.2 }}
-        className="inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-        style={{
-          background: `${color}1f`,
-          color,
-        }}
-      >
-        {tone === "ok" ? (
-          <ShieldCheck className="size-3" />
-        ) : tone === "danger" ? (
-          <AlertTriangle className="size-3" />
-        ) : (
-          <Activity className="size-3" />
-        )}
-        {label}
-      </motion.span>
-    </AnimatePresence>
-  );
-}
-
-function ChipButton({
-  icon,
-  label,
-  value,
-  tone,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone: string;
-  onClick: () => void;
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.97 }}
-      aria-label={`${label}: ${value}`}
-      className="flex flex-col gap-0.5 rounded-2xl border px-2.5 py-2 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
-      style={{
-        background: `${tone}10`,
-        borderColor: `${tone}33`,
-      }}
-    >
-      <span
-        className="inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.18em] text-muted-foreground/85"
-      >
-        {icon}
-        {label}
-      </span>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-[12.5px] font-medium"
-        style={{ color: tone }}
-      >
-        {value}
-      </span>
-    </motion.button>
-  );
-}
-
-function HealthExplainSheet({
-  open,
-  onOpenChange,
-  snap,
-  health,
-  chargesCount,
-  bigCharges,
-  nextIncomeDays,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  snap: FinancialSnapshot;
-  health: FinancialHealthScore;
-  chargesCount: number;
-  bigCharges: number;
-  nextIncomeDays: number | null;
-}) {
-  const tone = TONE_COLOR[health.tone];
-
-  // Derive "hurts" / "helps" lists from the same snapshot the score
-  // came from. Pure presentation — no parallel math.
   const hurts: string[] = [];
   const helps: string[] = [];
   if (snap.projectedBalanceWithoutDiscretionary < 0) {
@@ -548,7 +523,9 @@ function HealthExplainSheet({
   if (snap.currentBalance <= 0) {
     hurts.push("היתרה הנוכחית קרובה לאפס או שלילית.");
   } else if (snap.currentBalance >= 20_000) {
-    helps.push(`עומק עוגן בריא — ${ILS.format(Math.round(snap.currentBalance))}`);
+    helps.push(
+      `עומק עוגן בריא — ${ILS.format(Math.round(snap.currentBalance))}`,
+    );
   }
   const pendingObligations =
     snap.fixedExpensesUntilNextMonth +
@@ -580,9 +557,9 @@ function HealthExplainSheet({
   }
 
   const action =
-    health.tone === "danger"
+    tone.band === "danger"
       ? "פעל עכשיו: דחה חיוב גדול, הזרם הכנסה נוספת, או הקפא רכישה לא דחופה."
-      : health.tone === "watch"
+      : tone.band === "watch"
         ? "עקוב אחרי הקצב היומי, ובדוק אם אפשר להזיז חיוב כבד למועד אחר."
         : "שמור על הקצב הנוכחי. שווה לבדוק חיסכון או הפחתת חוב.";
 
@@ -596,7 +573,7 @@ function HealthExplainSheet({
         <div className="flex items-center gap-2">
           <span
             className="flex size-8 items-center justify-center rounded-xl"
-            style={{ background: `${tone}1f`, color: tone }}
+            style={{ background: `${tone.fg}1f`, color: tone.fg }}
           >
             <ShieldCheck className="size-4" />
           </span>
@@ -604,12 +581,17 @@ function HealthExplainSheet({
             <span className="text-section text-foreground">
               ציון בריאות: {health.score}/100
             </span>
-            <span className="text-caption" style={{ color: tone }}>
+            <span className="text-caption" style={{ color: tone.fg }}>
               {health.label}
             </span>
           </div>
         </div>
       </header>
+
+      <p className="text-caption text-muted-foreground">
+        הציון משוקלל מארבעה מנועים: עומק יתרה, צפי לסוף חודש, מינוף הוצאות
+        קבועות וחוב, וכניסת הכנסה. ככל שהציון גבוה — הקצב יציב יותר.
+      </p>
 
       {hurts.length > 0 ? (
         <section className="flex flex-col gap-1.5">
@@ -658,14 +640,11 @@ function HealthExplainSheet({
       <section
         className="rounded-2xl border px-3 py-2.5"
         style={{
-          background: `${tone}10`,
-          borderColor: `${tone}33`,
+          background: `${tone.fg}10`,
+          borderColor: `${tone.fg}33`,
         }}
       >
-        <span
-          className="text-caption font-medium"
-          style={{ color: tone }}
-        >
+        <span className="text-caption font-medium" style={{ color: tone.fg }}>
           💡 פעולה מומלצת
         </span>
         <p className="mt-1 text-[12px] text-foreground/90">{action}</p>
