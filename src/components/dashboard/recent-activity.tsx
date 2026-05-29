@@ -60,6 +60,20 @@ function timeAgo(date: Date, now: Date = new Date()): string {
   return HOUR_FMT.format(date);
 }
 
+// Phase 314 — richer per-row label: "היום · HH:mm" / "אתמול · HH:mm"
+// / "DD.MM · HH:mm" so the user reads when each activity actually
+// happened without doing relative-time math in their head.
+function whenLabel(date: Date, now: Date = new Date()): string {
+  const todayKey = startOfDay(now);
+  const dayKey = startOfDay(date);
+  const hh = HOUR_FMT.format(date);
+  if (dayKey === todayKey) return `היום · ${hh}`;
+  if (dayKey === todayKey - 86_400_000) return `אתמול · ${hh}`;
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mo} · ${hh}`;
+}
+
 function startOfDay(d: Date): number {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -165,13 +179,30 @@ export function RecentActivity() {
 
     for (const e of entries) {
       const slice = sliceForMonth(e, monthKey);
-      if (!slice) continue;
+      // Phase 314 — Wallet partials / manual entries without a
+      // chargeDate previously fell through `sliceForMonth` and
+      // disappeared from RecentActivity entirely (and from the
+      // "today" filter). Fall back to createdAt so they always
+      // surface.
+      let ts: Date;
+      let amount: number;
+      if (slice) {
+        ts = slice.chargeDate;
+        amount = slice.amount;
+      } else {
+        const iso = e.chargeDate ?? e.createdAt;
+        if (!iso) continue;
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) continue;
+        ts = d;
+        amount = Math.abs(e.amount) / Math.max(1, e.installments);
+      }
       out.push({
-        id: `${e.id}:${slice.chargeDate.toISOString()}`,
+        id: `${e.id}:${ts.toISOString()}`,
         entryId: e.id,
         direction: e.isRefund ? "in" : "out",
-        amount: slice.amount,
-        ts: slice.chargeDate,
+        amount,
+        ts,
         title: e.merchant ?? e.note ?? getCategory(e.category as CategoryId).label,
         category: e.category as CategoryId,
         source: e.source,
@@ -206,16 +237,22 @@ export function RecentActivity() {
   }, [hydrated, entries, incomes]);
 
   // Summary numbers — same engine inputs.
+  // Phase 314 — also surface the latest income + latest expense so
+  // the collapsed Home preview reads as "what just happened".
   const summary = useMemo(() => {
     const now = new Date();
     const todayKey = startOfDay(now);
     let monthCount = 0;
     let todayCount = 0;
+    let lastIncome: ActivityItem | null = null;
+    let lastExpense: ActivityItem | null = null;
     for (const it of items) {
       monthCount++;
       if (startOfDay(it.ts) === todayKey) todayCount++;
+      if (it.direction === "in" && !lastIncome) lastIncome = it;
+      if (it.direction === "out" && !lastExpense) lastExpense = it;
     }
-    return { monthCount, todayCount };
+    return { monthCount, todayCount, lastIncome, lastExpense };
   }, [items]);
 
   // Filter logic used by the bottom sheet.
@@ -258,8 +295,6 @@ export function RecentActivity() {
 
   if (!hydrated) return null;
 
-  const preview = items.slice(0, 3);
-
   function handleRowTap(item: ActivityItem) {
     if (!item.entryId) return;
     const e = entries.find((x) => x.id === item.entryId);
@@ -297,16 +332,33 @@ export function RecentActivity() {
             עוד אין פעילות החודש. חיוב חדש שיתקבל יופיע כאן בזמן אמת.
           </div>
         ) : (
-          <ul className="flex flex-col gap-1.5">
-            {preview.map((item, idx) => (
-              <ActivityRow
-                key={item.id}
-                item={item}
-                delay={idx * 0.04}
-                onTap={() => handleRowTap(item)}
-              />
-            ))}
-          </ul>
+          // Phase 314 — compact "what just happened" preview. Two
+          // tiles (income + expense) plus a single CTA. Full list
+          // lives inside the bottom sheet.
+          <div className="grid grid-cols-2 gap-2">
+            <SummaryTile
+              direction="in"
+              title="הכנסה אחרונה"
+              item={summary.lastIncome}
+            />
+            <SummaryTile
+              direction="out"
+              title="הוצאה אחרונה"
+              item={summary.lastExpense}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                setSheetOpen(true);
+              }}
+              aria-label="פתח פעילות מלאה"
+              className="col-span-2 inline-flex items-center justify-between gap-2 rounded-2xl border border-[color:var(--neon)]/30 bg-[color:var(--neon)]/10 px-3 py-2 text-[12px] font-medium text-[color:var(--neon)] transition-colors hover:border-[color:var(--neon)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+            >
+              פתח פעילות מלאה
+              <ChevronLeft className="size-3.5" aria-hidden />
+            </button>
+          </div>
         )}
       </section>
 
@@ -466,7 +518,7 @@ function ActivityRow({
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground/85">
-            {timeAgo(item.ts)}
+            {whenLabel(item.ts)}
           </span>
           {item.installments && item.installments > 1 ? (
             <Pill tone="neutral" icon={<Repeat2 className="size-2.5" />}>
@@ -492,5 +544,59 @@ function ActivityRow({
         ) : null}
       </div>
     </motion.li>
+  );
+}
+
+function SummaryTile({
+  direction,
+  title,
+  item,
+}: {
+  direction: Direction;
+  title: string;
+  item: ActivityItem | null;
+}) {
+  const accent = direction === "in" ? "#34D399" : "#F87171";
+  if (!item) {
+    return (
+      <div
+        className="flex flex-col gap-0.5 rounded-2xl border border-white/8 bg-black/25 p-2.5"
+        aria-label={`${title}: אין עדיין`}
+      >
+        <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+          {title}
+        </span>
+        <span className="text-[11px] text-muted-foreground/70">
+          אין עדיין החודש
+        </span>
+      </div>
+    );
+  }
+  const sign = direction === "in" ? "+" : "−";
+  return (
+    <div
+      className="flex flex-col gap-0.5 rounded-2xl border px-2.5 py-2"
+      style={{ borderColor: `${accent}33`, background: `${accent}10` }}
+      aria-label={`${title}: ${item.title}`}
+    >
+      <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+        {title}
+      </span>
+      <span
+        data-mono="true"
+        dir="ltr"
+        className="text-[13px] font-semibold"
+        style={{ color: accent }}
+      >
+        {sign}
+        {ILS.format(Math.round(item.amount))}
+      </span>
+      <span className="truncate text-[10px] text-foreground/85">
+        {item.title}
+      </span>
+      <span className="text-[9.5px] text-muted-foreground/85">
+        {timeAgo(item.ts)}
+      </span>
+    </div>
   );
 }
