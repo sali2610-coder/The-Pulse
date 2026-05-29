@@ -79,6 +79,15 @@ export type Income = {
   dayOfMonth: number;
   active: boolean;
   createdAt: string;
+  /** Phase 316 — per-month actual-received overrides. The base
+   *  `amount` is the immutable "expected" baseline; entries here
+   *  record what the user reports as actually received in a given
+   *  month so the UI can show expected / actual / variance without
+   *  ever overwriting the original definition. Key is a MonthKey
+   *  ("YYYY-MM"); value is the actual amount. Forecast / liquidity /
+   *  cashflow engines still read `amount` so projections continue to
+   *  use the expected baseline. */
+  actualByMonth?: Record<string, number>;
 };
 
 export type ExpenseEntry = {

@@ -225,6 +225,10 @@ type Actions = {
   updateIncome: (id: string, patch: Partial<AddIncomeInput>) => void;
   toggleIncome: (id: string) => void;
   deleteIncome: (id: string) => void;
+  /** Phase 316 — record per-month actual-received amount on an income
+   *  WITHOUT touching `amount` (expected baseline). Pass `null` to clear
+   *  the override for that month. */
+  setIncomeActual: (id: string, monthKey: MonthKey, amount: number | null) => void;
 
   setMonthlyBudget: (value: number) => void;
   setBudgetMode: (mode: "manual" | "auto") => void;
@@ -1015,6 +1019,21 @@ export const useFinanceStore = create<State & Actions>()(
         }));
       },
 
+      setIncomeActual: (id, monthKey, amount) => {
+        set((state) => ({
+          incomes: state.incomes.map((i) => {
+            if (i.id !== id) return i;
+            const next = { ...(i.actualByMonth ?? {}) };
+            if (amount === null || !Number.isFinite(amount) || amount <= 0) {
+              delete next[monthKey];
+            } else {
+              next[monthKey] = safeNumber(amount);
+            }
+            return { ...i, actualByMonth: next };
+          }),
+        }));
+      },
+
       setMonthlyBudget: (value) => {
         const safe = Number.isFinite(value) && value >= 0 ? value : 0;
         set({
@@ -1088,7 +1107,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 13,
+      version: 14,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -1225,6 +1244,16 @@ export const useFinanceStore = create<State & Actions>()(
               migrated.textScaleUpdatedAt ?? (legacy !== "normal" ? Date.now() : 0),
             textScaleCloudAt: migrated.textScaleCloudAt ?? 0,
           };
+        }
+        if (fromVersion < 14) {
+          // Phase 316 — Income gains `actualByMonth` (per-month received
+          // overrides). Default to {} so the expected vs actual UI can
+          // safely read it. `amount` remains the immutable baseline.
+          const incomes = (migrated.incomes ?? []).map((i) => ({
+            ...i,
+            actualByMonth: i.actualByMonth ?? {},
+          }));
+          migrated = { ...migrated, incomes };
         }
         return migrated;
       },

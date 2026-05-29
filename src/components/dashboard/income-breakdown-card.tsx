@@ -6,22 +6,20 @@
 // salary. Auto-hides when there's no income to break down.
 //
 // Phase 312 — each non-refund source is now a tappable card. Tap
-// opens a quick edit BottomSheet wired straight to the store
-// (updateIncome). Updates flow into the canonical incomes table,
-// so liquidity / forecast / health all react live to the change.
+// opens a quick edit BottomSheet wired straight to the store.
 //
-// "Monthly override" semantics (apply only this month) are NOT
-// implemented yet — they need a per-month overrides table that
-// every consumer (snapshot / forecast / liquidity) reads. The
-// editor exposes "amount + day + active" against the base record
-// for now and surfaces a note explaining the scope.
+// Phase 316 — dual amount model:
+//   expected = income.amount (immutable baseline — drives forecast)
+//   actual   = income.actualByMonth[currentMonthKey] ?? expected
+// The editor surfaces an "actual received" input that writes ONLY
+// to actualByMonth via setIncomeActual; the expected baseline is
+// never overwritten so month-over-month comparisons stay stable.
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Banknote,
-  Calendar,
   CheckCircle2,
   Pencil,
   Sparkles,
@@ -31,7 +29,6 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { incomeBreakdown } from "@/lib/income-breakdown";
 import { currentMonthKey } from "@/lib/dates";
-import { sliceForMonth } from "@/lib/projections";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { tap as hapticTap, success as hapticSuccess } from "@/lib/haptics";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
@@ -56,24 +53,18 @@ function nextDateFor(dayOfMonth: number, now: Date): Date {
   return candidate;
 }
 
-function actualInflowForIncome(
-  args: { entries: ReturnType<typeof useFinanceStore.getState>["entries"]; monthKey: string },
-): number {
-  // Refunds posted this month feed back into the user's wallet —
-  // they're the closest proxy for "income that wasn't the planned
-  // salary". `incomeBreakdown` already exposes them as a synthetic
-  // refund source; here we surface the per-month actual sum for
-  // the editor's "צפוי / בפועל" line, scoped to refund entries.
-  let n = 0;
-  for (const e of args.entries) {
-    if (!e.isRefund) continue;
-    if (e.needsConfirmation) continue;
-    if (e.currency && e.currency !== "ILS") continue;
-    const slice = sliceForMonth(e, args.monthKey);
-    if (!slice) continue;
-    n += slice.amount;
+function actualFor(income: Income, monthKey: string): number {
+  const override = income.actualByMonth?.[monthKey];
+  if (typeof override === "number" && Number.isFinite(override) && override >= 0) {
+    return override;
   }
-  return n;
+  return income.amount;
+}
+
+function varianceTone(ratio: number): string {
+  if (ratio >= 1) return "#34D399";
+  if (ratio >= 0.8) return "#D4AF37";
+  return "#F87171";
 }
 
 export function IncomeBreakdownCard() {
@@ -82,14 +73,12 @@ export function IncomeBreakdownCard() {
   const entries = useFinanceStore((s) => s.entries);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const monthKey = currentMonthKey();
+
   const breakdown = useMemo(() => {
     if (!hydrated) return null;
-    return incomeBreakdown({
-      incomes,
-      entries,
-      monthKey: currentMonthKey(),
-    });
-  }, [hydrated, incomes, entries]);
+    return incomeBreakdown({ incomes, entries, monthKey });
+  }, [hydrated, incomes, entries, monthKey]);
 
   if (!hydrated || !breakdown) return null;
   if (breakdown.totalMonthly === 0) return null;
@@ -116,76 +105,27 @@ export function IncomeBreakdownCard() {
         <ul className="flex flex-col gap-2">
           {breakdown.sources.map((s, idx) => {
             const pct = Math.round(s.share * 100);
-            const tone = s.isRefund ? "#D4AF37" : "#34D399";
             const incomeRecord = incomes.find((i) => i.id === s.id);
             const nextDate =
               incomeRecord && !s.isRefund
                 ? nextDateFor(incomeRecord.dayOfMonth, new Date())
                 : null;
             const tappable = Boolean(incomeRecord && !s.isRefund);
-            return (
-              <motion.li
-                key={s.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  delay: idx * STAGGER_TIGHT,
-                  duration: 0.25,
-                  ease: EASE_OUT_EXPO,
-                }}
-              >
-                {tappable ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      hapticTap();
-                      setEditingId(s.id);
-                    }}
-                    aria-label={`ערוך ${s.label}`}
-                    className="flex w-full items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3 text-start transition-colors hover:border-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
-                  >
-                    <span
-                      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl"
-                      style={{ background: `${tone}22`, color: tone }}
-                    >
-                      <Wallet className="size-4" />
-                    </span>
-                    <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                      <span className="truncate text-[12.5px] font-medium text-foreground">
-                        {s.label}
-                      </span>
-                      <span className="text-[10.5px] text-muted-foreground/85">
-                        משכורת קבועה ·{" "}
-                        {nextDate ? `כניסה צפויה ${DAY_FMT.format(nextDate)}` : ""}
-                        · {pct}% מההכנסה
-                      </span>
-                      <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/5">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.max(pct, 4)}%`,
-                            background: `linear-gradient(90deg, ${tone}, ${tone}66)`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end leading-tight">
-                      <span
-                        data-mono="true"
-                        dir="ltr"
-                        className="text-[13px] font-semibold"
-                        style={{ color: tone }}
-                      >
-                        +{ILS.format(s.amount)}
-                      </span>
-                      <span className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/70">
-                        ערוך
-                        <Pencil className="size-2.5" />
-                      </span>
-                    </div>
-                  </button>
-                ) : (
-                  // Refund synthetic source — not editable, just a tile.
+
+            if (!tappable || !incomeRecord) {
+              // Refund synthetic source — read-only tile.
+              const tone = "#D4AF37";
+              return (
+                <motion.li
+                  key={s.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    delay: idx * STAGGER_TIGHT,
+                    duration: 0.25,
+                    ease: EASE_OUT_EXPO,
+                  }}
+                >
                   <div
                     className="flex items-center gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3"
                     aria-label={`${s.label}: ${ILS.format(s.amount)}`}
@@ -213,7 +153,105 @@ export function IncomeBreakdownCard() {
                       +{ILS.format(s.amount)}
                     </span>
                   </div>
-                )}
+                </motion.li>
+              );
+            }
+
+            const expected = incomeRecord.amount;
+            const actual = actualFor(incomeRecord, monthKey);
+            const ratio = expected > 0 ? actual / expected : 0;
+            const ratioPct = Math.round(ratio * 100);
+            const diff = actual - expected;
+            const tone = varianceTone(ratio);
+            const progressWidth = Math.min(100, Math.max(0, ratioPct));
+
+            return (
+              <motion.li
+                key={s.id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  delay: idx * STAGGER_TIGHT,
+                  duration: 0.25,
+                  ease: EASE_OUT_EXPO,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    hapticTap();
+                    setEditingId(s.id);
+                  }}
+                  aria-label={`ערוך ${s.label}: צפוי ${ILS.format(expected)}, בפועל ${ILS.format(actual)}`}
+                  className="flex w-full items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3 text-start transition-colors hover:border-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+                >
+                  <span
+                    className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: `${tone}22`, color: tone }}
+                  >
+                    <Wallet className="size-4" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1 leading-tight">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-[12.5px] font-medium text-foreground">
+                        {s.label}
+                      </span>
+                      <span
+                        data-mono="true"
+                        dir="ltr"
+                        className="shrink-0 text-[10.5px] text-muted-foreground/80"
+                      >
+                        {ILS.format(expected)} צפוי
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[10.5px] text-muted-foreground/85">
+                        {nextDate ? `כניסה צפויה ${DAY_FMT.format(nextDate)}` : ""}
+                        {" · "}
+                        {pct}% מההכנסה
+                      </span>
+                      <span
+                        data-mono="true"
+                        dir="ltr"
+                        className="shrink-0 text-[11px] font-semibold"
+                        style={{ color: tone }}
+                      >
+                        בפועל {ILS.format(actual)}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                      <div
+                        className="h-full rounded-full transition-[width] duration-300"
+                        style={{
+                          width: `${Math.max(progressWidth, 4)}%`,
+                          background: `linear-gradient(90deg, ${tone}, ${tone}66)`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-[10px]">
+                      <span style={{ color: tone }} data-mono="true" dir="ltr">
+                        {ratioPct}% התקבל
+                      </span>
+                      <span
+                        className="text-muted-foreground/70"
+                        data-mono="true"
+                        dir="ltr"
+                      >
+                        {diff === 0
+                          ? "ללא פער"
+                          : diff > 0
+                            ? `+${ILS.format(diff)} מעבר לצפוי`
+                            : `${ILS.format(diff)} מתחת לצפוי`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end leading-tight">
+                    <span className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/70">
+                      ערוך
+                      <Pencil className="size-2.5" />
+                    </span>
+                  </div>
+                </button>
               </motion.li>
             );
           })}
@@ -223,10 +261,7 @@ export function IncomeBreakdownCard() {
       <IncomeEditorSheet
         open={editing !== null}
         income={editing}
-        actualRefund={actualInflowForIncome({
-          entries,
-          monthKey: currentMonthKey(),
-        })}
+        monthKey={monthKey}
         onOpenChange={(o) => {
           if (!o) setEditingId(null);
         }}
@@ -238,28 +273,24 @@ export function IncomeBreakdownCard() {
 function IncomeEditorSheet({
   open,
   income,
-  actualRefund,
+  monthKey,
   onOpenChange,
 }: {
   open: boolean;
   income: Income | null;
-  actualRefund: number;
+  monthKey: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const updateIncome = useFinanceStore((s) => s.updateIncome);
-  const [draftAmount, setDraftAmount] = useState<string>("");
-  const [draftDay, setDraftDay] = useState<string>("");
+  const setIncomeActual = useFinanceStore((s) => s.setIncomeActual);
+  const [draftActual, setDraftActual] = useState<string>("");
 
-  // Re-seed drafts whenever a new income is opened.
   const reseed = (i: Income | null) => {
     if (!i) return;
-    setDraftAmount(String(Math.round(i.amount)));
-    setDraftDay(String(i.dayOfMonth));
+    setDraftActual(String(Math.round(actualFor(i, monthKey))));
   };
 
-  // Sync drafts with the currently-open income.
   // Pure derived state — no setState in effect.
-  useMemo(() => reseed(income), [income]);
+  useMemo(() => reseed(income), [income, monthKey]);
 
   if (!income) {
     return (
@@ -270,24 +301,32 @@ function IncomeEditorSheet({
   }
 
   const expected = income.amount;
-  const actual = expected + actualRefund;
+  const actual = actualFor(income, monthKey);
+  const ratio = expected > 0 ? actual / expected : 0;
+  const tone = varianceTone(ratio);
+  const diff = actual - expected;
 
   function commit() {
     if (!income) return;
-    const nextAmount = Number(draftAmount.replace(/[^\d.-]/g, ""));
-    const nextDay = Number(draftDay.replace(/[^\d]/g, ""));
-    const patch: { amount?: number; dayOfMonth?: number } = {};
-    if (Number.isFinite(nextAmount) && nextAmount >= 0) {
-      patch.amount = nextAmount;
-    }
-    if (Number.isFinite(nextDay) && nextDay >= 1 && nextDay <= 31) {
-      patch.dayOfMonth = nextDay;
-    }
-    if (Object.keys(patch).length > 0) {
-      updateIncome(income.id, patch);
+    const nextActual = Number(draftActual.replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(nextActual) && nextActual >= 0) {
+      // null on equal-to-expected leaves the row clean; any other
+      // positive value records the override for this month only.
+      setIncomeActual(
+        income.id,
+        monthKey,
+        nextActual === expected ? null : nextActual,
+      );
       hapticSuccess();
     }
     onOpenChange(false);
+  }
+
+  function resetActual() {
+    if (!income) return;
+    setIncomeActual(income.id, monthKey, null);
+    setDraftActual(String(Math.round(expected)));
+    hapticTap();
   }
 
   return (
@@ -312,64 +351,54 @@ function IncomeEditorSheet({
         </span>
       </header>
 
-      <p className="text-caption text-muted-foreground">
-        עדכון כאן משנה את ההכנסה הקבועה בכל החודשים. אם תרצה רק חודש
-        אחד יוצא דופן, הוסף הוצאה/זיכוי ידני באותו תאריך.
-      </p>
-
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <Stat
           label="צפוי"
           value={`+${ILS.format(Math.round(expected))}`}
           tone="#60A5FA"
         />
         <Stat
-          label="בפועל החודש"
+          label="בפועל"
           value={`+${ILS.format(Math.round(actual))}`}
-          tone={actual >= expected ? "#34D399" : "#F87171"}
+          tone={tone}
+        />
+        <Stat
+          label="פער"
+          value={
+            diff === 0
+              ? "0"
+              : diff > 0
+                ? `+${ILS.format(Math.round(diff))}`
+                : ILS.format(Math.round(diff))
+          }
+          tone={tone}
         />
       </div>
 
       <label className="flex flex-col gap-1 text-caption text-muted-foreground">
-        <span>סכום קבוע</span>
+        <span>סכום שהתקבל בפועל</span>
         <input
           type="number"
           inputMode="numeric"
           min={0}
-          value={draftAmount}
-          onChange={(e) => setDraftAmount(e.target.value)}
+          value={draftActual}
+          onChange={(e) => setDraftActual(e.target.value)}
           dir="ltr"
           data-mono="true"
           className="h-10 rounded-2xl border border-white/8 bg-black/30 px-3 text-body text-foreground outline-none focus:border-[color:var(--neon)]/60"
         />
+        <span className="text-[10.5px] text-muted-foreground/75">
+          הסכום הצפוי נשמר קבוע לצורך מעקב והשוואה חודשית.
+        </span>
       </label>
 
-      <label className="flex flex-col gap-1 text-caption text-muted-foreground">
-        <span>יום בחודש</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={31}
-          value={draftDay}
-          onChange={(e) => setDraftDay(e.target.value)}
-          dir="ltr"
-          data-mono="true"
-          className="h-10 rounded-2xl border border-white/8 bg-black/30 px-3 text-body text-foreground outline-none focus:border-[color:var(--neon)]/60"
-        />
-      </label>
-
-      <section className="rounded-2xl border border-white/8 bg-black/25 p-3">
-        <div className="flex items-center gap-2 text-caption text-muted-foreground">
-          <Calendar className="size-3.5" />
-          <span>שינוי חד-פעמי לחודש הזה?</span>
-        </div>
-        <p className="mt-1 text-[11px] text-muted-foreground/80">
-          לכיסוי משכורת מוקדמת / מאוחרת / חלקית: סגור כאן והוסף עסקה
-          ידנית עם תיוג &quot;הכנסה&quot; בתאריך המתאים. החודשים העתידיים
-          לא ישתנו.
-        </p>
-      </section>
+      <button
+        type="button"
+        onClick={resetActual}
+        className="self-start text-[11px] text-muted-foreground/80 underline-offset-4 hover:text-foreground hover:underline"
+      >
+        אפס לחודש זה (החזר לצפוי)
+      </button>
 
       <div className="flex gap-2">
         <button
