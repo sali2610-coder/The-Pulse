@@ -35,6 +35,16 @@ import { detectSubscriptionCandidates } from "@/lib/subscription-detector";
 import { isInsightDismissed } from "@/lib/insight-dismiss";
 import { ruleSchedule } from "@/lib/installment-schedule";
 
+export type RecurringInsightItem = {
+  /** Stable identifier — drives React keys + dismissal. */
+  id: string;
+  kind: "drift" | "dormant" | "subscription" | "endingSoon";
+  /** Hebrew short label. */
+  label: string;
+  /** One-line context the UI surfaces under the label. */
+  detail: string;
+};
+
 export type RecurringSectionSummary = {
   /** Distinct recurring sources firing in `monthKey`: active open-ended
    *  bills + active installment plans + active installment entries. */
@@ -48,6 +58,8 @@ export type RecurringSectionSummary = {
     endingSoon: number;
     total: number;
   };
+  /** Phase 289 — actual item list so the UI can answer "which 3?". */
+  insightItems: RecurringInsightItem[];
   /** "info" when quiet, "warn" when at least one insight exists. */
   tone: "info" | "warn";
 };
@@ -70,6 +82,14 @@ function entrySliceFallsInMonth(
   };
 }
 
+function fmtILS(n: number): string {
+  return new Intl.NumberFormat("he-IL", {
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: 0,
+  }).format(Math.round(n));
+}
+
 export function buildRecurringSectionSummary(args: {
   entries: ExpenseEntry[];
   rules: RecurringRule[];
@@ -79,6 +99,7 @@ export function buildRecurringSectionSummary(args: {
   let sourceCount = 0;
   let monthlyTotal = 0;
   let endingSoon = 0;
+  const insightItems: RecurringInsightItem[] = [];
 
   for (const rule of args.rules) {
     if (!rule.active) continue;
@@ -88,6 +109,12 @@ export function buildRecurringSectionSummary(args: {
     monthlyTotal += rule.estimatedAmount;
     if (schedule.remaining !== undefined && schedule.remaining <= 1) {
       endingSoon += 1;
+      insightItems.push({
+        id: `endingSoon:rule:${rule.id}`,
+        kind: "endingSoon",
+        label: `${rule.label} מסתיים בקרוב`,
+        detail: `נשארו ${schedule.remaining} תשלומים · ${fmtILS(rule.estimatedAmount)} לחודש`,
+      });
     }
   }
 
@@ -96,26 +123,64 @@ export function buildRecurringSectionSummary(args: {
     if (!slice.active) continue;
     sourceCount += 1;
     monthlyTotal += entry.amount / entry.installments;
-    if (slice.remaining <= 1) endingSoon += 1;
+    if (slice.remaining <= 1) {
+      endingSoon += 1;
+      insightItems.push({
+        id: `endingSoon:entry:${entry.id}`,
+        kind: "endingSoon",
+        label: `${entry.merchant ?? entry.note ?? "תשלום"} מסתיים בקרוב`,
+        detail: `נשארו ${slice.remaining} תשלומים · ${fmtILS(entry.amount / entry.installments)} לחודש`,
+      });
+    }
   }
 
-  const drift = detectRuleDrift({
+  const driftHits = detectRuleDrift({
     rules: args.rules,
     entries: args.entries,
     statuses: args.statuses,
     monthKey: args.monthKey,
-  }).filter((d) => !isInsightDismissed("rule-drift", d.ruleId)).length;
+  }).filter((d) => !isInsightDismissed("rule-drift", d.ruleId));
+  for (const d of driftHits) {
+    insightItems.push({
+      id: `drift:${d.ruleId}`,
+      kind: "drift",
+      label: `${d.label} סוטה מהאומדן`,
+      detail:
+        d.direction === "up"
+          ? `בפועל ${fmtILS(d.currentActual)} · אומדן ${fmtILS(d.estimatedAmount)} — שווה לעדכן`
+          : `בפועל ${fmtILS(d.currentActual)} · אומדן ${fmtILS(d.estimatedAmount)} — האומדן גבוה מדי`,
+    });
+  }
+  const drift = driftHits.length;
 
-  const dormant = detectDormantRules({
+  const dormantHits = detectDormantRules({
     rules: args.rules,
     statuses: args.statuses,
     monthKey: args.monthKey,
-  }).filter((d) => !isInsightDismissed("dormant-rule", d.ruleId)).length;
+  }).filter((d) => !isInsightDismissed("dormant-rule", d.ruleId));
+  for (const d of dormantHits) {
+    insightItems.push({
+      id: `dormant:${d.ruleId}`,
+      kind: "dormant",
+      label: `${d.label} לא חויב כבר ${d.dormantMonths} חודשים`,
+      detail: `מנפח את "התחייבויות החודש" באומדן ${fmtILS(d.estimatedAmount)} מבלי שחויב`,
+    });
+  }
+  const dormant = dormantHits.length;
 
-  const subscription = detectSubscriptionCandidates({
+  const subHits = detectSubscriptionCandidates({
     entries: args.entries,
     rules: args.rules,
-  }).filter((c) => !isInsightDismissed("subscription", c.merchantKey)).length;
+  }).filter((c) => !isInsightDismissed("subscription", c.merchantKey));
+  for (const c of subHits) {
+    insightItems.push({
+      id: `subscription:${c.merchantKey}`,
+      kind: "subscription",
+      label: `מנוי קבוע שזוהה: ${c.displayName}`,
+      detail: `כ-${fmtILS(c.suggestedAmount)} בחודש — לא הוגדר כחוק קבוע`,
+    });
+  }
+  const subscription = subHits.length;
 
   const total = drift + dormant + subscription + endingSoon;
 
@@ -123,6 +188,7 @@ export function buildRecurringSectionSummary(args: {
     sourceCount,
     monthlyTotal: Math.round(monthlyTotal * 100) / 100,
     insights: { drift, dormant, subscription, endingSoon, total },
+    insightItems,
     tone: total > 0 ? "warn" : "info",
   };
 }

@@ -156,7 +156,14 @@ export function RecurringRulesPanel() {
     return ordered;
   }, [rules, accounts, monthKey]);
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Phase 289 — every inner group defaults to collapsed so the user
+  // never lands inside a fully-expanded list. Matches the rest of
+  // the Expenses-tab UX language. Adding a new group while the
+  // panel is mounted also lands it collapsed (initial-mount logic
+  // already covers the remount-on-section-open path).
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(groups.map((g) => g.key)),
+  );
   const toggleGroup = (key: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);

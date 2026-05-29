@@ -166,6 +166,14 @@ export function ExpensesTab() {
         summary={recurringSummaryChip}
         defaultCollapsed={true}
       >
+        {/* Phase 289 — "N לבדיקה" expanded inline. When the user
+           opens the section, the actual N items lead the body so
+           the chip is no longer a mystery. */}
+        {summary && summary.insightItems.length > 0 ? (
+          <div className="sm:col-span-6">
+            <RecurringInsightsList items={summary.insightItems} />
+          </div>
+        ) : null}
         <div className="sm:col-span-6">
           <Safe name="RecurringRulesPanel">
             <RecurringRulesPanel />
@@ -194,5 +202,70 @@ export function ExpensesTab() {
         </div>
       </DashboardSection>
     </div>
+  );
+}
+
+const KIND_TONE: Record<
+  "drift" | "dormant" | "subscription" | "endingSoon",
+  string
+> = {
+  drift: "#F59E0B",
+  dormant: "#A78BFA",
+  subscription: "#60A5FA",
+  endingSoon: "#34D399",
+};
+
+const KIND_LABEL: Record<
+  "drift" | "dormant" | "subscription" | "endingSoon",
+  string
+> = {
+  drift: "סטייה",
+  dormant: "רדום",
+  subscription: "מנוי",
+  endingSoon: "מסתיים",
+};
+
+function RecurringInsightsList({
+  items,
+}: {
+  items: import("@/lib/recurring-section-summary").RecurringInsightItem[];
+}) {
+  return (
+    <section className="flex flex-col gap-2 rounded-2xl border border-[#F59E0B]/30 bg-[#F59E0B]/8 p-3">
+      <header className="flex items-center justify-between">
+        <span className="text-caption font-medium text-foreground">
+          {items.length} תובנות לבדיקה
+        </span>
+        <span className="text-micro text-muted-foreground/80">
+          מה זוהה במערכת
+        </span>
+      </header>
+      <ul className="flex flex-col gap-1.5">
+        {items.map((it) => {
+          const tone = KIND_TONE[it.kind];
+          return (
+            <li
+              key={it.id}
+              className="flex items-start gap-2 rounded-xl border border-white/8 bg-black/25 p-2.5"
+            >
+              <span
+                className="inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ background: `${tone}22`, color: tone }}
+              >
+                {KIND_LABEL[it.kind]}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="truncate text-[12.5px] text-foreground">
+                  {it.label}
+                </span>
+                <span className="text-[10.5px] text-muted-foreground/85">
+                  {it.detail}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
