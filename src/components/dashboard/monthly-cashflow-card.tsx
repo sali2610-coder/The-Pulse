@@ -105,6 +105,36 @@ export function MonthlyCashflowCard({
 
   const grandIncome = folders.reduce((acc, f) => acc + f.totalIncome, 0);
   const grandExpense = folders.reduce((acc, f) => acc + f.totalExpense, 0);
+  const grandNet = grandIncome - grandExpense;
+
+  return <MonthlyCashflowBody
+    title={title}
+    windowDays={windowDays}
+    folders={folders}
+    grandIncome={grandIncome}
+    grandExpense={grandExpense}
+    grandNet={grandNet}
+  />;
+}
+
+function MonthlyCashflowBody({
+  title,
+  windowDays,
+  folders,
+  grandIncome,
+  grandExpense,
+  grandNet,
+}: {
+  title: string;
+  windowDays: number;
+  folders: MonthlyCashflowFolder[];
+  grandIncome: number;
+  grandExpense: number;
+  grandNet: number;
+}) {
+  // Phase 291 — single open month at a time. Default closed.
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const openFolder = folders.find((f) => f.monthKey === openKey) ?? null;
 
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
@@ -118,29 +148,162 @@ export function MonthlyCashflowCard({
         }
       />
       <p className="text-caption text-muted-foreground">
-        כל חודש = תיקייה משלו. בכל תיקייה — הכנסות, חיובי בנק, כרטיסים
-        והלוואות בנפרד. אין מיזוג בין חודשים.
+        כל חודש בנפרד. בכל תיקייה הכנסות, חיובי בנק, כרטיסים והלוואות.
       </p>
 
-      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/8 bg-black/25 p-3">
+      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/8 bg-black/25 p-3">
         <Stat
-          label={`סך הכנסות ${windowDays} ימים`}
+          label={`הכנסות ${windowDays} ימים`}
           value={`+${ILS.format(Math.round(grandIncome))}`}
           tone="#34D399"
         />
         <Stat
-          label={`סך יציאות ${windowDays} ימים`}
+          label={`יציאות ${windowDays} ימים`}
           value={`−${ILS.format(Math.round(grandExpense))}`}
+          tone="#F87171"
+        />
+        <Stat
+          label={`נטו ${windowDays} ימים`}
+          value={`${grandNet < 0 ? "−" : "+"}${ILS.format(
+            Math.abs(Math.round(grandNet)),
+          )}`}
+          tone={grandNet < 0 ? "#F87171" : "#34D399"}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {folders.map((folder) => (
+          <MonthButton
+            key={folder.monthKey}
+            folder={folder}
+            active={openKey === folder.monthKey}
+            onClick={() => {
+              tap();
+              setOpenKey(
+                openKey === folder.monthKey ? null : folder.monthKey,
+              );
+            }}
+          />
+        ))}
+      </div>
+
+      <AnimatePresence initial={false} mode="wait">
+        {openFolder ? (
+          <motion.div
+            key={openFolder.monthKey}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <FolderBody folder={openFolder} />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+function MonthButton({
+  folder,
+  active,
+  onClick,
+}: {
+  folder: MonthlyCashflowFolder;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const color = TONE_COLOR[folder.tone];
+  const tierLabel =
+    folder.tone === "current"
+      ? "חודש נוכחי"
+      : folder.tone === "next"
+        ? "החודש הבא"
+        : "חודש עתידי";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${active ? "סגור" : "פתח"} ${folder.fullLabel} · ${tierLabel}`}
+      title={`${active ? "סגור" : "פתח"} ${folder.fullLabel}`}
+      className={`relative flex flex-col gap-1 overflow-hidden rounded-2xl border px-3 py-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+        active
+          ? "bg-black/40"
+          : "bg-black/25 hover:bg-white/3"
+      }`}
+      style={{
+        borderColor: active ? `${color}66` : "rgba(255,255,255,0.08)",
+        boxShadow: active
+          ? `0 16px 40px -22px ${color}66, inset 0 1px 0 rgba(255,255,255,0.06)`
+          : undefined,
+        background: active
+          ? `linear-gradient(180deg, ${color}1f 0%, rgba(0,0,0,0.35) 80%)`
+          : undefined,
+      }}
+    >
+      <span
+        className="text-[11px] uppercase tracking-[0.18em]"
+        style={{ color }}
+      >
+        {tierLabel}
+      </span>
+      <span className="text-section text-foreground leading-tight">
+        {folder.fullLabel}
+      </span>
+      <span
+        data-mono="true"
+        dir="ltr"
+        className="text-caption"
+        style={{ color: folder.net < 0 ? "#F87171" : "#34D399" }}
+      >
+        {folder.net < 0 ? "−" : "+"}
+        {ILS.format(Math.abs(Math.round(folder.net)))}
+      </span>
+    </button>
+  );
+}
+
+function FolderBody({ folder }: { folder: MonthlyCashflowFolder }) {
+  return (
+    <div className="flex flex-col gap-3 pt-3">
+      <div className="grid grid-cols-2 gap-2">
+        <Stat
+          label="הכנסות"
+          value={`+${ILS.format(Math.round(folder.totalIncome))}`}
+          tone="#34D399"
+        />
+        <Stat
+          label="יציאות"
+          value={`−${ILS.format(Math.round(folder.totalExpense))}`}
           tone="#F87171"
         />
       </div>
 
-      <ul className="flex flex-col gap-2">
-        {folders.map((folder) => (
-          <FolderRow key={folder.monthKey} folder={folder} />
-        ))}
+      <ul className="flex flex-col gap-1.5">
+        {(["income", "card", "bank_debit", "loan"] as const).map(
+          (source, idx) => {
+            const group = folder.bySource[source];
+            if (group.total === 0) return null;
+            return (
+              <motion.div
+                key={source}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  delay: Math.min(idx * 0.05, 0.2),
+                  duration: 0.22,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <SourceRow group={group} isInflow={source === "income"} />
+              </motion.div>
+            );
+          },
+        )}
       </ul>
-    </section>
+    </div>
   );
 }
 
@@ -165,118 +328,6 @@ function Stat({
         {value}
       </span>
     </div>
-  );
-}
-
-function FolderRow({ folder }: { folder: MonthlyCashflowFolder }) {
-  // Phase 271 — every folder defaults to collapsed. The app-wide
-  // calm rule: summary first, details on demand.
-  const [open, setOpen] = useState(false);
-  const color = TONE_COLOR[folder.tone];
-  const tierLabel =
-    folder.tone === "current"
-      ? "חודש נוכחי"
-      : folder.tone === "next"
-        ? "החודש הבא"
-        : "חודש עתידי";
-  return (
-    <li
-      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
-      style={{
-        background: `linear-gradient(180deg, ${color}08 0%, rgba(0,0,0,0.25) 80%)`,
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((v) => !v);
-          tap();
-        }}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/3"
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: `${color}22`, color }}
-          >
-            <CalendarRange className="size-4" />
-          </span>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="text-section text-foreground">
-              {folder.fullLabel}
-            </span>
-            <span className="text-caption" style={{ color }}>
-              {tierLabel}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-section"
-            style={{
-              color: folder.net < 0 ? "#F87171" : "#34D399",
-            }}
-          >
-            {folder.net < 0 ? "−" : "+"}
-            {ILS.format(Math.abs(Math.round(folder.net)))}
-          </span>
-          <motion.span
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.18 }}
-            className="text-muted-foreground"
-          >
-            <ChevronDown className="size-5" />
-          </motion.span>
-        </div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            key="body"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden border-t border-white/8"
-          >
-            <div className="flex flex-col gap-3 p-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Stat
-                  label="הכנסות"
-                  value={`+${ILS.format(Math.round(folder.totalIncome))}`}
-                  tone="#34D399"
-                />
-                <Stat
-                  label="יציאות"
-                  value={`−${ILS.format(Math.round(folder.totalExpense))}`}
-                  tone="#F87171"
-                />
-              </div>
-
-              <ul className="flex flex-col gap-1.5">
-                {(
-                  ["income", "card", "bank_debit", "loan"] as const
-                ).map((source) => {
-                  const group = folder.bySource[source];
-                  if (group.total === 0) return null;
-                  return (
-                    <SourceRow
-                      key={source}
-                      group={group}
-                      isInflow={source === "income"}
-                    />
-                  );
-                })}
-              </ul>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </li>
   );
 }
 
