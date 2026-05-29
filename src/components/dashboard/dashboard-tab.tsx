@@ -32,7 +32,6 @@ import { motion as fmMotion } from "framer-motion";
 import { Bell as BellIcon, ArrowLeft as ArrowLeftIcon } from "lucide-react";
 import { tap as hapticTap } from "@/lib/haptics";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
-import { HeroEomCard } from "@/components/dashboard/simple/hero-eom-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
 import { HeroFutureBalanceCard } from "@/components/dashboard/simple/hero-future-balance-card";
 
@@ -226,47 +225,15 @@ const SmartRecommendationsCard = lazy(() =>
   })),
 );
 
-// ── Advanced overflow — everything else, collapsed by default ────
-const PulseBar = lazy(() =>
-  import("@/components/pulse/pulse-bar").then((m) => ({
-    default:
-      m.PulseBar as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const SmartSummaryCard = lazy(() =>
-  import("@/components/dashboard/smart-summary-card").then((m) => ({
-    default:
-      m.SmartSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const SpentThisMonthCard = lazy(() =>
-  import("@/components/dashboard/spent-this-month-card").then((m) => ({
-    default:
-      m.SpentThisMonthCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const AccountBridgeCard = lazy(() =>
-  import("@/components/dashboard/account-bridge-card").then((m) => ({
-    default:
-      m.AccountBridgeCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const ExpectedBalanceCard = lazy(() =>
-  import("@/components/dashboard/expected-balance-card").then((m) => ({
-    default:
-      m.ExpectedBalanceCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 295 — "פירוט מתקדם" overflow section retired. The six lazy
+// declarations it hosted (PulseBar, SmartSummaryCard,
+// SpentThisMonthCard, AccountBridgeCard, ExpectedBalanceCard,
+// DailyInsightsCard) are removed from Home; the components remain on
+// disk so other surfaces that import them keep working.
 const TodayPulseCard = lazy(() =>
   import("@/components/dashboard/today-pulse-card").then((m) => ({
     default:
       m.TodayPulseCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const DailyInsightsCard = lazy(() =>
-  import("@/components/dashboard/daily-insights-card").then((m) => ({
-    default:
-      m.DailyInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 const RecentActivity = lazy(() =>
@@ -384,6 +351,15 @@ export function DashboardTab() {
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="FinancialHealthGauge">
             <FinancialHealthGauge />
+          </Safe>
+        </div>
+
+        {/* Phase 295 — "טייס פיננסי" is now Home's primary AI hero.
+           Promoted from inside "פירוט מתקדם" so the smart Copilot
+           narrative reads first, not last. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="CopilotCard">
+            <CopilotCard />
           </Safe>
         </div>
 
@@ -587,68 +563,21 @@ export function DashboardTab() {
           </div>
         </DashboardSection>
 
-        <DashboardSection
-          storageKey="simple.advanced"
-          title="פירוט מתקדם"
-          subtitle="Pulse, CFO ונתונים נוספים"
-          defaultCollapsed
-        >
-          <div className="sm:col-span-6">
-            <Safe name="HeroEomCard">
-              <HeroEomCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="PulseBar">
-              <PulseBar budget={pulseBudget} />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="SmartSummaryCard">
-              <SmartSummaryCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="SpentThisMonthCard">
-              <SpentThisMonthCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="AccountBridgeCard">
-              <AccountBridgeCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="ExpectedBalanceCard">
-              <ExpectedBalanceCard />
-            </Safe>
-          </div>
-          {/* Phase 275 — CfoSummary, HealthScoreCard, LiquidityTimelineCard
-              relocated to the Expenses tab as the financial-control
-              center. WhatIfSimulatorCard promoted into the AI Insights
-              tab as the CFO Sandbox. TodayPulseCard moved to the top
-              of Home for emotional anchoring. */}
-          <div className="sm:col-span-6">
-            {/* Phase 277 — monthly summary / deficit / EOM forecast
-               surfaces (CashflowSummaryCard, StatsCards, EmergencyFundCard,
-               AnchorTrajectoryCard, MonthlyDigestCard) moved into the
-               AI Insights tab as the connected financial-narrative
-               experience. Home keeps lighter, daily-cadence cards. */}
-            <Safe name="DailyInsightsCard">
-              <DailyInsightsCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="RecentActivity">
-              <RecentActivity />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="CopilotCard">
-              <CopilotCard />
-            </Safe>
-          </div>
-        </DashboardSection>
+        {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
+           CopilotCard ("טייס פיננסי") was promoted to the executive
+           hero slot at the top of Home (above the hero stack), and
+           RecentActivity stays as a single compact preview below.
+           Every other card it used to host (HeroEomCard, PulseBar,
+           SmartSummaryCard, SpentThisMonthCard, AccountBridgeCard,
+           ExpectedBalanceCard, DailyInsightsCard) is a duplicate of
+           data already surfaced in Expenses / Future / Insights and
+           is no longer mounted on Home. Components remain on disk so
+           other tabs that import them keep working. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="RecentActivity">
+            <RecentActivity />
+          </Safe>
+        </div>
 
         <FloatingCTA onClick={() => setOpen(true)} />
 
