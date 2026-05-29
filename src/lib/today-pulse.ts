@@ -15,7 +15,6 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { monthKeyOf } from "@/lib/dates";
-import { sliceForMonth } from "@/lib/projections";
 import { dailyAllowance } from "@/lib/forecast";
 
 export type PulseVibe = "calm" | "watch" | "hot";
@@ -59,12 +58,24 @@ export function todayPulse(args: {
   let pendingTodayAmount = 0;
   let pendingTodayCount = 0;
 
-  // Phase 302 — local-day helper. Uses chargeDate when available,
-  // falling back to createdAt. Compares year/month/day instead of
-  // bare getDate() so a Jan 1 vs Feb 1 collision is impossible.
+  // Phase 308 — single canonical "today" pipeline.
+  //
+  // The old implementation routed every entry through sliceForMonth
+  // (which silently dropped Wallet partials with no chargeDate) AND
+  // short-circuited pending entries before they could be counted.
+  // That created exactly the bug the user hit: a ₪1 manual entry
+  // showed in RecentActivity but never in TodayPulse.
+  //
+  // The new pipeline is: for every entry — pending or not, pick
+  // chargeDate when it exists, else createdAt. If that ISO falls on
+  // today (local year+month+day), the entry counts. Pending entries
+  // still feed pendingTodayAmount so the UI can label them, but
+  // they also land in spentToday so the headline number reads
+  // correctly.
   const isSameLocalDay = (iso: string | undefined): boolean => {
     if (!iso) return false;
     const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return false;
     return (
       d.getFullYear() === now.getFullYear() &&
       d.getMonth() === now.getMonth() &&
@@ -72,44 +83,30 @@ export function todayPulse(args: {
     );
   };
 
+  const sliceValue = (e: ExpenseEntry): number => {
+    const inst = Math.max(1, e.installments);
+    return Math.abs(e.amount) / inst;
+  };
+
   for (const e of args.entries) {
     const isPending =
       (e.needsConfirmation && !e.confirmedAt) || e.bankPending;
-    if (isPending) {
-      pending++;
-      // Pending entries booked for today should be visible in the
-      // pulse — labeled "ממתין לאישור" by the UI, not silently
-      // dropped. The check tolerates a missing chargeDate (Wallet
-      // partials sometimes only carry receivedAt → createdAt).
-      if (
-        isSameLocalDay(e.chargeDate) ||
-        isSameLocalDay(e.createdAt)
-      ) {
-        pendingTodayAmount += Math.abs(e.amount) / Math.max(1, e.installments);
-        pendingTodayCount++;
-      }
-      continue;
-    }
+    if (isPending) pending++;
     if (e.excludeFromBudget) continue;
     if (e.currency && e.currency !== "ILS") continue;
-    const slice = sliceForMonth(e, monthKey);
-    if (!slice) continue;
-    // Phase 302 — match by year/month/day. Drop the previous
-    // "slice.chargeDate > now" clock filter so an entry booked
-    // earlier today (with the slice's noon chargeDate) still counts
-    // even when "now" is before noon.
-    if (
-      slice.chargeDate.getFullYear() !== now.getFullYear() ||
-      slice.chargeDate.getMonth() !== now.getMonth() ||
-      slice.chargeDate.getDate() !== today
-    ) {
+    if (!isSameLocalDay(e.chargeDate) && !isSameLocalDay(e.createdAt)) {
       continue;
     }
+    const value = sliceValue(e);
     if (e.isRefund) {
-      refundedToday += slice.amount;
-    } else {
-      spentToday += slice.amount;
-      countToday++;
+      refundedToday += value;
+      continue;
+    }
+    spentToday += value;
+    countToday++;
+    if (isPending) {
+      pendingTodayAmount += value;
+      pendingTodayCount++;
     }
   }
 

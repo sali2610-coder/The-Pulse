@@ -50,7 +50,11 @@ describe("todayPulse", () => {
     expect(p.countToday).toBe(1);
   });
 
-  it("separates refunds + counts pending entries awaiting review", () => {
+  it("Phase 308 — pending entries booked today count toward spentToday", () => {
+    // The old contract excluded needsConfirmation/bankPending entries
+    // entirely. The new contract counts them so the user can never
+    // see ₪0 while a real ₪1 manual / Wallet entry sits in the
+    // store. Refunds still subtract via the dedicated bucket.
     const p = todayPulse({
       entries: [
         entry({ amount: 100, iso: "2026-05-15T09:00:00Z" }),
@@ -66,9 +70,11 @@ describe("todayPulse", () => {
       monthlyBudget: 0,
       now: NOW,
     });
-    expect(p.spentToday).toBe(100);
+    expect(p.spentToday).toBe(1099);
     expect(p.refundedToday).toBe(30);
     expect(p.pendingForReview).toBe(1);
+    expect(p.pendingTodayAmount).toBe(999);
+    expect(p.pendingTodayCount).toBe(1);
   });
 
   it("Phase 302 — pending entries booked today expose pendingTodayAmount + count", () => {
