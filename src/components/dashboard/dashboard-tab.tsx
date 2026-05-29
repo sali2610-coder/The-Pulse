@@ -110,60 +110,12 @@ const IncomeForecastCard = lazy(() =>
 // Phase 303 — CategoryDonut + HeatmapMini lazy decls dropped here.
 // Both visuals duplicated the Expenses-tab CategorySpendCard / the
 // dedicated analytics screens.
-const CategoryParetoCard = lazy(() =>
-  import("@/components/dashboard/category-pareto-card").then((m) => ({
-    default:
-      m.CategoryParetoCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const CategoryPaceCard = lazy(() =>
-  import("@/components/dashboard/category-pace-card").then((m) => ({
-    default:
-      m.CategoryPaceCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const SpendSplitCard = lazy(() =>
-  import("@/components/dashboard/spend-split-card").then((m) => ({
-    default:
-      m.SpendSplitCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const NetWorthCard = lazy(() =>
-  import("@/components/dashboard/net-worth-card").then((m) => ({
-    default:
-      m.NetWorthCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const NetWorthTrendCard = lazy(() =>
-  import("@/components/dashboard/net-worth-trend-card").then((m) => ({
-    default:
-      m.NetWorthTrendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const RunwayCard = lazy(() =>
-  import("@/components/dashboard/runway-card").then((m) => ({
-    default:
-      m.RunwayCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const FixedCostRatioCard = lazy(() =>
-  import("@/components/dashboard/fixed-cost-ratio-card").then((m) => ({
-    default:
-      m.FixedCostRatioCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const AvgTicketCard = lazy(() =>
-  import("@/components/dashboard/avg-ticket-card").then((m) => ({
-    default:
-      m.AvgTicketCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const WeekendSpendCard = lazy(() =>
-  import("@/components/dashboard/weekend-spend-card").then((m) => ({
-    default:
-      m.WeekendSpendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 311 — analytics-section lazy decls removed entirely.
+// CategoryParetoCard, CategoryPaceCard, SpendSplitCard, NetWorthCard,
+// NetWorthTrendCard, RunwayCard, FixedCostRatioCard, AvgTicketCard,
+// WeekendSpendCard component files stay on disk so other tabs can
+// import them.
+
 // ── Watch / subscriptions / anomalies section ────────────────────
 const SubscriptionReviewCard = lazy(() =>
   import("@/components/dashboard/subscription-review-card").then((m) => ({
@@ -428,64 +380,12 @@ export function DashboardTab() {
           </div>
         </DashboardSection>
 
-        <DashboardSection
-          storageKey="simple.analytics"
-          title="ניתוחים וסטטיסטיקות"
-          subtitle="קצב, מגמות וחתכים — לא חוזרים על פירוט קטגוריות"
-          defaultCollapsed
-          summary={summaries?.analytics ?? undefined}
-        >
-          {/* Phase 303 — "לאן הולך הכסף" + פילוח לפי קטגוריה + חום
-             ימי החודש removed from Home. CategorySpendCard already
-             leads the Expenses tab; CategoryDonut + HeatmapMini are
-             dropped from Home to avoid duplication. Components stay
-             on disk so other surfaces can mount them. */}
-          <div className="sm:col-span-6">
-            <Safe name="CategoryParetoCard">
-              <CategoryParetoCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="CategoryPaceCard">
-              <CategoryPaceCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-3">
-            <Safe name="SpendSplitCard">
-              <SpendSplitCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-3">
-            <Safe name="AvgTicketCard">
-              <AvgTicketCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-3">
-            <Safe name="WeekendSpendCard">
-              <WeekendSpendCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-3">
-            <Safe name="FixedCostRatioCard">
-              <FixedCostRatioCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="NetWorthCard">
-              <NetWorthCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="NetWorthTrendCard">
-              <NetWorthTrendCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="RunwayCard">
-              <RunwayCard />
-            </Safe>
-          </div>
-        </DashboardSection>
+        {/* Phase 311 — "ניתוחים וסטטיסטיקות" removed from Home.
+           CategoryParetoCard / CategoryPaceCard / SpendSplitCard /
+           AvgTicketCard / WeekendSpendCard / FixedCostRatioCard /
+           NetWorthCard / NetWorthTrendCard / RunwayCard are too
+           analytical for an executive overview. Components stay on
+           disk; Expenses / Insights can mount them when needed. */}
 
         <DashboardSection
           storageKey="simple.watch"
