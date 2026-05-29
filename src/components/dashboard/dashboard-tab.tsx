@@ -57,37 +57,8 @@ const PendingTray = lazy(() =>
   })),
 );
 
-// ── Future cash-flow section ──────────────────────────────────────
-const LiquidityCurveCard = lazy(() =>
-  import("@/components/dashboard/liquidity-curve-card").then((m) => ({
-    default:
-      m.LiquidityCurveCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const CashflowBucketsCard = lazy(() =>
-  import("@/components/dashboard/cashflow-buckets-card").then((m) => ({
-    default:
-      m.CashflowBucketsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const MonthlyCashflowCard = lazy(() =>
-  import("@/components/dashboard/monthly-cashflow-card").then((m) => ({
-    default:
-      m.MonthlyCashflowCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const UpcomingOutflowsCard = lazy(() =>
-  import("@/components/dashboard/upcoming-outflows-card").then((m) => ({
-    default:
-      m.UpcomingOutflowsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const ForecastTimelineCard = lazy(() =>
-  import("@/components/dashboard/forecast-timeline-card").then((m) => ({
-    default:
-      m.ForecastTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 285 — future-cashflow lazy components removed from Home.
+// They still ship via the "עתידי" tab.
 
 // ── Credit cards section ──────────────────────────────────────────
 const CardsPressureCard = lazy(() =>
@@ -444,42 +415,13 @@ export function DashboardTab() {
            gives the L1 cards breathing room before L2 starts. */}
         <div className="sm:col-span-6 h-1" aria-hidden />
 
-        {/* ── Sections — collapsed by default with a summary chip ── */}
-        <DashboardSection
-          storageKey="simple.future"
-          title="תזרים עתידי"
-          subtitle="חיובים שיגיעו, יציאות צפויות, ומה ייכנס לבנק"
-          defaultCollapsed
-          summary={summaries?.future ?? undefined}
-        >
-          {/* Phase 268 — month-first cashflow folders. June + July
-             never visually merged into one scary block. */}
-          <div className="sm:col-span-6">
-            <Safe name="MonthlyCashflowCard">
-              <MonthlyCashflowCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="LiquidityCurveCard">
-              <LiquidityCurveCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="CashflowBucketsCard">
-              <CashflowBucketsCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="UpcomingOutflowsCard">
-              <UpcomingOutflowsCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="ForecastTimelineCard">
-              <ForecastTimelineCard />
-            </Safe>
-          </div>
-        </DashboardSection>
+        {/* ── Sections — collapsed by default with a summary chip ──
+            Phase 285 — "תזרים עתידי" removed from Home. The full
+            forward-looking surfaces (MonthlyCashflowCard,
+            LiquidityCurveCard, CashflowBucketsCard,
+            UpcomingOutflowsCard, ForecastTimelineCard) all still
+            render inside the dedicated "עתידי" tab. Home stays
+            focused on today / now / immediate state. */}
 
         <DashboardSection
           storageKey="simple.cards"
