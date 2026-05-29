@@ -60,29 +60,12 @@ const PendingTray = lazy(() =>
 // Phase 285 — future-cashflow lazy components removed from Home.
 // They still ship via the "עתידי" tab.
 
-// ── Credit cards section ──────────────────────────────────────────
-const CardsPressureCard = lazy(() =>
-  import("@/components/dashboard/cards-pressure-card").then((m) => ({
-    default:
-      m.CardsPressureCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const CardsHierarchyCard = lazy(() =>
-  import("@/components/dashboard/cards-hierarchy-card").then((m) => ({
-    default:
-      m.CardsHierarchyCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 286 — credit-cards lazies removed from Home. CategorySpendCard
+// kept because the "ניתוחים וסטטיסטיקות" section still uses it.
 const CategorySpendCard = lazy(() =>
   import("@/components/dashboard/category-spend-card").then((m) => ({
     default:
       m.CategorySpendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const ActiveInstallmentsCard = lazy(() =>
-  import("@/components/dashboard/active-installments-card").then((m) => ({
-    default:
-      m.ActiveInstallmentsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 
@@ -423,29 +406,10 @@ export function DashboardTab() {
             render inside the dedicated "עתידי" tab. Home stays
             focused on today / now / immediate state. */}
 
-        <DashboardSection
-          storageKey="simple.cards"
-          title="כרטיסי אשראי"
-          subtitle="כל כרטיס בנפרד · קטגוריה · קבוע / תשלום / חד-פעמי"
-          defaultCollapsed
-          summary={summaries?.cards ?? undefined}
-        >
-          <div className="sm:col-span-6">
-            <Safe name="CardsHierarchyCard">
-              <CardsHierarchyCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="CardsPressureCard">
-              <CardsPressureCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="ActiveInstallmentsCard">
-              <ActiveInstallmentsCard />
-            </Safe>
-          </div>
-        </DashboardSection>
+        {/* Phase 286 — "כרטיסי אשראי" section removed from Home. The
+           CardsHierarchyCard, CardsPressureCard, ActiveInstallmentsCard
+           experience still ships inside the "הוצאות" tab. Home stays
+           focused on executive overview. */}
 
         <DashboardSection
           storageKey="simple.obligations"
