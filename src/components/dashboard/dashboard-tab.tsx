@@ -281,6 +281,16 @@ export function DashboardTab() {
           </Safe>
         </div>
 
+        {/* Phase 325 — Daily Budget Strip sits directly under Pulse so
+           the user reads "how much can I spend today?" before any
+           other number. Compact strip; the same engine that drives
+           Pulse / Health drives this. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="HeroSpendableCard">
+            <HeroSpendableCard />
+          </Safe>
+        </div>
+
         {/* Phase 282 — premium financial-health gauge. Single needle,
            single score. Reads from the same buildFinancialSnapshot
            every other card uses so the dashboard never disagrees with
@@ -300,17 +310,9 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* ── HERO — three cards, the only L1 surfaces on first paint.
-           Phase 235 trim: HeroEomCard removed because HeroFutureBalance
-           covers the same question with a slidable date. Order:
-             1. How much can I safely spend? (action)
-             2. What's the single most important risk? (signal)
-             3. Where will my bank balance be on a future date? (planning) */}
-        <div className="sm:col-span-6">
-          <Safe name="HeroSpendableCard">
-            <HeroSpendableCard />
-          </Safe>
-        </div>
+        {/* ── HERO — Phase 325: HeroSpendableCard lifted directly under
+           Pulse as the Daily Budget Strip. Remaining hero rows keep
+           the risk signal + future-balance planner. */}
         <div className="sm:col-span-6">
           <Safe name="HeroInsightCard">
             <HeroInsightCard />
