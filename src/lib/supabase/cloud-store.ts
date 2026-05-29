@@ -259,6 +259,11 @@ export async function fetchUserSettings(): Promise<
        *  local "auto" on hydrate. */
       budgetMode?: "manual" | "auto";
       budgetSafetyBuffer?: number;
+      /** Phase 288 — global text-scale, persisted in the same
+       *  user_settings row so reinstall on another device restores
+       *  it. Undefined when the column doesn't exist yet (legacy
+       *  schema) or the user has not set a preference. */
+      textScale?: "compact" | "normal" | "large";
     }
   | { ok: false; reason: "not_configured" | "no_session" | "rls"; detail?: string }
 > {
@@ -277,6 +282,7 @@ export async function fetchUserSettings(): Promise<
             monthly_budget: number;
             budget_mode?: string | null;
             budget_safety_buffer?: number | null;
+            text_scale?: string | null;
           } | null;
           error: { message: string } | null;
         }>;
@@ -287,7 +293,8 @@ export async function fetchUserSettings(): Promise<
     // Phase 214 — pull all settings columns. Missing columns return
     // undefined for older databases that haven't been migrated yet;
     // we coerce defaults below so legacy schemas keep working.
-    .select("monthly_budget, budget_mode, budget_safety_buffer")
+    // Phase 288 — text_scale added; same defensive fallback.
+    .select("monthly_budget, budget_mode, budget_safety_buffer, text_scale")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) {
@@ -322,11 +329,17 @@ export async function fetchUserSettings(): Promise<
   const rawBuffer = data?.budget_safety_buffer;
   const budgetSafetyBuffer =
     typeof rawBuffer === "number" ? Number(rawBuffer) : undefined;
+  const rawScale = data?.text_scale;
+  const textScale: "compact" | "normal" | "large" | undefined =
+    rawScale === "compact" || rawScale === "large" || rawScale === "normal"
+      ? rawScale
+      : undefined;
   return {
     ok: true,
     monthlyBudget: data ? Number(data.monthly_budget) : 0,
     budgetMode,
     budgetSafetyBuffer,
+    textScale,
   };
 }
 
@@ -334,6 +347,9 @@ export async function upsertUserSettings(args: {
   monthlyBudget: number;
   budgetMode?: "manual" | "auto";
   budgetSafetyBuffer?: number;
+  /** Phase 288 — same row, new column. Defensive against missing
+   *  column on legacy databases (the upsert retries without it). */
+  textScale?: "compact" | "normal" | "large";
 }): Promise<Status> {
   const client = supabase();
   if (!client) return { ok: false, reason: "not_configured" };
@@ -356,6 +372,9 @@ export async function upsertUserSettings(args: {
   if (args.budgetMode !== undefined) payload.budget_mode = args.budgetMode;
   if (args.budgetSafetyBuffer !== undefined) {
     payload.budget_safety_buffer = args.budgetSafetyBuffer;
+  }
+  if (args.textScale !== undefined) {
+    payload.text_scale = args.textScale;
   }
   const { error } = await builder.upsert(payload, { onConflict: "user_id" });
   if (error) {

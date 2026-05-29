@@ -75,4 +75,26 @@ describe("budgetMode persistence markers", () => {
     useFinanceStore.getState().markBudgetSettingsCloudSynced(t0);
     expect(useFinanceStore.getState().budgetSettingsCloudAt).toBe(t0);
   });
+
+  it("Phase 288 — setTextScale persists in store and bumps updatedAt", () => {
+    const t0 = Date.now();
+    useFinanceStore.getState().setTextScale("large");
+    expect(useFinanceStore.getState().textScale).toBe("large");
+    expect(useFinanceStore.getState().textScaleUpdatedAt).toBeGreaterThanOrEqual(
+      t0,
+    );
+  });
+
+  it("Phase 288 — markTextScaleCloudSynced records cloud round-trip", () => {
+    const t0 = Date.now();
+    useFinanceStore.getState().markTextScaleCloudSynced(t0);
+    expect(useFinanceStore.getState().textScaleCloudAt).toBe(t0);
+  });
+
+  it("Phase 288 — setTextScale coerces invalid values to 'normal'", () => {
+    useFinanceStore
+      .getState()
+      .setTextScale("huge" as unknown as "large");
+    expect(useFinanceStore.getState().textScale).toBe("normal");
+  });
 });

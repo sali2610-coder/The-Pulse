@@ -125,6 +125,17 @@ type State = {
   incomes: Income[];
   /** UX preference — chime on sync. Default on. */
   audioEnabled: boolean;
+  /** Phase 288 — global text-scale preference moved into the store
+   *  so it persists locally AND syncs across devices via
+   *  user_settings. "normal" / "compact" / "large". */
+  textScale: "compact" | "normal" | "large";
+  /** Phase 288 — epoch ms of the last LOCAL change. Same pending-push
+   *  semantics as budgetSettingsUpdatedAt. */
+  textScaleUpdatedAt: number;
+  /** Phase 288 — epoch ms of the last SUCCESSFUL cloud upsert of
+   *  the text-scale row. Reconcile uses this to keep local
+   *  authoritative until cloud catches up. */
+  textScaleCloudAt: number;
 };
 
 type Actions = {
@@ -221,6 +232,11 @@ type Actions = {
   /** Phase 274 — marks the last successful cloud upsert of budget
    *  settings so reconcile can detect a still-pending push. */
   markBudgetSettingsCloudSynced: (ms: number) => void;
+  /** Phase 288 — global text-scale write + cloud round-trip marker.
+   *  setTextScale always bumps textScaleUpdatedAt; markTextScaleCloudSynced
+   *  records the last successful cloud upsert. */
+  setTextScale: (scale: "compact" | "normal" | "large") => void;
+  markTextScaleCloudSynced: (ms: number) => void;
   setAudioEnabled: (v: boolean) => void;
   setLastSyncedAt: (ms: number) => void;
   setHydrated: (v: boolean) => void;
@@ -290,6 +306,9 @@ export const useFinanceStore = create<State & Actions>()(
       loans: [],
       incomes: [],
       audioEnabled: true,
+      textScale: "normal",
+      textScaleUpdatedAt: 0,
+      textScaleCloudAt: 0,
 
       addExpense: (input) => {
         const cleanMerchant = input.merchant
@@ -1018,6 +1037,21 @@ export const useFinanceStore = create<State & Actions>()(
         set({ budgetSettingsCloudAt: Math.max(0, Math.floor(ms)) });
       },
 
+      setTextScale: (scale) => {
+        const next = scale === "compact" || scale === "large" ? scale : "normal";
+        set({
+          textScale: next,
+          textScaleUpdatedAt: Date.now(),
+        });
+        if (typeof document !== "undefined") {
+          document.documentElement.setAttribute("data-text-scale", next);
+        }
+      },
+
+      markTextScaleCloudSynced: (ms) => {
+        set({ textScaleCloudAt: Math.max(0, Math.floor(ms)) });
+      },
+
       setBudgetSafetyBuffer: (value) => {
         const safe = Number.isFinite(value) && value >= 0 ? value : 0;
         set({
@@ -1049,7 +1083,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 12,
+      version: 13,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -1065,6 +1099,9 @@ export const useFinanceStore = create<State & Actions>()(
         loans: s.loans,
         incomes: s.incomes,
         audioEnabled: s.audioEnabled,
+        textScale: s.textScale,
+        textScaleUpdatedAt: s.textScaleUpdatedAt,
+        textScaleCloudAt: s.textScaleCloudAt,
       }),
       migrate: (raw, fromVersion) => {
         const persisted = (raw ?? {}) as Partial<State>;
@@ -1160,6 +1197,28 @@ export const useFinanceStore = create<State & Actions>()(
           migrated = {
             ...migrated,
             budgetSettingsCloudAt: migrated.budgetSettingsCloudAt ?? 0,
+          };
+        }
+        if (fromVersion < 13) {
+          // Phase 288 — text-scale moved off localStorage into the
+          // store + cloud sync. Migrate the legacy
+          // "sally.text-scale.v1" key one-shot so the user's
+          // existing choice survives the bump.
+          let legacy: "compact" | "normal" | "large" = "normal";
+          if (typeof window !== "undefined") {
+            try {
+              const raw = window.localStorage.getItem("sally.text-scale.v1");
+              if (raw === "compact" || raw === "large") legacy = raw;
+            } catch {
+              /* private mode — fall back to default */
+            }
+          }
+          migrated = {
+            ...migrated,
+            textScale: migrated.textScale ?? legacy,
+            textScaleUpdatedAt:
+              migrated.textScaleUpdatedAt ?? (legacy !== "normal" ? Date.now() : 0),
+            textScaleCloudAt: migrated.textScaleCloudAt ?? 0,
           };
         }
         return migrated;

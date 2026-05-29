@@ -19,6 +19,7 @@ import { CloudSyncProvider } from "@/lib/supabase/cloud-sync-context";
 import { installGlobalErrorHandlers } from "@/lib/error-log";
 import { installWebVitals } from "@/lib/web-vitals";
 import { resetAllCollapseState } from "@/lib/dashboard-section-store";
+import { flushBudgetSettings } from "@/lib/budget-settings-flush";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -64,6 +65,23 @@ function AppShellContent() {
   useStoreMutationBridge();
   useEffect(() => installGlobalErrorHandlers(), []);
   useEffect(() => installWebVitals(), []);
+  // Phase 288 — startup pending-push retry. If the previous session
+  // wrote a budget / text-scale change locally but the cloud upsert
+  // didn't land (RLS, offline), the timestamp is strictly newer than
+  // the last successful cloud round-trip. Re-flush once on mount so
+  // the user's choice eventually catches up without them having to
+  // re-toggle the setting.
+  useEffect(() => {
+    if (!hydrated) return;
+    const st = useFinanceStore.getState();
+    const budgetPending =
+      st.budgetSettingsUpdatedAt > (st.budgetSettingsCloudAt ?? 0);
+    const textScalePending =
+      st.textScaleUpdatedAt > (st.textScaleCloudAt ?? 0);
+    if (budgetPending || textScalePending) {
+      void flushBudgetSettings();
+    }
+  }, [hydrated]);
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "dashboard";

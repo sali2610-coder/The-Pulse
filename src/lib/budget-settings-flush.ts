@@ -41,6 +41,10 @@ export function flushBudgetSettings(): Promise<FlushResult> {
     monthlyBudget: s.monthlyBudget,
     budgetMode: s.budgetMode,
     budgetSafetyBuffer: s.budgetSafetyBuffer,
+    // Phase 288 — text-scale rides the same user-settings push so
+    // both preferences land or fail together. The wrapper marks
+    // textScaleCloudAt on success.
+    textScale: s.textScale,
   };
   inFlight = (async (): Promise<FlushResult> => {
     try {

@@ -540,6 +540,55 @@ export function useCloudSync(): CloudSyncState {
               api({ budgetSafetyBuffer: settingsRes.budgetSafetyBuffer });
             }
           }
+
+          // Phase 288 — text-scale reconcile. Same pending-push gate
+          // as the budget settings above: when the local timestamp
+          // is newer than the last successful cloud round-trip, the
+          // user's choice has not landed in Supabase yet and must
+          // win regardless of recency.
+          const cloudHasTextScale = settingsRes.textScale !== undefined;
+          const textScaleOpinionated = localState.textScaleUpdatedAt > 0;
+          const textScalePendingPush =
+            textScaleOpinionated &&
+            localState.textScaleUpdatedAt >
+              (localState.textScaleCloudAt ?? 0);
+          if (
+            cloudHasTextScale &&
+            settingsRes.textScale !== localState.textScale
+          ) {
+            if (textScalePendingPush && !ownershipMismatchRef.current) {
+              await upsertBudgetSettings({
+                monthlyBudget: useFinanceStore.getState().monthlyBudget,
+                budgetMode: localState.budgetMode,
+                budgetSafetyBuffer: localState.budgetSafetyBuffer,
+                textScale: localState.textScale,
+              });
+            } else {
+              api({
+                textScale: settingsRes.textScale,
+                textScaleUpdatedAt:
+                  localState.textScaleUpdatedAt || Date.now(),
+                textScaleCloudAt: Date.now(),
+              });
+              if (typeof document !== "undefined") {
+                document.documentElement.setAttribute(
+                  "data-text-scale",
+                  settingsRes.textScale ?? "normal",
+                );
+              }
+            }
+          } else if (
+            !cloudHasTextScale &&
+            textScaleOpinionated &&
+            !ownershipMismatchRef.current
+          ) {
+            await upsertBudgetSettings({
+              monthlyBudget: useFinanceStore.getState().monthlyBudget,
+              budgetMode: localState.budgetMode,
+              budgetSafetyBuffer: localState.budgetSafetyBuffer,
+              textScale: localState.textScale,
+            });
+          }
         }
       } catch (err) {
         console.warn("[cloud-sync] fetchUserSettings failed:", err);

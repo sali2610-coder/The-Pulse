@@ -16,10 +16,18 @@ export async function upsertBudgetSettings(args: {
   monthlyBudget: number;
   budgetMode?: "manual" | "auto";
   budgetSafetyBuffer?: number;
+  textScale?: "compact" | "normal" | "large";
 }): Promise<Status> {
   const res = await rawUpsertUserSettings(args);
   if (res.ok) {
-    useFinanceStore.getState().markBudgetSettingsCloudSynced(Date.now());
+    const now = Date.now();
+    useFinanceStore.getState().markBudgetSettingsCloudSynced(now);
+    // Phase 288 — only mark the text-scale round-trip when the
+    // caller actually sent that field. Avoids falsely claiming
+    // cloud agrees with local when only the budget half landed.
+    if (args.textScale !== undefined) {
+      useFinanceStore.getState().markTextScaleCloudSynced(now);
+    }
   }
   return res;
 }
