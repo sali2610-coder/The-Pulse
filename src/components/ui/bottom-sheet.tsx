@@ -17,11 +17,15 @@ type BottomSheetProps = {
   className?: string;
   /** If true, suppress the drag-down-to-dismiss handle. */
   noHandle?: boolean;
+  /** Phase 326 — fills the entire viewport (modulo safe-area top) for
+   *  premium form flows where partial-height feels cramped. */
+  fullScreen?: boolean;
+  /** Phase 326 — optional sticky footer rendered under the scrollable
+   *  body. Footer stays pinned to the bottom over the safe-area pad
+   *  so action buttons never get pushed off-screen by content. */
+  footer?: React.ReactNode;
 };
 
-// Velocity threshold for "throw to dismiss" — combined with the
-// position threshold below so a quick downward flick closes the
-// sheet even if the user didn't drag past the visual midpoint.
 const DISMISS_VELOCITY = 600;
 const DISMISS_DISTANCE = 110;
 
@@ -32,6 +36,8 @@ export function BottomSheet({
   children,
   className,
   noHandle = false,
+  fullScreen = false,
+  footer,
 }: BottomSheetProps) {
   const reduced = useReducedMotion();
   return (
@@ -69,7 +75,10 @@ export function BottomSheet({
                     }
                   }}
                   className={cn(
-                    "glass-card pb-safe-plus fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[92dvh] w-full max-w-md flex-col gap-4 rounded-t-[28px] px-5 pt-3 shadow-[0_-24px_60px_-12px_rgba(0,0,0,0.55)]",
+                    "glass-card fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] shadow-[0_-24px_60px_-12px_rgba(0,0,0,0.55)]",
+                    fullScreen
+                      ? "top-[max(env(safe-area-inset-top),24px)] max-h-[100dvh] gap-3 px-5 pt-3"
+                      : "pb-safe-plus max-h-[92dvh] gap-4 px-5 pt-3",
                     className,
                   )}
                 />
@@ -78,7 +87,7 @@ export function BottomSheet({
               {!noHandle && (
                 <div
                   aria-hidden
-                  className="mx-auto h-1.5 w-12 rounded-full bg-white/20 transition-colors"
+                  className="mx-auto h-1.5 w-12 shrink-0 rounded-full bg-white/20 transition-colors"
                 />
               )}
               {title && (
@@ -86,9 +95,23 @@ export function BottomSheet({
                   {title}
                 </DialogPrimitive.Title>
               )}
-              <div className="flex flex-col gap-4 overflow-y-auto overscroll-contain pb-2">
+              <div
+                className={cn(
+                  "flex flex-col gap-4 overflow-y-auto overscroll-contain pb-2",
+                  fullScreen ? "min-h-0 flex-1" : "",
+                  // Hide native scrollbar — the white sidebar that
+                  // showed on iOS Safari was the form body's overflow
+                  // scrollbar bleeding through the rounded corners.
+                  "[&::-webkit-scrollbar]:hidden [scrollbar-width:none]",
+                )}
+              >
                 {children}
               </div>
+              {footer ? (
+                <div className="pb-safe-plus shrink-0 border-t border-white/8 bg-black/40 px-1 pt-3 backdrop-blur-md">
+                  {footer}
+                </div>
+              ) : null}
             </DialogPrimitive.Popup>
           </DialogPrimitive.Portal>
         )}

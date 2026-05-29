@@ -142,24 +142,54 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
 
   const submit = handleSubmit((values) => mutation.mutate(values));
 
+  // Phase 326 — promoted to full-screen sheet with a sticky
+  // two-button footer (ביטול / שמור הוצאה). Body owns the form
+  // fields with breathing-room spacing; footer never gets pushed by
+  // content or by the iOS keyboard because it lives outside the
+  // scroll container.
+  const formId = "expense-form";
+
   return (
     <>
       <BottomSheet
         open={open}
         onOpenChange={handleOpenChange}
         title="תיעוד הוצאה"
+        fullScreen
+        footer={
+          <div className="flex gap-2.5 px-4">
+            <button
+              type="button"
+              onClick={() => {
+                tap();
+                handleOpenChange(false);
+              }}
+              className="flex h-12 flex-1 items-center justify-center rounded-2xl border border-white/12 bg-black/40 text-[14px] font-medium text-muted-foreground transition-colors hover:border-white/24 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 active:scale-[0.99]"
+            >
+              ביטול
+            </button>
+            <button
+              type="submit"
+              form={formId}
+              disabled={!isValid || mutation.isPending}
+              className="btn-confirm flex h-12 flex-1 items-center justify-center rounded-2xl text-[14px] font-semibold transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+            >
+              {mutation.isPending ? "שומר..." : "שמור הוצאה"}
+            </button>
+          </div>
+        }
       >
-        <div className="relative">
-          <div className="flex flex-col gap-1 pt-1">
-            <h2 className="text-right text-lg font-semibold text-foreground">
+        <div className="relative flex flex-col gap-5 px-1 pt-2">
+          <header className="flex flex-col gap-1">
+            <h2 className="text-right text-[20px] font-semibold text-foreground">
               תיעוד הוצאה
             </h2>
-            <p className="text-right text-xs text-muted-foreground">
+            <p className="text-right text-[12.5px] text-muted-foreground">
               מזומן, אונליין, או כל הוצאה ידנית.
             </p>
-          </div>
+          </header>
 
-          <form onSubmit={submit} className="mt-4 space-y-4 pb-2">
+          <form id={formId} onSubmit={submit} className="flex flex-col gap-5">
             <Controller
               control={control}
               name="amount"
@@ -260,14 +290,6 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
                 />
               )}
             />
-
-            <button
-              type="submit"
-              disabled={!isValid || mutation.isPending}
-              className="btn-confirm flex h-14 w-full items-center justify-center rounded-2xl text-base font-semibold transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
-            >
-              {mutation.isPending ? "שומר..." : "שמור הוצאה"}
-            </button>
           </form>
 
           <SuccessOverlay open={showSuccess} />
