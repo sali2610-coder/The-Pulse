@@ -31,6 +31,10 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { autoBudget, type AutoBudgetVibe } from "@/lib/auto-budget";
 import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
+import {
+  BudgetBreakdownPanel,
+  BudgetNegativeBanner,
+} from "@/components/budget/budget-breakdown";
 import { SectionHeader } from "@/components/ui/section-header";
 import {
   InsightChip,
@@ -182,16 +186,23 @@ export function SpendableTodayCard() {
         }
       />
 
+      {/* Phase 323 — headline reads RAW availableUntilCycleEnd so a
+         negative trajectory shows the real number (with sign) instead
+         of a misleading clamped "₪0". Color flips red below zero. */}
       <div className="flex items-baseline justify-between gap-3">
         <span
           data-mono="true"
           dir="ltr"
           className="text-[40px] font-light leading-none"
-          style={{ color: tone }}
+          style={{
+            color: report.availableUntilCycleEnd < 0 ? "#F87171" : tone,
+          }}
         >
           <AnimatedCounter
-            value={report.spendableUntilCycleEnd}
-            format={(v) => ILS.format(v)}
+            value={Math.abs(report.availableUntilCycleEnd)}
+            format={(v) =>
+              `${report.availableUntilCycleEnd < 0 ? "−" : ""}${ILS.format(v)}`
+            }
           />
         </span>
         <div className="flex flex-col items-end gap-0.5 leading-tight text-[10.5px] text-muted-foreground/85">
@@ -201,6 +212,17 @@ export function SpendableTodayCard() {
           <span dir="ltr">{report.daysRemaining} ימים</span>
         </div>
       </div>
+
+      {report.availableUntilCycleEnd < 0 ? (
+        <BudgetNegativeBanner available={report.availableUntilCycleEnd} />
+      ) : null}
+
+      {/* Phase 323 — shared 6-line breakdown so the headline is
+         auditable in place. Same engine as the Settings panel. */}
+      <BudgetBreakdownPanel
+        breakdown={report.breakdown}
+        trusted={report.breakdown.hasAnchors}
+      />
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <span>

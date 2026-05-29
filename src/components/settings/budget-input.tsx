@@ -30,6 +30,10 @@ import { tap } from "@/lib/haptics";
 import { BudgetPreview } from "@/components/settings/budget-preview";
 import { autoBudget, effectiveMonthlyBudget } from "@/lib/auto-budget";
 import type { AutoBudgetReport } from "@/lib/auto-budget";
+import {
+  BudgetBreakdownPanel,
+  BudgetNegativeBanner,
+} from "@/components/budget/budget-breakdown";
 import { flushBudgetSettings } from "@/lib/budget-settings-flush";
 import { toast } from "sonner";
 
@@ -315,62 +319,19 @@ function AutoPanel({
         </div>
 
         {headlineNegative ? (
-          <p className="mt-2 rounded-xl border border-[#F87171]/30 bg-[#F87171]/10 p-2 text-[11.5px] text-[#F87171]">
-            אין תקציב פנוי. צפוי מינוס של {fmt(available)} עד המשכורת
-            הבאה. שקול לדחות חיוב, להזרים הכנסה נוספת או לעדכן את כרית
-            הביטחון.
-          </p>
-        ) : null}
-
-        {missingAnchors ? (
-          <p className="mt-2 rounded-xl border border-white/10 bg-black/40 p-2 text-[11.5px] text-muted-foreground">
-            הגדר לפחות חשבון בנק אחד עם יתרה ב״חשבונות״ כדי שהחישוב
-            יהיה אמין. בלי יתרה אמיתית — Pulse לא מציג מספר.
-          </p>
+          <div className="mt-2">
+            <BudgetNegativeBanner available={available} />
+          </div>
         ) : null}
       </div>
 
-      {/* Breakdown — visible only when we trust the data. */}
-      {breakdown && !missingAnchors ? (
-        <ul className="flex flex-col gap-1.5 rounded-2xl border border-white/8 bg-black/20 p-3 text-[12px]">
-          <BreakdownRow
-            label="יתרה בבנק"
-            value={breakdown.bankBalance}
-            negativeIsBad
-          />
-          <BreakdownRow
-            label="הכנסות צפויות"
-            value={breakdown.expectedIncomeUntilCycle}
-            forcePositive
-          />
-          <BreakdownRow
-            label="חיובים קבועים שעוד ירדו"
-            value={-breakdown.pendingFixedUntilCycle}
-          />
-          <BreakdownRow
-            label="הלוואות שעוד ירדו"
-            value={-breakdown.pendingLoansUntilCycle}
-          />
-          <BreakdownRow
-            label="אשראי צפוי"
-            value={-breakdown.pendingCardUntilCycle}
-          />
-          <BreakdownRow
-            label="כרית ביטחון"
-            value={-breakdown.safetyBuffer}
-          />
-          <li
-            className="mt-1 flex items-center justify-between border-t border-white/10 pt-1.5 text-[12.5px] font-medium"
-            style={{
-              color: headlineNegative ? "#F87171" : "#34D399",
-            }}
-          >
-            <span>תוצאה</span>
-            <span data-mono="true" dir="ltr">
-              {fmt(available)}
-            </span>
-          </li>
-        </ul>
+      {/* Breakdown — shared component so Home + Settings render the
+         same authoritative 6-line decomposition. */}
+      {breakdown ? (
+        <BudgetBreakdownPanel
+          breakdown={breakdown}
+          trusted={!missingAnchors}
+        />
       ) : null}
 
       {/* Phase 237 — clear labeling. Safety buffer ≠ budget. */}
@@ -409,37 +370,3 @@ function AutoPanel({
   );
 }
 
-function BreakdownRow({
-  label,
-  value,
-  negativeIsBad = false,
-  forcePositive = false,
-}: {
-  label: string;
-  value: number;
-  negativeIsBad?: boolean;
-  forcePositive?: boolean;
-}) {
-  const rounded = Math.round(value);
-  const color = forcePositive
-    ? rounded > 0
-      ? "#34D399"
-      : "rgba(255,255,255,0.55)"
-    : negativeIsBad && rounded < 0
-      ? "#F87171"
-      : rounded < 0
-        ? "#F87171"
-        : rounded > 0
-          ? "#34D399"
-          : "rgba(255,255,255,0.55)";
-  const sign = rounded > 0 ? "+" : rounded < 0 ? "−" : "";
-  return (
-    <li className="flex items-center justify-between text-muted-foreground">
-      <span>{label}</span>
-      <span data-mono="true" dir="ltr" style={{ color }}>
-        {sign}
-        {ILS.format(Math.abs(rounded))}
-      </span>
-    </li>
-  );
-}
