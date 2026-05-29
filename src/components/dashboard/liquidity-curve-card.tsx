@@ -13,8 +13,8 @@
 // Auto-hides when there are no anchors — without a starting balance
 // the curve has no meaning.
 
-import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
@@ -24,6 +24,7 @@ import {
   Download,
   Landmark,
   Wallet,
+  X,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
@@ -93,6 +94,13 @@ export function LiquidityCurveCard() {
     });
   }, [hydrated, accounts, loans, incomes, rules, statuses, entries]);
 
+  // Phase 292 — filter chip + selected day. Filter defaults to "all";
+  // selectedDay null = no tooltip open. Hooks declared before any
+  // early return so the React rules-of-hooks contract holds when the
+  // user has no anchors (and the card auto-hides below).
+  const [filter, setFilter] = useState<"all" | "income" | "card" | "loan" | "bank_debit">("all");
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
   if (!hydrated || !curve) return null;
 
   const hasAnchors = accounts.some(
@@ -125,12 +133,23 @@ export function LiquidityCurveCard() {
       ? "מרווח קצר"
       : "מצב יציב";
 
-  // Show up to 4 nearest events for inline scan.
-  const nearestEvents = curve.points
-    .flatMap((p) =>
-      p.events.map((e) => ({ ...e, whenISO: e.whenISO ?? p.whenISO })),
-    )
-    .slice(0, 4);
+  // Show up to 4 nearest events for inline scan, filtered by the
+  // active chip so the list explains the same lens the user picked
+  // for the dot overlay.
+  const allEvents = curve.points.flatMap((p, dayIdx) =>
+    p.events.map((e) => ({
+      ...e,
+      whenISO: e.whenISO ?? p.whenISO,
+      dayIdx,
+    })),
+  );
+  const filteredEvents =
+    filter === "all" ? allEvents : allEvents.filter((e) => e.kind === filter);
+  const nearestEvents = filteredEvents.slice(0, 4);
+  const selectedPoint =
+    selectedDay !== null && selectedDay < curve.points.length
+      ? curve.points[selectedDay]
+      : null;
 
   return (
     <motion.section
@@ -199,7 +218,46 @@ export function LiquidityCurveCard() {
         />
       </div>
 
-      <Sparkline points={curve.points} pathD={sparkPath} minTone={minTone} />
+      <FilterRow
+        value={filter}
+        onChange={(next) => {
+          setFilter(next);
+          setSelectedDay(null);
+          tap();
+        }}
+      />
+
+      <Sparkline
+        points={curve.points}
+        pathD={sparkPath}
+        minTone={minTone}
+        filter={filter}
+        selectedDay={selectedDay}
+        onSelectDay={(d) => {
+          tap();
+          setSelectedDay((cur) => (cur === d ? null : d));
+        }}
+      />
+
+      <Legend />
+
+      <AnimatePresence initial={false}>
+        {selectedPoint ? (
+          <motion.div
+            key={`tooltip-${selectedDay}`}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <SelectedDayPanel
+              point={selectedPoint}
+              onClose={() => setSelectedDay(null)}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {nearestEvents.length > 0 ? (
         <ul className="flex flex-col gap-1">
@@ -289,15 +347,45 @@ function Stat({
   );
 }
 
+type FilterKind = "all" | "income" | "card" | "loan" | "bank_debit";
+
 function Sparkline({
   points,
   pathD,
   minTone,
+  filter,
+  selectedDay,
+  onSelectDay,
 }: {
   points: LiquidityPoint[];
-  pathD: { line: string; fill: string; w: number; h: number; minX: number; minY: number; zeroY: number | null };
+  pathD: { line: string; fill: string; w: number; h: number; minX: number; minY: number; zeroY: number | null; xs: number[]; ys: number[] };
   minTone: string;
+  filter: FilterKind;
+  selectedDay: number | null;
+  onSelectDay: (day: number) => void;
 }) {
+  // Phase 292 — per-day event dot overlay, colored by kind, sized by
+  // |amount|. Filter dims non-matching dots; tapping selects a day so
+  // the panel below can explain the movement. Each dot is a real
+  // <button> equivalent for keyboard / SR support.
+  const dots = useMemo(() => {
+    const out: Array<{
+      day: number;
+      kind: LiquidityEvent["kind"];
+      amount: number;
+      x: number;
+      y: number;
+    }> = [];
+    for (let day = 0; day < points.length; day++) {
+      const x = pathD.xs[day];
+      const y = pathD.ys[day];
+      for (const ev of points[day].events) {
+        out.push({ day, kind: ev.kind, amount: ev.amount, x, y });
+      }
+    }
+    return out;
+  }, [points, pathD]);
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-black/25 p-2">
       <svg
@@ -305,7 +393,7 @@ function Sparkline({
         preserveAspectRatio="none"
         role="img"
         aria-label="עקומת נזילות"
-        className="block h-24 w-full"
+        className="block h-32 w-full"
       >
         {/* Danger zone shading — area below y=0 line. */}
         {pathD.zeroY !== null ? (
@@ -329,16 +417,46 @@ function Sparkline({
           />
         ) : null}
         {/* Fill under curve */}
-        <path d={pathD.fill} fill="rgba(0,229,255,0.12)" />
+        <motion.path
+          initial={false}
+          animate={{ d: pathD.fill }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          fill="rgba(0,229,255,0.12)"
+        />
         {/* Curve */}
-        <path
-          d={pathD.line}
+        <motion.path
+          initial={false}
+          animate={{ d: pathD.line }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           stroke="var(--neon)"
           strokeWidth={1.6}
           fill="none"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
+        {/* Per-event dots */}
+        {dots.map((d, i) => {
+          const isMatch = filter === "all" || d.kind === filter;
+          const isSelected = selectedDay === d.day;
+          const tone = TONE[d.kind];
+          const r = Math.min(6, 2 + Math.log10(Math.max(10, Math.abs(d.amount))));
+          return (
+            <g key={`dot-${i}`} opacity={isMatch ? 1 : 0.22}>
+              <circle
+                cx={d.x}
+                cy={d.y}
+                r={isSelected ? r + 2.5 : r}
+                fill={tone}
+                stroke={isSelected ? "#0A0A0A" : "rgba(0,0,0,0.35)"}
+                strokeWidth={isSelected ? 1.5 : 0.8}
+                style={{ cursor: "pointer" }}
+                onClick={() => onSelectDay(d.day)}
+                role="button"
+                aria-label={`יום ${d.day} · אירוע`}
+              />
+            </g>
+          );
+        })}
         {/* Minimum marker */}
         <circle
           cx={pathD.minX}
@@ -359,6 +477,165 @@ function Sparkline({
   );
 }
 
+const FILTER_OPTIONS: Array<{ value: FilterKind; label: string }> = [
+  { value: "all", label: "הכל" },
+  { value: "income", label: "הכנסות" },
+  { value: "card", label: "כרטיסים" },
+  { value: "loan", label: "הלוואות" },
+  { value: "bank_debit", label: "חיובי בנק" },
+];
+
+function FilterRow({
+  value,
+  onChange,
+}: {
+  value: FilterKind;
+  onChange: (next: FilterKind) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="סינון לפי סוג">
+      {FILTER_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        const tone = opt.value === "all" ? "#E5E7EB" : TONE[opt.value];
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+              active ? "" : "border border-white/10 bg-black/30 text-muted-foreground hover:text-foreground"
+            }`}
+            style={
+              active
+                ? {
+                    background: `${tone}26`,
+                    color: tone,
+                    boxShadow: `inset 0 0 0 1px ${tone}55`,
+                  }
+                : undefined
+            }
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-white/8 bg-black/25 px-3 py-2 text-[10px] text-muted-foreground">
+      <LegendItem color="#34D399" label="הכנסה" />
+      <LegendItem color="#A78BFA" label="כרטיס" />
+      <LegendItem color="#F87171" label="הלוואה" />
+      <LegendItem color="#60A5FA" label="חיוב בנק" />
+      <LegendItem color="var(--neon)" label="יתרה צפויה" />
+    </div>
+  );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span
+        className="size-2 rounded-full"
+        style={{ background: color }}
+        aria-hidden
+      />
+      {label}
+    </span>
+  );
+}
+
+function SelectedDayPanel({
+  point,
+  onClose,
+}: {
+  point: LiquidityPoint;
+  onClose: () => void;
+}) {
+  const income = point.events
+    .filter((e) => e.kind === "income")
+    .reduce((s, e) => s + e.amount, 0);
+  const expense = point.events
+    .filter((e) => e.kind !== "income")
+    .reduce((s, e) => s + Math.abs(e.amount), 0);
+  return (
+    <section className="mt-1 flex flex-col gap-2 rounded-2xl border border-white/10 bg-black/35 p-3">
+      <header className="flex items-center justify-between gap-2">
+        <span className="text-caption font-medium text-foreground">
+          {DATE_FMT.format(new Date(point.whenISO))}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="סגור פירוט יום"
+          className="rounded-full border border-white/10 bg-black/40 p-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-3" />
+        </button>
+      </header>
+      {point.events.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground/85">
+          אין אירועים מתועדים ביום הזה. היתרה ממשיכה מהיום הקודם.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {point.events.map((e, i) => (
+            <li
+              key={`ev-${i}`}
+              className="flex items-center gap-2 text-[11px]"
+            >
+              <span
+                className="flex size-6 shrink-0 items-center justify-center rounded-md"
+                style={{
+                  background: `${TONE[e.kind]}22`,
+                  color: TONE[e.kind],
+                }}
+              >
+                {ICON[e.kind]}
+              </span>
+              <span className="flex-1 truncate text-foreground">{e.label}</span>
+              <span
+                data-mono="true"
+                dir="ltr"
+                className="text-[11px] font-medium"
+                style={{ color: e.amount > 0 ? "#34D399" : "#F87171" }}
+              >
+                {e.amount > 0 ? "+" : "−"}
+                {ILS.format(Math.abs(e.amount))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-1 flex items-center justify-between gap-2 border-t border-white/10 pt-2 text-[11px]">
+        {income > 0 ? (
+          <span dir="ltr" data-mono="true" className="text-[#34D399]">
+            +{ILS.format(Math.round(income))}
+          </span>
+        ) : <span />}
+        {expense > 0 ? (
+          <span dir="ltr" data-mono="true" className="text-[#F87171]">
+            −{ILS.format(Math.round(expense))}
+          </span>
+        ) : <span />}
+        <span
+          dir="ltr"
+          data-mono="true"
+          className="font-semibold"
+          style={{ color: point.balance < 0 ? "#F87171" : "#34D399" }}
+        >
+          ≈ {ILS.format(Math.round(point.balance))}
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function buildSparkPath(points: LiquidityPoint[]) {
   if (points.length === 0) {
     return {
@@ -369,6 +646,8 @@ function buildSparkPath(points: LiquidityPoint[]) {
       minX: 0,
       minY: 0,
       zeroY: null,
+      xs: [] as number[],
+      ys: [] as number[],
     };
   }
   const w = 600;
@@ -381,7 +660,15 @@ function buildSparkPath(points: LiquidityPoint[]) {
     points.length > 1 ? (i / (points.length - 1)) * w : w / 2;
   const scaleY = (v: number) => h - ((v - min) / span) * h;
 
-  const segs = points.map((p, i) => `${i === 0 ? "M" : "L"}${scaleX(i).toFixed(1)} ${scaleY(p.balance).toFixed(1)}`);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i < points.length; i++) {
+    xs.push(scaleX(i));
+    ys.push(scaleY(points[i].balance));
+  }
+  const segs = points.map(
+    (p, i) => `${i === 0 ? "M" : "L"}${xs[i].toFixed(1)} ${ys[i].toFixed(1)}`,
+  );
   const line = segs.join(" ");
   const fill = `${line} L${scaleX(points.length - 1).toFixed(1)} ${h} L${scaleX(0).toFixed(1)} ${h} Z`;
 
@@ -401,5 +688,7 @@ function buildSparkPath(points: LiquidityPoint[]) {
     minX: scaleX(minIdx),
     minY: scaleY(points[minIdx].balance),
     zeroY,
+    xs,
+    ys,
   };
 }
