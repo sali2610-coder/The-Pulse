@@ -92,12 +92,8 @@ const RecurringCalendarCard = lazy(() =>
       m.RecurringCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const ObligationsTimelineCard = lazy(() =>
-  import("@/components/dashboard/obligations-timeline-card").then((m) => ({
-    default:
-      m.ObligationsTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 297 — ObligationsTimelineCard lazy decl removed from Home.
+// Component file remains on disk for any future surface that wants it.
 
 // ── Income section ────────────────────────────────────────────────
 const IncomeBreakdownCard = lazy(() =>
@@ -424,11 +420,10 @@ export function DashboardTab() {
               <RecurringCalendarCard />
             </Safe>
           </div>
-          <div className="sm:col-span-6">
-            <Safe name="ObligationsTimelineCard">
-              <ObligationsTimelineCard />
-            </Safe>
-          </div>
+          {/* Phase 297 — ObligationsTimelineCard ("התחייבויות N
+             חודשים") removed from Home. The forward-looking
+             obligations view is already covered by the Future tab's
+             MonthlyCashflowCard + ObligationsAndWeek pair. */}
         </DashboardSection>
 
         <DashboardSection
