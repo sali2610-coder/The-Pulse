@@ -64,14 +64,11 @@ const PendingTray = lazy(() =>
 // Phase 285 — future-cashflow lazy components removed from Home.
 // They still ship via the "עתידי" tab.
 
-// Phase 286 — credit-cards lazies removed from Home. CategorySpendCard
-// kept because the "ניתוחים וסטטיסטיקות" section still uses it.
-const CategorySpendCard = lazy(() =>
-  import("@/components/dashboard/category-spend-card").then((m) => ({
-    default:
-      m.CategorySpendCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 286 — credit-cards lazies removed from Home.
+// Phase 303 — CategorySpendCard lazy decl dropped too; the
+// "ניתוחים וסטטיסטיקות" section no longer mounts the per-category
+// breakdown ("לאן הולך הכסף") because the Expenses tab is now its
+// single home.
 
 // ── Obligations section ───────────────────────────────────────────
 const LoanSummaryCard = lazy(() =>
@@ -110,12 +107,9 @@ const IncomeForecastCard = lazy(() =>
 );
 
 // ── Analytics section ─────────────────────────────────────────────
-const CategoryDonut = lazy(() =>
-  import("@/components/dashboard/category-donut").then((m) => ({
-    default:
-      m.CategoryDonut as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 303 — CategoryDonut + HeatmapMini lazy decls dropped here.
+// Both visuals duplicated the Expenses-tab CategorySpendCard / the
+// dedicated analytics screens.
 const CategoryParetoCard = lazy(() =>
   import("@/components/dashboard/category-pareto-card").then((m) => ({
     default:
@@ -170,13 +164,6 @@ const WeekendSpendCard = lazy(() =>
       m.WeekendSpendCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const HeatmapMini = lazy(() =>
-  import("@/components/dashboard/heatmap-mini").then((m) => ({
-    default:
-      m.HeatmapMini as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
 // ── Watch / subscriptions / anomalies section ────────────────────
 const SubscriptionReviewCard = lazy(() =>
   import("@/components/dashboard/subscription-review-card").then((m) => ({
@@ -444,25 +431,15 @@ export function DashboardTab() {
         <DashboardSection
           storageKey="simple.analytics"
           title="ניתוחים וסטטיסטיקות"
-          subtitle="לאן הולך הכסף — לפי קטגוריה, קצב ומגמה"
+          subtitle="קצב, מגמות וחתכים — לא חוזרים על פירוט קטגוריות"
           defaultCollapsed
           summary={summaries?.analytics ?? undefined}
         >
-          <div className="sm:col-span-6">
-            <Safe name="CategorySpendCard">
-              <CategorySpendCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-3">
-            <Safe name="CategoryDonut">
-              <CategoryDonut />
-            </Safe>
-          </div>
-          <div className="sm:col-span-3">
-            <Safe name="HeatmapMini">
-              <HeatmapMini />
-            </Safe>
-          </div>
+          {/* Phase 303 — "לאן הולך הכסף" + פילוח לפי קטגוריה + חום
+             ימי החודש removed from Home. CategorySpendCard already
+             leads the Expenses tab; CategoryDonut + HeatmapMini are
+             dropped from Home to avoid duplication. Components stay
+             on disk so other surfaces can mount them. */}
           <div className="sm:col-span-6">
             <Safe name="CategoryParetoCard">
               <CategoryParetoCard />
