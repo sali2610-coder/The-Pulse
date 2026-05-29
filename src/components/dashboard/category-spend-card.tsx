@@ -59,7 +59,12 @@ export function CategorySpendCard() {
   // for "חודש שעבר" + "לפני 2 חודשים" so the user can compare
   // patterns without leaving the card. monthKey lives in state so
   // the buildCategorySpend memo re-runs on switch.
+  // Phase 283 — list is now collapsed by default. Pressing a chip
+  // opens its month; pressing the active chip again closes the list.
+  // Only one month view is open at a time, with smooth height +
+  // staggered row reveal.
   const [monthKey, setMonthKey] = useState<MonthKey>(currentMonthKey());
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
 
   const report = useMemo(() => {
     if (!hydrated) return null;
@@ -133,17 +138,25 @@ export function CategorySpendCard() {
         חד-פעמיות, וניתן לפתוח לרשימה מפורטת.
       </p>
 
+      <SegmentedPreview report={report} />
+
       <div className="flex flex-wrap gap-2">
         {presets.map((p) => {
-          const active = monthKey === p.monthKey;
+          const active = revealedKey === p.key;
           return (
             <button
               key={p.key}
               type="button"
               data-no-min-tap
+              aria-pressed={active}
               onClick={() => {
                 tap();
+                if (active) {
+                  setRevealedKey(null);
+                  return;
+                }
                 setMonthKey(p.monthKey);
+                setRevealedKey(p.key);
               }}
               className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
                 active
@@ -156,28 +169,51 @@ export function CategorySpendCard() {
           );
         })}
       </div>
-      {isEmpty ? (
-        <CardEmpty
-          icon={<PieChart className="size-4" />}
-          title="אין נתונים לחודש שנבחר"
-          reason="נסה חודש אחר או הוסף הוצאה ראשונה כדי שנתחיל לבנות את התמונה."
-        />
-      ) : (
-        <ul className="flex flex-col gap-1.5">
-          {report.byCategory.map((g) => (
-            <CategoryRow
-              key={g.category}
-              group={g}
-              total={report.total}
-              monthKey={monthKey}
-              deltaPct={trendByCategory.get(g.category) ?? null}
-              endingCount={endingByCategory.get(g.category) ?? 0}
-              onEditEntry={(id) => setEditingId(id)}
-              onDeleteEntry={(id) => deleteWithUndo(id)}
-            />
-          ))}
-        </ul>
-      )}
+      <AnimatePresence initial={false} mode="wait">
+        {revealedKey ? (
+          <motion.div
+            key={revealedKey}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            {isEmpty ? (
+              <CardEmpty
+                icon={<PieChart className="size-4" />}
+                title="אין נתונים לחודש שנבחר"
+                reason="נסה חודש אחר או הוסף הוצאה ראשונה כדי שנתחיל לבנות את התמונה."
+              />
+            ) : (
+              <ul className="flex flex-col gap-1.5 pt-2">
+                {report.byCategory.map((g, i) => (
+                  <motion.div
+                    key={g.category}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      delay: Math.min(i * 0.035, 0.3),
+                      duration: 0.2,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  >
+                    <CategoryRow
+                      group={g}
+                      total={report.total}
+                      monthKey={monthKey}
+                      deltaPct={trendByCategory.get(g.category) ?? null}
+                      endingCount={endingByCategory.get(g.category) ?? 0}
+                      onEditEntry={(id) => setEditingId(id)}
+                      onDeleteEntry={(id) => deleteWithUndo(id)}
+                    />
+                  </motion.div>
+                ))}
+              </ul>
+            )}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <ExpenseEditSheet
         entry={editingEntry}
@@ -411,6 +447,78 @@ function CategoryRow({
         ) : null}
       </AnimatePresence>
     </li>
+  );
+}
+
+function SegmentedPreview({
+  report,
+}: {
+  report: {
+    total: number;
+    byCategory: CategorySpendBreakdown[];
+  };
+}) {
+  if (report.total <= 0 || report.byCategory.length === 0) return null;
+  // Top 5 categories by spend, remainder folded into "other".
+  const top = [...report.byCategory]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+  const topSum = top.reduce((s, g) => s + g.total, 0);
+  const tail = Math.max(0, report.total - topSum);
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        className="flex h-2 w-full overflow-hidden rounded-full bg-white/5"
+        role="img"
+        aria-label="פירוט קטגוריות"
+      >
+        {top.map((g) => {
+          const meta = getCategory(g.category);
+          const share = (g.total / report.total) * 100;
+          return (
+            <span
+              key={g.category}
+              style={{
+                width: `${Math.max(1.5, share)}%`,
+                background: meta.accent,
+              }}
+              className="h-full"
+            />
+          );
+        })}
+        {tail > 0 ? (
+          <span
+            style={{
+              width: `${Math.max(1.5, (tail / report.total) * 100)}%`,
+              background: "#ffffff14",
+            }}
+            className="h-full"
+          />
+        ) : null}
+      </div>
+      <ul className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {top.slice(0, 3).map((g) => {
+          const meta = getCategory(g.category);
+          const pct = Math.round((g.total / report.total) * 100);
+          return (
+            <li
+              key={g.category}
+              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+            >
+              <span
+                className="size-2 rounded-full"
+                style={{ background: meta.accent }}
+                aria-hidden
+              />
+              {meta.label}
+              <span dir="ltr" data-mono="true" className="text-foreground/80">
+                {pct}%
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
