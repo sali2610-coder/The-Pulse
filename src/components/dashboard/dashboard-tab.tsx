@@ -71,6 +71,12 @@ const PendingTray = lazy(() =>
 // single home.
 
 // ── Obligations section ───────────────────────────────────────────
+const MonthlyObligationsHeader = lazy(() =>
+  import("@/components/dashboard/monthly-obligations-header").then((m) => ({
+    default:
+      m.MonthlyObligationsHeader as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 const LoanSummaryCard = lazy(() =>
   import("@/components/dashboard/loan-summary-card").then((m) => ({
     default:
@@ -340,6 +346,11 @@ export function DashboardTab() {
           defaultCollapsed
           summary={summaries?.obligations ?? undefined}
         >
+          <div className="sm:col-span-6">
+            <Safe name="MonthlyObligationsHeader">
+              <MonthlyObligationsHeader />
+            </Safe>
+          </div>
           <div className="sm:col-span-6">
             <Safe name="LoanSummaryCard">
               <LoanSummaryCard />
