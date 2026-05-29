@@ -25,6 +25,7 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { computeSummaries } from "@/lib/dashboard-section-summaries";
 
+import { FinancialHealthGauge } from "@/components/dashboard/financial-health-gauge";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
 import { HeroEomCard } from "@/components/dashboard/simple/hero-eom-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
@@ -404,6 +405,16 @@ export function DashboardTab() {
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="TodayPulseCard">
             <TodayPulseCard />
+          </Safe>
+        </div>
+
+        {/* Phase 282 — premium financial-health gauge. Single needle,
+           single score. Reads from the same buildFinancialSnapshot
+           every other card uses so the dashboard never disagrees with
+           itself. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="FinancialHealthGauge">
+            <FinancialHealthGauge />
           </Safe>
         </div>
 
