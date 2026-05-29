@@ -1,5 +1,14 @@
 "use client";
 
+// Phase 306 — compact-by-default activity preview + full-feed sheet.
+//
+// Home keeps only a 3-row preview + a "N החודש · M היום" summary
+// chip. Tapping the preview opens a premium full-feed bottom sheet
+// with filter chips, day-grouped rows and tap-to-edit per item.
+// Engine / data unchanged; this is a pure UX restructure of the
+// existing sliceForMonth + incomes loop that recent-activity already
+// consumed.
+
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -20,7 +29,7 @@ import { getCategory, type CategoryId } from "@/lib/categories";
 import { currentMonthKey } from "@/lib/dates";
 import { sliceForMonth } from "@/lib/projections";
 import { Pill } from "@/components/ui/pill";
-import { TransactionsDrilldown } from "@/components/dashboard/transactions-drilldown";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ExpenseEditSheet } from "@/components/dashboard/expense-edit-sheet";
 import { tap } from "@/lib/haptics";
 import type { ExpenseEntry } from "@/types/finance";
@@ -70,9 +79,6 @@ function dayHeader(ts: number, now: Date = new Date()): string {
 type Direction = "in" | "out";
 type ActivityItem = {
   id: string;
-  /** Linked store entry — undefined for income events (they live in
-   *  the incomes table, not entries). Editable activity rows must have
-   *  this populated. */
   entryId?: string;
   direction: Direction;
   amount: number;
@@ -85,7 +91,30 @@ type ActivityItem = {
   bankPending?: boolean;
   needsConfirmation?: boolean;
   excludeFromBudget?: boolean;
+  /** Phase 306 — broad payment source for the filter chips. */
+  paySource: "income" | "credit" | "cash" | "bank" | "wallet";
 };
+
+type Filter =
+  | "all"
+  | "today"
+  | "week"
+  | "out"
+  | "in"
+  | "credit"
+  | "wallet"
+  | "pending";
+
+const FILTERS: Array<{ key: Filter; label: string }> = [
+  { key: "all", label: "הכל" },
+  { key: "today", label: "היום" },
+  { key: "week", label: "השבוע" },
+  { key: "out", label: "הוצאות" },
+  { key: "in", label: "הכנסות" },
+  { key: "credit", label: "אשראי" },
+  { key: "wallet", label: "Wallet" },
+  { key: "pending", label: "ממתין" },
+];
 
 function sourcePill(item: ActivityItem) {
   if (item.source === "wallet")
@@ -113,19 +142,27 @@ function sourcePill(item: ActivityItem) {
   );
 }
 
+function classifyPaySource(
+  e: ExpenseEntry,
+): ActivityItem["paySource"] {
+  if (e.source === "wallet") return "wallet";
+  if (e.paymentMethod === "cash") return "cash";
+  return "credit";
+}
+
 export function RecentActivity() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
   const incomes = useFinanceStore((s) => s.incomes);
-  const [drilldownOpen, setDrilldownOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ExpenseEntry | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
 
   const items = useMemo<ActivityItem[]>(() => {
     if (!hydrated) return [];
     const monthKey = currentMonthKey();
     const out: ActivityItem[] = [];
 
-    // Outflow slices for this month.
     for (const e of entries) {
       const slice = sliceForMonth(e, monthKey);
       if (!slice) continue;
@@ -143,10 +180,10 @@ export function RecentActivity() {
         bankPending: e.bankPending,
         needsConfirmation: e.needsConfirmation,
         excludeFromBudget: e.excludeFromBudget,
+        paySource: classifyPaySource(e),
       });
     }
 
-    // Incomes whose dayOfMonth already passed this month → inflow events.
     const now = new Date();
     const todayDay = now.getDate();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -161,99 +198,188 @@ export function RecentActivity() {
         amount: inc.amount,
         ts: date,
         title: inc.label,
+        paySource: "income",
       });
     }
 
-    return out.sort((a, b) => b.ts.getTime() - a.ts.getTime()).slice(0, 8);
+    return out.sort((a, b) => b.ts.getTime() - a.ts.getTime());
   }, [hydrated, entries, incomes]);
 
-  /** Group activity rows by calendar day so the user sees natural
-   *  "היום / אתמול / DD/MM" chapters instead of a flat timeline. */
+  // Summary numbers — same engine inputs.
+  const summary = useMemo(() => {
+    const now = new Date();
+    const todayKey = startOfDay(now);
+    let monthCount = 0;
+    let todayCount = 0;
+    for (const it of items) {
+      monthCount++;
+      if (startOfDay(it.ts) === todayKey) todayCount++;
+    }
+    return { monthCount, todayCount };
+  }, [items]);
+
+  // Filter logic used by the bottom sheet.
+  const filtered = useMemo(() => {
+    if (filter === "all") return items;
+    const now = new Date();
+    if (filter === "today") {
+      const today = startOfDay(now);
+      return items.filter((it) => startOfDay(it.ts) === today);
+    }
+    if (filter === "week") {
+      const cutoff = now.getTime() - 7 * 86_400_000;
+      return items.filter((it) => it.ts.getTime() >= cutoff);
+    }
+    if (filter === "out") return items.filter((it) => it.direction === "out");
+    if (filter === "in") return items.filter((it) => it.direction === "in");
+    if (filter === "credit")
+      return items.filter((it) => it.paySource === "credit");
+    if (filter === "wallet")
+      return items.filter((it) => it.paySource === "wallet");
+    if (filter === "pending")
+      return items.filter(
+        (it) => it.needsConfirmation || it.bankPending,
+      );
+    return items;
+  }, [items, filter]);
+
   const grouped = useMemo(() => {
     const byDay = new Map<number, ActivityItem[]>();
-    for (const item of items) {
-      const key = startOfDay(item.ts);
+    for (const it of filtered) {
+      const key = startOfDay(it.ts);
       const list = byDay.get(key) ?? [];
-      list.push(item);
+      list.push(it);
       byDay.set(key, list);
     }
     return [...byDay.entries()]
       .sort((a, b) => b[0] - a[0])
       .map(([dayTs, list]) => ({ dayTs, items: list }));
-  }, [items]);
+  }, [filtered]);
 
   if (!hydrated) return null;
 
-  if (items.length === 0) {
-    return (
-      <section className="glass-card rounded-3xl p-4">
-        <header className="mb-2 flex items-center justify-between">
-          <h3 className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            פעילות אחרונה
-          </h3>
-        </header>
-        <div className="flex items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-[12px] text-muted-foreground">
-          <Bell className="size-4 shrink-0 text-muted-foreground/60" />
-          עוד אין פעילות החודש. חיוב חדש שיתקבל יופיע כאן בזמן אמת.
-        </div>
-      </section>
-    );
+  const preview = items.slice(0, 3);
+
+  function handleRowTap(item: ActivityItem) {
+    if (!item.entryId) return;
+    const e = entries.find((x) => x.id === item.entryId);
+    if (!e) return;
+    tap();
+    setEditEntry(e);
   }
 
   return (
     <>
       <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
-        <header className="flex items-center justify-between">
-          <h3 className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            פעילות אחרונה
-          </h3>
-          <button
-            type="button"
-            onClick={() => setDrilldownOpen(true)}
-            className="flex items-center gap-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            כל החיובים
-            <ChevronLeft className="size-3" />
-          </button>
-        </header>
+        <button
+          type="button"
+          onClick={() => {
+            tap();
+            setSheetOpen(true);
+          }}
+          aria-label="פתח פעילות מלאה"
+          className="flex w-full items-center justify-between gap-3 rounded-2xl text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+        >
+          <div className="flex flex-col leading-tight">
+            <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              פעילות אחרונה
+            </span>
+            <span className="text-section text-foreground">
+              {summary.monthCount} פעולות החודש · {summary.todayCount} היום
+            </span>
+          </div>
+          <ChevronLeft className="size-4 text-muted-foreground/70" aria-hidden />
+        </button>
 
-        <ul className="flex flex-col gap-2">
-          <AnimatePresence initial={false}>
-            {grouped.map((group) => (
-              <li key={group.dayTs} className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2 px-1 pt-1">
-                  <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground/80">
-                    {dayHeader(group.dayTs)}
-                  </span>
-                  <span className="h-px flex-1 bg-white/6" />
-                </div>
-                {group.items.map((item, idx) => (
-                  <ActivityRow
-                    key={item.id}
-                    item={item}
-                    delay={idx * 0.04}
-                    onTap={() => {
-                      if (!item.entryId) return;
-                      const e = entries.find((x) => x.id === item.entryId);
-                      if (!e) return;
-                      tap();
-                      setEditEntry(e);
-                    }}
-                  />
-                ))}
-              </li>
+        {items.length === 0 ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-[12px] text-muted-foreground">
+            <Bell className="size-4 shrink-0 text-muted-foreground/60" />
+            עוד אין פעילות החודש. חיוב חדש שיתקבל יופיע כאן בזמן אמת.
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {preview.map((item, idx) => (
+              <ActivityRow
+                key={item.id}
+                item={item}
+                delay={idx * 0.04}
+                onTap={() => handleRowTap(item)}
+              />
             ))}
-          </AnimatePresence>
-        </ul>
+          </ul>
+        )}
       </section>
 
-      <TransactionsDrilldown
-        open={drilldownOpen}
-        onOpenChange={setDrilldownOpen}
+      <BottomSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
         title="פעילות החודש"
-        subtitle="כל החיובים — עבר ועתיד"
-        filter="all-this-month"
-      />
+      >
+        <header className="flex items-center justify-between gap-2 pt-1">
+          <span className="text-section text-foreground">פעילות החודש</span>
+          <span className="text-caption text-muted-foreground">
+            {filtered.length}/{items.length}
+          </span>
+        </header>
+
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="radiogroup"
+          aria-label="סינון פעילות"
+        >
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => {
+                  tap();
+                  setFilter(f.key);
+                }}
+                className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+                  active
+                    ? "bg-[color:var(--neon)]/20 text-[color:var(--neon)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--neon)_55%,transparent)]"
+                    : "border border-white/10 bg-black/30 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {grouped.length === 0 ? (
+          <div className="rounded-2xl border border-white/8 bg-black/25 p-6 text-center text-caption text-muted-foreground">
+            אין פעילות בסינון הזה.
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            <AnimatePresence initial={false}>
+              {grouped.map((group) => (
+                <li key={group.dayTs} className="flex flex-col gap-1.5">
+                  <div className="sticky top-0 z-10 flex items-center gap-2 bg-black/40 px-1 py-1 backdrop-blur-sm">
+                    <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground/85">
+                      {dayHeader(group.dayTs)}
+                    </span>
+                    <span className="h-px flex-1 bg-white/6" />
+                  </div>
+                  {group.items.map((item, idx) => (
+                    <ActivityRow
+                      key={item.id}
+                      item={item}
+                      delay={Math.min(idx * 0.025, 0.2)}
+                      onTap={() => handleRowTap(item)}
+                    />
+                  ))}
+                </li>
+              ))}
+            </AnimatePresence>
+          </ul>
+        )}
+      </BottomSheet>
 
       <ExpenseEditSheet
         key={editEntry?.id ?? "none"}
@@ -315,7 +441,6 @@ function ActivityRow({
           : ""
       }`}
     >
-      {/* Direction badge */}
       <span
         className="flex size-9 shrink-0 items-center justify-center rounded-xl"
         style={{
@@ -326,7 +451,6 @@ function ActivityRow({
         <Icon className="size-4" strokeWidth={1.7} />
       </span>
 
-      {/* Body */}
       <div className="flex min-w-0 flex-1 flex-col leading-tight">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[12.5px] font-medium text-foreground">
@@ -353,7 +477,6 @@ function ActivityRow({
         </div>
       </div>
 
-      {/* Amount */}
       <div className="flex shrink-0 flex-col items-end leading-tight">
         <span
           data-mono="true"
