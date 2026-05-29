@@ -20,6 +20,10 @@ import {
 import { addMonths, currentMonthKey } from "@/lib/dates";
 import type { MonthKey } from "@/types/finance";
 import { getCategory } from "@/lib/categories";
+import { categoryTrends } from "@/lib/forecast";
+import { ruleSchedule } from "@/lib/installment-schedule";
+import { sliceForMonth } from "@/lib/projections";
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
@@ -66,6 +70,43 @@ export function CategorySpendCard() {
       monthKey,
     });
   }, [hydrated, entries, rules, statuses, monthKey]);
+
+  // Phase 280 — MoM trend + ending-installment count per category so
+  // each collapsed row can show "in motion" cues without expanding.
+  // Reuses categoryTrends (3-month lookback) from the forecast engine.
+  const trendByCategory = useMemo(() => {
+    if (!hydrated) return new Map<string, number>();
+    const trends = categoryTrends({ entries, monthKey, lookback: 3 });
+    const m = new Map<string, number>();
+    for (const t of trends) {
+      if (t.deltaPct !== null) m.set(t.category, t.deltaPct);
+    }
+    return m;
+  }, [hydrated, entries, monthKey]);
+
+  const endingByCategory = useMemo(() => {
+    if (!hydrated) return new Map<string, number>();
+    const nextKey = addMonths(monthKey, 1);
+    const m = new Map<string, number>();
+    for (const rule of rules) {
+      if (!rule.active) continue;
+      if (!rule.installmentTotal || rule.installmentTotal <= 1) continue;
+      const here = ruleSchedule(rule, monthKey);
+      const there = ruleSchedule(rule, nextKey);
+      if (here.active && !there.active) {
+        m.set(rule.category, (m.get(rule.category) ?? 0) + 1);
+      }
+    }
+    for (const e of entries) {
+      if (e.installments <= 1) continue;
+      const here = sliceForMonth(e, monthKey);
+      const there = sliceForMonth(e, nextKey);
+      if (here && !there) {
+        m.set(e.category, (m.get(e.category) ?? 0) + 1);
+      }
+    }
+    return m;
+  }, [hydrated, rules, entries, monthKey]);
 
   const presets: Array<{ key: string; label: string; monthKey: MonthKey }> = [
     { key: "this", label: "החודש", monthKey: currentMonthKey() },
@@ -129,6 +170,8 @@ export function CategorySpendCard() {
               group={g}
               total={report.total}
               monthKey={monthKey}
+              deltaPct={trendByCategory.get(g.category) ?? null}
+              endingCount={endingByCategory.get(g.category) ?? 0}
               onEditEntry={(id) => setEditingId(id)}
               onDeleteEntry={(id) => deleteWithUndo(id)}
             />
@@ -151,12 +194,16 @@ function CategoryRow({
   group,
   total,
   monthKey,
+  deltaPct,
+  endingCount,
   onEditEntry,
   onDeleteEntry,
 }: {
   group: CategorySpendBreakdown;
   total: number;
   monthKey: MonthKey;
+  deltaPct: number | null;
+  endingCount: number;
   onEditEntry: (entryId: string) => void;
   onDeleteEntry: (entryId: string) => void;
 }) {
@@ -198,17 +245,41 @@ function CategoryRow({
                 .filter(Boolean)
                 .join(" · ") || "—"}
             </span>
-            {/* Phase 279 — micro-insight chip: ratio of fixed-vs-variable.
-                Surfaces the "how committed is this category" feel without
-                forcing the user to expand the row. */}
-            {group.total > 0 && (group.recurring > 0 || group.discretionary > 0) ? (
-              <span
-                className="mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] text-muted-foreground"
-                aria-label="פילוח קבועים מול משתנים"
-              >
-                {Math.round((group.recurring / group.total) * 100)}% קבוע
-              </span>
-            ) : null}
+            {/* Phase 279 — fixed-vs-variable micro chip.
+                Phase 280 — MoM trend + ending-installment + anomaly
+                chips, rendered inline so the user reads the
+                "in-motion" signals without expanding the row. */}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {group.total > 0 && (group.recurring > 0 || group.discretionary > 0) ? (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[10px] text-muted-foreground"
+                  aria-label="פילוח קבועים מול משתנים"
+                >
+                  {Math.round((group.recurring / group.total) * 100)}% קבוע
+                </span>
+              ) : null}
+              {deltaPct !== null && Math.abs(deltaPct) >= 0.15 ? (
+                <TrendChip deltaPct={deltaPct} />
+              ) : null}
+              {deltaPct !== null && deltaPct >= 0.4 ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                  style={{ background: "#F8717122", color: "#FCA5A5" }}
+                  aria-label="עלייה חריגה בקטגוריה"
+                >
+                  ⚠ חריגה
+                </span>
+              ) : null}
+              {endingCount > 0 ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                  style={{ background: "#34D39922", color: "#86EFAC" }}
+                  aria-label="תשלומים שמסתיימים החודש"
+                >
+                  {endingCount} מסתיים
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -247,10 +318,13 @@ function CategoryRow({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
+            // Phase 280 — premium spring-like ease. Slightly slower
+            // than the 200ms snap so the user perceives the depth
+            // change, not just a state flip.
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden border-t border-white/8"
           >
-            {group.items.map((it) => {
+            {group.items.map((it, rowIdx) => {
               // Phase 269 — pull installment progress so installment
               // rows show "תשלום 3 מתוך 12" + ₪/חודש · סה״כ.
               const installmentMeta = installmentMetaForSource({
@@ -267,8 +341,17 @@ function CategoryRow({
                   ? "קבוע"
                   : "חד-פעמי";
               return (
-              <li
+              <motion.li
                 key={`${it.source}-${it.id}`}
+                // Phase 280 — staggered subtle entrance. Cap at ~250ms
+                // so longer lists don't drag.
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  delay: Math.min(rowIdx * 0.028, 0.25),
+                  duration: 0.2,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
                 className={`flex items-start gap-2 px-4 py-2 ${
                   isInstallment ? "border-r-2 border-r-[#F59E0B]/60" : ""
                 }`}
@@ -321,12 +404,31 @@ function CategoryRow({
                 >
                   {ILS.format(Math.round(it.amount))}
                 </span>
-              </li>
+              </motion.li>
               );
             })}
           </motion.ul>
         ) : null}
       </AnimatePresence>
     </li>
+  );
+}
+
+function TrendChip({ deltaPct }: { deltaPct: number }) {
+  const up = deltaPct > 0;
+  const color = up ? "#F87171" : "#34D399";
+  const Icon = up ? TrendingUp : TrendingDown;
+  const pct = Math.round(Math.abs(deltaPct) * 100);
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+      style={{ background: `${color}1f`, color }}
+      aria-label={`שינוי לעומת חודשים אחרונים`}
+      dir="ltr"
+    >
+      <Icon className="size-3" />
+      {up ? "+" : "−"}
+      {pct}%
+    </span>
   );
 }
