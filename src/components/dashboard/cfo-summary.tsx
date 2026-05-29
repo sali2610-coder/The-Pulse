@@ -37,6 +37,18 @@ const formatILSSign = (value: number) => {
 
 type Section = "balance" | "income" | "fixed" | "loans" | "installments" | "future";
 
+type ContextItem = {
+  id: string;
+  label: string;
+  value: number;
+  /** Phase 324 — present when this item was filtered out of the
+   *  headline total. Surfaces the reason ("שולם" / "ירד ב-08" /
+   *  "טרם פעיל" / etc.) so the row reads as auditable. */
+  note?: string;
+};
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
 export function CfoSummary() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -101,12 +113,18 @@ export function CfoSummary() {
   // Phase 279 — derive the contributing line items so each
   // BreakdownRow can expand inline to show "what's actually in this
   // number". Same engine inputs, same filters as buildFinancialSnapshot.
+  //
+  // Phase 324 — every bucket also exposes `contextItems`: the items
+  // that EXIST in the system but were filtered out of the headline
+  // total (already paid this month, future month, dormant, etc.).
+  // CFO Brain reads as "connected to all data" instead of a row of
+  // 0s the user can't audit.
   const monthKey = currentMonthKey();
   const now = new Date();
   const isCurrentMonth = monthKeyOf(now) === monthKey;
   const today = now.getDate();
 
-  const balanceItems = accounts
+  const balanceItems: ContextItem[] = accounts
     .filter(
       (a) => a.active && a.kind === "bank" && a.anchorBalance !== undefined,
     )
@@ -116,75 +134,144 @@ export function CfoSummary() {
       value: a.anchorBalance ?? 0,
     }));
 
-  const incomeItems = incomes
-    .filter((i) => i.active && (!isCurrentMonth || i.dayOfMonth >= today))
-    .map((i) => ({
-      id: i.id,
-      label: i.label || "הכנסה",
-      value: i.amount,
-    }));
+  const incomeItems: ContextItem[] = [];
+  const incomeContext: ContextItem[] = [];
+  for (const i of incomes) {
+    if (!i.active) continue;
+    if (!isCurrentMonth || i.dayOfMonth >= today) {
+      incomeItems.push({ id: i.id, label: i.label || "הכנסה", value: i.amount });
+    } else {
+      incomeContext.push({
+        id: i.id,
+        label: i.label || "הכנסה",
+        value: i.amount,
+        note: `התקבל ב-${pad(i.dayOfMonth)}`,
+      });
+    }
+  }
 
   const paidThisMonth = new Set(
     statuses
       .filter((s) => s.monthKey === monthKey && s.status === "paid")
       .map((s) => s.ruleId),
   );
-  const fixedItems: { id: string; label: string; value: number }[] = [];
-  const installmentRuleItems: { id: string; label: string; value: number }[] = [];
+  const fixedItems: ContextItem[] = [];
+  const fixedContext: ContextItem[] = [];
+  const installmentRuleItems: ContextItem[] = [];
+  const installmentRuleContext: ContextItem[] = [];
   for (const r of rules) {
     if (!r.active) continue;
-    if (paidThisMonth.has(r.id)) continue;
-    if (!ruleSchedule(r, monthKey).active) continue;
-    if (isCurrentMonth && r.dayOfMonth < today) continue;
-    if (r.installmentTotal) {
-      installmentRuleItems.push({
+    const sched = ruleSchedule(r, monthKey);
+    const isInstallment = !!r.installmentTotal;
+    if (!sched.active) {
+      // Rule exists but is dormant this month (future plan / completed).
+      const note = sched.isFuture
+        ? "טרם פעיל"
+        : sched.isComplete
+          ? "הסתיים"
+          : "לא במחזור החודש";
+      (isInstallment ? installmentRuleContext : fixedContext).push({
         id: r.id,
         label: r.label,
         value: r.estimatedAmount,
+        note,
       });
-    } else {
-      fixedItems.push({
-        id: r.id,
-        label: r.label,
-        value: r.estimatedAmount,
-      });
+      continue;
     }
+    const alreadyPaid =
+      paidThisMonth.has(r.id) || (isCurrentMonth && r.dayOfMonth < today);
+    if (alreadyPaid) {
+      (isInstallment ? installmentRuleContext : fixedContext).push({
+        id: r.id,
+        label: r.label,
+        value: r.estimatedAmount,
+        note: paidThisMonth.has(r.id)
+          ? "שולם"
+          : `ירד ב-${pad(r.dayOfMonth)}`,
+      });
+      continue;
+    }
+    (isInstallment ? installmentRuleItems : fixedItems).push({
+      id: r.id,
+      label: r.label,
+      value: r.estimatedAmount,
+    });
   }
 
-  const loanItems = loans
-    .filter(
-      (l) =>
-        loanSchedule(l, monthKey).active &&
-        !(isCurrentMonth && l.dayOfMonth < today),
-    )
-    .map((l) => ({
+  const loanItems: ContextItem[] = [];
+  const loanContext: ContextItem[] = [];
+  for (const l of loans) {
+    const sched = loanSchedule(l, monthKey);
+    if (!sched.active) {
+      loanContext.push({
+        id: l.id,
+        label: l.label,
+        value: l.monthlyInstallment,
+        note: sched.isFuture
+          ? "טרם פעיל"
+          : sched.isComplete
+            ? "הסתיים"
+            : "לא פעיל החודש",
+      });
+      continue;
+    }
+    if (isCurrentMonth && l.dayOfMonth < today) {
+      loanContext.push({
+        id: l.id,
+        label: l.label,
+        value: l.monthlyInstallment,
+        note: `ירד ב-${pad(l.dayOfMonth)}`,
+      });
+      continue;
+    }
+    loanItems.push({
       id: l.id,
       label: l.label,
       value: l.monthlyInstallment,
-    }));
+    });
+  }
 
-  const futureSliceItems: { id: string; label: string; value: number }[] = [];
+  const futureSliceItems: ContextItem[] = [];
+  const futureSliceContext: ContextItem[] = [];
   for (const e of entries) {
     if (e.needsConfirmation || e.bankPending || e.isRefund) continue;
     if (e.excludeFromBudget) continue;
     if (e.currency && e.currency !== "ILS") continue;
     const slice = sliceForMonth(e, monthKey);
     if (!slice) continue;
-    if (slice.chargeDate.getTime() <= now.getTime()) continue;
+    const past = slice.chargeDate.getTime() <= now.getTime();
+    const label = e.merchant || e.note || "חיוב";
+    if (past) {
+      futureSliceContext.push({
+        id: e.id,
+        label,
+        value: slice.amount,
+        note: `חויב ב-${pad(slice.chargeDate.getDate())}`,
+      });
+      continue;
+    }
     futureSliceItems.push({
       id: e.id,
-      label: e.merchant || e.note || "חיוב",
+      label,
       value: slice.amount,
     });
   }
 
-  const sectionItems: Record<Section, { id: string; label: string; value: number }[]> = {
+  const sectionItems: Record<Section, ContextItem[]> = {
     balance: balanceItems,
     income: incomeItems,
     fixed: fixedItems,
     loans: loanItems,
     installments: installmentRuleItems,
     future: futureSliceItems,
+  };
+  const sectionContext: Record<Section, ContextItem[]> = {
+    balance: [],
+    income: incomeContext,
+    fixed: fixedContext,
+    loans: loanContext,
+    installments: installmentRuleContext,
+    future: futureSliceContext,
   };
 
   // Project the same line the rest of the dashboard uses — net cash on
@@ -282,6 +369,7 @@ export function CfoSummary() {
           value={formatILSSign(snap.currentBalance)}
           tone={snap.currentBalance >= 0 ? "positive" : "negative"}
           items={sectionItems.balance}
+          context={sectionContext.balance}
           section="balance"
           openSection={openSection}
           setOpenSection={setOpenSection}
@@ -292,6 +380,7 @@ export function CfoSummary() {
           value={formatILSSign(snap.expectedIncomeUntilNextMonth)}
           tone="positive"
           items={sectionItems.income}
+          context={sectionContext.income}
           section="income"
           openSection={openSection}
           setOpenSection={setOpenSection}
@@ -302,6 +391,7 @@ export function CfoSummary() {
           value={`−${formatILS(snap.fixedExpensesUntilNextMonth)}`}
           tone="negative"
           items={sectionItems.fixed}
+          context={sectionContext.fixed}
           section="fixed"
           openSection={openSection}
           setOpenSection={setOpenSection}
@@ -312,6 +402,7 @@ export function CfoSummary() {
           value={`−${formatILS(snap.activeLoansPaymentsUntilNextMonth)}`}
           tone="negative"
           items={sectionItems.loans}
+          context={sectionContext.loans}
           section="loans"
           openSection={openSection}
           setOpenSection={setOpenSection}
@@ -322,6 +413,7 @@ export function CfoSummary() {
           value={`−${formatILS(snap.installmentPaymentsUntilNextMonth)}`}
           tone="negative"
           items={sectionItems.installments}
+          context={sectionContext.installments}
           section="installments"
           openSection={openSection}
           setOpenSection={setOpenSection}
@@ -332,6 +424,7 @@ export function CfoSummary() {
           value={`−${formatILS(snap.recurringCommitmentsUntilNextMonth)}`}
           tone="negative"
           items={sectionItems.future}
+          context={sectionContext.future}
           section="future"
           openSection={openSection}
           setOpenSection={setOpenSection}
@@ -350,7 +443,13 @@ export function CfoSummary() {
           >
             <SectionDetail
               items={sectionItems[openSection]}
-              tone={openSection === "balance" || openSection === "income" ? "positive" : "negative"}
+              context={sectionContext[openSection]}
+              section={openSection}
+              tone={
+                openSection === "balance" || openSection === "income"
+                  ? "positive"
+                  : "negative"
+              }
             />
           </motion.div>
         ) : null}
@@ -407,40 +506,118 @@ function FormulaLine({
 
 function SectionDetail({
   items,
+  context,
+  section,
   tone,
 }: {
-  items: { id: string; label: string; value: number }[];
+  items: ContextItem[];
+  context: ContextItem[];
+  section: Section;
   tone: "positive" | "negative";
 }) {
   const color = tone === "positive" ? "#34D399" : "#F87171";
-  if (items.length === 0) {
-    return (
-      <p className="mt-3 rounded-xl border border-white/8 bg-black/25 px-3 py-2 text-[11px] text-muted-foreground">
-        אין פריטים שתורמים לסכום הזה כרגע.
-      </p>
-    );
-  }
+  const emptyHeadline = sectionEmptyHeadline(section);
+  const emptyHint = sectionEmptyHint(section, context.length > 0);
+
   return (
-    <ul className="mt-3 flex flex-col gap-1 rounded-xl border border-white/8 bg-black/25 p-2">
-      {items.map((it) => (
-        <li
-          key={it.id}
-          className="flex items-baseline justify-between gap-2 px-2 py-1"
-        >
-          <span className="truncate text-[11px] text-foreground">{it.label}</span>
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-[11px] font-medium"
-            style={{ color }}
-          >
-            {tone === "negative" ? "−" : ""}
-            {_ils.format(Math.round(Math.abs(it.value)))}
+    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-white/8 bg-black/25 p-2">
+      {items.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {items.map((it) => (
+            <li
+              key={it.id}
+              className="flex items-baseline justify-between gap-2 px-2 py-1"
+            >
+              <span className="truncate text-[11px] text-foreground">
+                {it.label}
+              </span>
+              <span
+                data-mono="true"
+                dir="ltr"
+                className="text-[11px] font-medium"
+                style={{ color }}
+              >
+                {tone === "negative" ? "−" : ""}
+                {_ils.format(Math.round(Math.abs(it.value)))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-2 py-1 text-[11px] text-muted-foreground">
+          {emptyHeadline}
+        </p>
+      )}
+
+      {context.length > 0 ? (
+        <div className="flex flex-col gap-1 border-t border-white/8 pt-1.5">
+          <span className="px-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+            כבר במערכת · לא נספר בכותרת
           </span>
-        </li>
-      ))}
-    </ul>
+          {context.map((it) => (
+            <div
+              key={`ctx-${it.id}`}
+              className="flex items-baseline justify-between gap-2 px-2 py-0.5 text-[10.5px] text-muted-foreground/85"
+            >
+              <span className="truncate">
+                {it.label}
+                {it.note ? (
+                  <span className="ms-1 text-muted-foreground/60">
+                    · {it.note}
+                  </span>
+                ) : null}
+              </span>
+              <span
+                data-mono="true"
+                dir="ltr"
+                className="text-muted-foreground/70"
+              >
+                {_ils.format(Math.round(Math.abs(it.value)))}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="px-2 pb-1 text-[10.5px] text-muted-foreground/70">
+          {emptyHint}
+        </p>
+      ) : null}
+    </div>
   );
+}
+
+function sectionEmptyHeadline(section: Section): string {
+  switch (section) {
+    case "balance":
+      return "לא נמצאו חשבונות בנק פעילים עם יתרה.";
+    case "income":
+      return "אין הכנסות שעוד אמורות להיכנס עד סוף החודש.";
+    case "fixed":
+      return "אין חיובים קבועים שעוד אמורים לרדת עד סוף החודש.";
+    case "loans":
+      return "אין הלוואות שעוד אמורות לרדת עד סוף החודש.";
+    case "installments":
+      return "אין תשלומים שעוד אמורים לרדת עד סוף החודש.";
+    case "future":
+      return "אין חיובי כרטיס עתידיים עד סוף החודש.";
+  }
+}
+
+function sectionEmptyHint(section: Section, hasContext: boolean): string {
+  if (hasContext) return "";
+  switch (section) {
+    case "balance":
+      return "הגדר חשבון בנק בלשונית הגדרות → חשבונות.";
+    case "income":
+      return "הוסף הכנסה בלשונית הגדרות → הכנסות.";
+    case "fixed":
+    case "installments":
+      return "הוסף חיוב קבוע בלשונית הגדרות → חיובים קבועים.";
+    case "loans":
+      return "הוסף הלוואה בלשונית הגדרות → הלוואות.";
+    case "future":
+      return "חיובי כרטיס מתווספים אוטומטית מ-SMS / Wallet / ייבוא CSV.";
+  }
 }
 
 function BreakdownRow({
@@ -449,6 +626,7 @@ function BreakdownRow({
   value,
   tone,
   items,
+  context,
   section,
   openSection,
   setOpenSection,
@@ -457,7 +635,8 @@ function BreakdownRow({
   label: string;
   value: string;
   tone: "positive" | "negative" | "neutral";
-  items: { id: string; label: string; value: number }[];
+  items: ContextItem[];
+  context: ContextItem[];
   section: Section;
   openSection: Section | null;
   setOpenSection: (s: Section | null) => void;
@@ -488,7 +667,11 @@ function BreakdownRow({
         {icon}
         {label}
         <span className="text-[10px] text-muted-foreground/60">
-          · {items.length}
+          {items.length > 0
+            ? `· ${items.length}`
+            : context.length > 0
+              ? `· ${context.length} במערכת`
+              : ""}
         </span>
       </span>
       <span className="flex items-center gap-1.5">
