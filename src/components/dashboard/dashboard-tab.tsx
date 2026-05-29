@@ -190,12 +190,8 @@ const SubscriptionRadarCard = lazy(() =>
       m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const RiskWarningsCard = lazy(() =>
-  import("@/components/dashboard/risk-warnings-card").then((m) => ({
-    default:
-      m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 301 — RiskWarningsCard lazy decl removed; the card now
+// lives in src/components/expenses/expenses-tab.tsx.
 const AnomalyBanner = lazy(() =>
   import("@/components/dashboard/anomaly-banner").then((m) => ({
     default:
@@ -521,11 +517,9 @@ export function DashboardTab() {
           defaultCollapsed
           summary={summaries?.watch ?? undefined}
         >
-          <div className="sm:col-span-6">
-            <Safe name="RiskWarningsCard">
-              <RiskWarningsCard />
-            </Safe>
-          </div>
+          {/* Phase 301 — RiskWarningsCard ("סיכוני תזרים") relocated
+             to the Expenses tab next to the financial-control-center
+             cards. Component file stays — Expenses tab mounts it. */}
           <div className="sm:col-span-6">
             <Safe name="AnomalyBanner">
               <AnomalyBanner />

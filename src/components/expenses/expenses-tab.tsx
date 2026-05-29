@@ -73,6 +73,13 @@ const LiquidityTimelineCard = lazy(() =>
       m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+// Phase 301 — RiskWarningsCard ("סיכוני תזרים") relocated from Home.
+const RiskWarningsCard = lazy(() =>
+  import("@/components/dashboard/risk-warnings-card").then((m) => ({
+    default:
+      m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -144,6 +151,15 @@ export function ExpensesTab() {
       <div className="sm:col-span-6">
         <Safe name="HealthScoreCard">
           <HealthScoreCard />
+        </Safe>
+      </div>
+
+      {/* Phase 301 — "סיכוני תזרים" relocated from Home into the
+         financial-control-center cluster. Auto-hides when no risks
+         are detected. */}
+      <div className="sm:col-span-6 empty:hidden">
+        <Safe name="RiskWarningsCard">
+          <RiskWarningsCard />
         </Safe>
       </div>
 

@@ -3,12 +3,17 @@
 // Forward-looking risk surface. Renders the prioritised list from
 // buildRiskWarnings — most severe first. Auto-hides when the list
 // is empty (the calm-by-default rule).
+// Phase 301 — promoted out of Home into Expenses + made every row
+// actionable (tap → open the unified Attention Center sheet for
+// approve / dismiss / drill-down). Duplicate warnings (same title)
+// are merged so the user never sees the same root cause twice.
 
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   AlertOctagon,
   AlertTriangle,
+  ArrowLeft,
   Eye,
   Info,
   ShieldAlert,
@@ -17,6 +22,8 @@ import {
 import { useFinanceStore } from "@/lib/store";
 import { buildRiskWarnings, type RiskSeverity } from "@/lib/risk-warnings";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
+import { openAttentionCenter } from "@/lib/use-attention-center";
+import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -38,6 +45,13 @@ function severityIcon(s: RiskSeverity) {
   return Info;
 }
 
+function suggestedAction(s: RiskSeverity): string {
+  if (s === "alert") return "פעל עכשיו — דחה חיוב גדול או הזרם כסף נוסף לחשבון.";
+  if (s === "warn") return "קצץ הוצאה משתנה השבוע או בדוק אם אפשר לדחות חיוב.";
+  if (s === "watch") return "עקוב אחרי הקצב היומי בימים הקרובים.";
+  return "השאר בעין — אין צורך בפעולה מיידית.";
+}
+
 export function RiskWarningsCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -50,7 +64,7 @@ export function RiskWarningsCard() {
 
   const warnings = useMemo(() => {
     if (!hydrated) return [];
-    return buildRiskWarnings({
+    const raw = buildRiskWarnings({
       accounts,
       loans,
       incomes,
@@ -59,6 +73,25 @@ export function RiskWarningsCard() {
       statuses,
       monthlyBudget,
     });
+    // Phase 301 — dedupe by title. Same root cause sometimes
+    // surfaces twice (e.g. two cards both hit the income-ratio
+    // gate). Keep the most-severe occurrence per title.
+    const order: Record<RiskSeverity, number> = {
+      alert: 4,
+      warn: 3,
+      watch: 2,
+      info: 1,
+    };
+    const byTitle = new Map<string, typeof raw[number]>();
+    for (const w of raw) {
+      const cur = byTitle.get(w.title);
+      if (!cur || order[w.severity] > order[cur.severity]) {
+        byTitle.set(w.title, w);
+      }
+    }
+    return Array.from(byTitle.values()).sort(
+      (a, b) => order[b.severity] - order[a.severity],
+    );
   }, [hydrated, accounts, loans, incomes, rules, entries, statuses, monthlyBudget]);
 
   if (!hydrated || warnings.length === 0) return null;
@@ -89,34 +122,53 @@ export function RiskWarningsCard() {
                 duration: 0.25,
                 ease: EASE_OUT_EXPO,
               }}
-              className="flex items-start gap-2 rounded-2xl border border-white/8 bg-black/25 p-3"
             >
-              <span
-                className="flex size-7 shrink-0 items-center justify-center rounded-xl"
-                style={{ background: `${tone}22`, color: tone }}
+              <button
+                type="button"
+                onClick={() => {
+                  hapticTap();
+                  openAttentionCenter();
+                }}
+                aria-label={`פתח פעולות עבור: ${w.title}`}
+                className="flex w-full items-start gap-2 rounded-2xl border border-white/8 bg-black/25 p-3 text-start transition-colors hover:border-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
               >
-                <Icon className="size-3.5" />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[12px] font-medium text-foreground">
-                    {w.title}
-                  </span>
-                  {typeof w.amount === "number" ? (
-                    <span
-                      data-mono="true"
-                      dir="ltr"
-                      className="text-[11px]"
-                      style={{ color: tone }}
-                    >
-                      {ILS.format(w.amount)}
+                <span
+                  className="flex size-7 shrink-0 items-center justify-center rounded-xl"
+                  style={{ background: `${tone}22`, color: tone }}
+                >
+                  <Icon className="size-3.5" />
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[12px] font-medium text-foreground">
+                      {w.title}
                     </span>
-                  ) : null}
+                    {typeof w.amount === "number" ? (
+                      <span
+                        data-mono="true"
+                        dir="ltr"
+                        className="text-[11px]"
+                        style={{ color: tone }}
+                      >
+                        {ILS.format(w.amount)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                    {w.detail}
+                  </p>
+                  <p
+                    className="mt-1 text-[10px]"
+                    style={{ color: tone }}
+                  >
+                    💡 {suggestedAction(w.severity)}
+                  </p>
                 </div>
-                <p className="mt-0.5 text-[10.5px] text-muted-foreground">
-                  {w.detail}
-                </p>
-              </div>
+                <ArrowLeft
+                  className="mt-1 size-3.5 shrink-0 text-muted-foreground/70"
+                  aria-hidden
+                />
+              </button>
             </motion.li>
           );
         })}
