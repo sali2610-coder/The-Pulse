@@ -13,12 +13,10 @@
 // the screen explicitly says so in a calm, premium tone.
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
-  CalendarCheck,
   ChevronDown,
   Compass,
   Gauge,
@@ -32,48 +30,7 @@ import {
 import { tap } from "@/lib/haptics";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { CfoSandboxCard } from "@/components/insights/cfo-sandbox-card";
-
-// Phase 277 — monthly summary / EOM forecast / deficit-risk surfaces
-// promoted out of the Home "פירוט מתקדם" dump into the AI Insights
-// tab. They share one narrative container so the user reads them as
-// a connected financial story, not isolated stat cards.
-const lazy = (
-  loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
-) => dynamic(loader, { ssr: false });
-
-const CashflowSummaryCard = lazy(() =>
-  import("@/components/dashboard/cashflow-summary-card").then((m) => ({
-    default:
-      m.CashflowSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const StatsCards = lazy(() =>
-  import("@/components/dashboard/stats-cards").then((m) => ({
-    default:
-      m.StatsCards as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const EmergencyFundCard = lazy(() =>
-  import("@/components/dashboard/emergency-fund-card").then((m) => ({
-    default:
-      m.EmergencyFundCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const AnchorTrajectoryCard = lazy(() =>
-  import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
-    default:
-      m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const MonthlyDigestCard = lazy(() =>
-  import("@/components/dashboard/monthly-digest-card").then((m) => ({
-    default:
-      m.MonthlyDigestCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
 import {
   GROUP_LABELS,
   GROUP_ORDER,
@@ -81,10 +38,6 @@ import {
   type AiInsight,
   type AiInsightGroup,
 } from "@/lib/ai-insights";
-
-function Safe({ name, children }: { name: string; children: React.ReactNode }) {
-  return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
-}
 
 function useNowTick(intervalMs: number): number {
   return useSyncExternalStore(
@@ -237,44 +190,10 @@ export function InsightsTab() {
 
       {top ? <HeroInsight insight={top} /> : null}
 
-      {/* Phase 277 — connected financial-narrative band. Monthly
-         summary + EOM forecast + deficit / burn risk + emergency
-         fund all share one section so the user reads them as a
-         single story. Default-expanded because this is now the
-         primary AI surface, not an advanced detail. */}
-      <DashboardSection
-        storageKey="insights.monthly-summary"
-        title="סיכום חודשי ותחזית"
-        subtitle="מצב התזרים, חיוב סוף החודש, וסיכוני גירעון"
-        icon={<CalendarCheck className="size-4" />}
-        defaultCollapsed={false}
-      >
-        <div className="sm:col-span-6">
-          <Safe name="CashflowSummaryCard">
-            <CashflowSummaryCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="StatsCards">
-            <StatsCards />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="EmergencyFundCard">
-            <EmergencyFundCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="AnchorTrajectoryCard">
-            <AnchorTrajectoryCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="MonthlyDigestCard">
-            <MonthlyDigestCard />
-          </Safe>
-        </div>
-      </DashboardSection>
+      {/* Phase 281 — "סיכום חודשי ותחזית" removed from the AI
+         Insights tab. The same financial-summary surfaces still live
+         in Home / Expenses / Future / CFO Brain. Insights focuses
+         strictly on behavior-aware AI signals + the CFO Sandbox. */}
 
       {!result || result.total === 0 ? <CalmEmpty /> : null}
 
