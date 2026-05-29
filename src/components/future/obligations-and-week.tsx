@@ -136,6 +136,8 @@ function LensButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      aria-label={`${active ? "סגור" : "פתח"} ${label} · ${sub}`}
+      title={`${active ? "סגור" : "פתח"} ${label}`}
       className={`group relative flex items-center justify-between gap-2 overflow-hidden rounded-2xl border px-4 py-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
         active
           ? "border-[color:var(--neon)]/40 bg-[color:var(--neon)]/15"
