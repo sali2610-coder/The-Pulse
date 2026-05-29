@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { tap } from "@/lib/haptics";
 import { BudgetPreview } from "@/components/settings/budget-preview";
 import { autoBudget, effectiveMonthlyBudget } from "@/lib/auto-budget";
+import type { AutoBudgetReport } from "@/lib/auto-budget";
 import { flushBudgetSettings } from "@/lib/budget-settings-flush";
 import { toast } from "sonner";
 
@@ -157,6 +158,7 @@ export function BudgetInput() {
       ) : (
         <AutoPanel
           value={autoBudgetValue}
+          report={autoReport}
           buffer={buffer}
           onBuffer={(v) => {
             setBuffer(v);
@@ -256,13 +258,22 @@ function ManualPanel({
 
 function AutoPanel({
   value,
+  report,
   buffer,
   onBuffer,
 }: {
   value: number;
+  report: AutoBudgetReport | null;
   buffer: number;
   onBuffer: (v: number) => void;
 }) {
+  const breakdown = report?.breakdown ?? null;
+  const missingAnchors = !breakdown || !breakdown.hasAnchors;
+  const available = breakdown?.available ?? 0;
+  const headlineNegative = !missingAnchors && available < 0;
+  const sign = (n: number) => (n < 0 ? "−" : n > 0 ? "+" : "");
+  const fmt = (n: number) => `${sign(n)}${ILS.format(Math.abs(Math.round(n)))}`;
+
   return (
     <div className="space-y-3">
       <p className="text-caption text-muted-foreground">
@@ -270,23 +281,97 @@ function AutoPanel({
         משכורות צפויות, חיובי כרטיס, הלוואות והוצאות קבועות.
       </p>
 
-      <div className="flex items-baseline justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 p-4">
-        <div className="flex flex-col leading-tight">
-          <span className="text-caption text-muted-foreground">
-            תקציב חודשי מחושב
-          </span>
-          <span className="text-caption text-muted-foreground/70">
-            עד למשכורת הבאה
+      {/* Headline */}
+      <div className="rounded-2xl border border-white/8 bg-black/25 p-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="flex flex-col leading-tight">
+            <span className="text-caption text-muted-foreground">
+              {headlineNegative
+                ? "צפוי מינוס עד המשכורת"
+                : "תקציב פנוי עד המשכורת"}
+            </span>
+            <span className="text-caption text-muted-foreground/70">
+              {missingAnchors
+                ? "חסר מידע לחישוב מדויק"
+                : `${report?.daysRemaining ?? 0} ימים עד למשכורת`}
+            </span>
+          </div>
+          <span
+            data-mono="true"
+            dir="ltr"
+            className="text-stat"
+            style={{
+              color: headlineNegative
+                ? "#F87171"
+                : missingAnchors
+                  ? "rgba(255,255,255,0.55)"
+                  : value > 0
+                    ? "#34D399"
+                    : undefined,
+            }}
+          >
+            {missingAnchors ? "—" : fmt(available)}
           </span>
         </div>
-        <span
-          data-mono="true"
-          dir="ltr"
-          className="text-stat text-foreground"
-        >
-          {ILS.format(Math.round(value))}
-        </span>
+
+        {headlineNegative ? (
+          <p className="mt-2 rounded-xl border border-[#F87171]/30 bg-[#F87171]/10 p-2 text-[11.5px] text-[#F87171]">
+            אין תקציב פנוי. צפוי מינוס של {fmt(available)} עד המשכורת
+            הבאה. שקול לדחות חיוב, להזרים הכנסה נוספת או לעדכן את כרית
+            הביטחון.
+          </p>
+        ) : null}
+
+        {missingAnchors ? (
+          <p className="mt-2 rounded-xl border border-white/10 bg-black/40 p-2 text-[11.5px] text-muted-foreground">
+            הגדר לפחות חשבון בנק אחד עם יתרה ב״חשבונות״ כדי שהחישוב
+            יהיה אמין. בלי יתרה אמיתית — Pulse לא מציג מספר.
+          </p>
+        ) : null}
       </div>
+
+      {/* Breakdown — visible only when we trust the data. */}
+      {breakdown && !missingAnchors ? (
+        <ul className="flex flex-col gap-1.5 rounded-2xl border border-white/8 bg-black/20 p-3 text-[12px]">
+          <BreakdownRow
+            label="יתרה בבנק"
+            value={breakdown.bankBalance}
+            negativeIsBad
+          />
+          <BreakdownRow
+            label="הכנסות צפויות"
+            value={breakdown.expectedIncomeUntilCycle}
+            forcePositive
+          />
+          <BreakdownRow
+            label="חיובים קבועים שעוד ירדו"
+            value={-breakdown.pendingFixedUntilCycle}
+          />
+          <BreakdownRow
+            label="הלוואות שעוד ירדו"
+            value={-breakdown.pendingLoansUntilCycle}
+          />
+          <BreakdownRow
+            label="אשראי צפוי"
+            value={-breakdown.pendingCardUntilCycle}
+          />
+          <BreakdownRow
+            label="כרית ביטחון"
+            value={-breakdown.safetyBuffer}
+          />
+          <li
+            className="mt-1 flex items-center justify-between border-t border-white/10 pt-1.5 text-[12.5px] font-medium"
+            style={{
+              color: headlineNegative ? "#F87171" : "#34D399",
+            }}
+          >
+            <span>תוצאה</span>
+            <span data-mono="true" dir="ltr">
+              {fmt(available)}
+            </span>
+          </li>
+        </ul>
+      ) : null}
 
       {/* Phase 237 — clear labeling. Safety buffer ≠ budget. */}
       <label className="flex flex-col gap-2 rounded-2xl border border-white/8 bg-black/20 p-3">
@@ -321,5 +406,40 @@ function AutoPanel({
 
       <BudgetPreview draftBudget={value} />
     </div>
+  );
+}
+
+function BreakdownRow({
+  label,
+  value,
+  negativeIsBad = false,
+  forcePositive = false,
+}: {
+  label: string;
+  value: number;
+  negativeIsBad?: boolean;
+  forcePositive?: boolean;
+}) {
+  const rounded = Math.round(value);
+  const color = forcePositive
+    ? rounded > 0
+      ? "#34D399"
+      : "rgba(255,255,255,0.55)"
+    : negativeIsBad && rounded < 0
+      ? "#F87171"
+      : rounded < 0
+        ? "#F87171"
+        : rounded > 0
+          ? "#34D399"
+          : "rgba(255,255,255,0.55)";
+  const sign = rounded > 0 ? "+" : rounded < 0 ? "−" : "";
+  return (
+    <li className="flex items-center justify-between text-muted-foreground">
+      <span>{label}</span>
+      <span data-mono="true" dir="ltr" style={{ color }}>
+        {sign}
+        {ILS.format(Math.abs(rounded))}
+      </span>
+    </li>
   );
 }

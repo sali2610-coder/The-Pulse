@@ -35,6 +35,10 @@ import { liquidityCurve } from "@/lib/liquidity-curve";
 import { monthlySpent } from "@/lib/monthly-spent";
 import { daysInMonth } from "@/lib/projections";
 import { monthKeyOf } from "@/lib/dates";
+import {
+  buildBudgetControlBreakdown,
+  type BudgetControlBreakdown,
+} from "@/lib/budget-control";
 
 export type AutoBudgetVibe = "calm" | "tight" | "danger";
 
@@ -56,6 +60,15 @@ export type AutoBudgetReport = {
   recommendedMonthlyBudget: number;
   /** Echo of the user's preference so explain sheets can show it. */
   safetyBufferApplied: number;
+  /** Phase 322 — full decomposition that drove `spendableUntilCycleEnd`.
+   *  UI surfaces it so the headline number is auditable. The raw
+   *  `available` here may be negative; consumers should fall through
+   *  to `breakdown.available < 0` for the danger banner. */
+  breakdown: BudgetControlBreakdown;
+  /** Phase 322 — `breakdown.available` echoed at the top level so
+   *  callers don't have to drill in for the most-asked number. May be
+   *  negative. */
+  availableUntilCycleEnd: number;
 };
 
 const TIGHT_FLOOR_PER_DAY = 100;
@@ -102,14 +115,27 @@ export function autoBudget(args: {
     if (curve.points[i].balance < lowest) lowest = curve.points[i].balance;
   }
 
-  // Spendable = lowest projected balance minus safety buffer. If
-  // lowest is already negative, no safe spend exists.
-  const spendable = Math.max(0, lowest - safetyBuffer);
+  // Phase 322 — full breakdown. The headline `spendable` clamps at
+  // zero (the user can't spend negative ILS), but downstream surfaces
+  // read `breakdown.available` directly to render the negative number
+  // and the warning banner.
+  const breakdown = buildBudgetControlBreakdown({
+    accounts: args.accounts,
+    loans: args.loans,
+    incomes: args.incomes,
+    entries: args.entries,
+    rules: args.rules,
+    statuses: args.statuses,
+    safetyBuffer,
+    now,
+  });
+  const spendable = Math.max(0, breakdown.available);
   const dailyAllowance = round2(spendable / daysRemaining);
+  void lowest;
 
   // Vibe: same threshold logic as safe-to-spend for parity.
   let vibe: AutoBudgetVibe = "calm";
-  if (lowest - safetyBuffer < 0) {
+  if (breakdown.available < 0) {
     vibe = "danger";
   } else if (dailyAllowance < TIGHT_FLOOR_PER_DAY) {
     vibe = "tight";
@@ -126,12 +152,17 @@ export function autoBudget(args: {
   });
   // Pro-rate spendable to a notional month so PulseBar's scale
   // doesn't shrink dramatically when the cycle window is short.
+  // Phase 322 — when `breakdown.available` is negative there is no
+  // safe spend; collapse the recommendation to 0 instead of echoing
+  // back `spent.spentSoFar`, which used to look like a positive
+  // budget on the surface.
   const monthDays = daysInMonth(monthKey);
   const proRatedSpendable =
     daysRemaining > 0 ? (spendable * monthDays) / daysRemaining : spendable;
-  const recommendedMonthlyBudget = round2(
-    Math.max(0, spent.spentSoFar + proRatedSpendable),
-  );
+  const recommendedMonthlyBudget =
+    breakdown.available < 0
+      ? 0
+      : round2(Math.max(0, spent.spentSoFar + proRatedSpendable));
 
   return {
     cycleEndAt: cycleEnd.whenISO,
@@ -143,13 +174,19 @@ export function autoBudget(args: {
     willCrossZero: curve.crossesNegative,
     recommendedMonthlyBudget,
     safetyBufferApplied: round2(safetyBuffer),
+    breakdown,
+    availableUntilCycleEnd: breakdown.available,
   };
 }
 
 /** Returns the monthlyBudget the dashboard should use given the
  *  user's preference. Manual mode → user's typed value. Auto mode →
- *  the engine's recommendation, falling back to the manual value
- *  when the engine cannot compute (e.g. no anchors). */
+ *  the engine's recommendation. Phase 322: once the engine produces a
+ *  report we trust it, even when its recommendation is 0 (budget
+ *  exhausted). Falling back to a stale manual value here was the
+ *  source of the "₪7,393" mis-display when the user was already in
+ *  the minus. The only time we fall through to manual is when the
+ *  engine couldn't compute at all (no anchors). */
 export function effectiveMonthlyBudget(args: {
   monthlyBudget: number;
   budgetMode: "manual" | "auto";
@@ -157,9 +194,8 @@ export function effectiveMonthlyBudget(args: {
 }): number {
   if (args.budgetMode === "manual") return args.monthlyBudget;
   if (!args.autoReport) return args.monthlyBudget;
-  return args.autoReport.recommendedMonthlyBudget > 0
-    ? args.autoReport.recommendedMonthlyBudget
-    : args.monthlyBudget;
+  if (!args.autoReport.breakdown.hasAnchors) return args.monthlyBudget;
+  return args.autoReport.recommendedMonthlyBudget;
 }
 
 function pickCycleEnd(args: {
