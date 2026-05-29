@@ -80,6 +80,19 @@ const RiskWarningsCard = lazy(() =>
       m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
+// Phase 304 — interactive analytics widgets.
+const CategoryDonut = lazy(() =>
+  import("@/components/dashboard/category-donut").then((m) => ({
+    default:
+      m.CategoryDonut as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const HeatmapMini = lazy(() =>
+  import("@/components/dashboard/heatmap-mini").then((m) => ({
+    default:
+      m.HeatmapMini as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -205,6 +218,27 @@ export function ExpensesTab() {
       {/* Phase 275 — liquidity timeline kept here but folded behind
          a quiet accordion. Useful but visually heavy when always
          expanded. */}
+      {/* Phase 304 — interactive analytics. Donut for category
+         drilldown, heatmap for day-level exploration. Both are
+         clickable: tap a slice / day to see the full breakdown. */}
+      <DashboardSection
+        storageKey="expenses.analytics"
+        title="ניתוחים גרפיים"
+        subtitle="פילוח קטגוריות + חום ימי החודש — אינטראקטיביים"
+        defaultCollapsed
+      >
+        <div className="sm:col-span-6">
+          <Safe name="CategoryDonut">
+            <CategoryDonut />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6">
+          <Safe name="HeatmapMini">
+            <HeatmapMini />
+          </Safe>
+        </div>
+      </DashboardSection>
+
       <DashboardSection
         storageKey="expenses.liquidity-timeline"
         title="ציר נזילות 35 ימים"

@@ -1,11 +1,27 @@
 "use client";
 
-import { useMemo } from "react";
+// Phase 304 — interactive month heatmap.
+// Each day cell is now a button. Tap → opens a bottom sheet with
+// the day's breakdown: total spend, income (matched salary
+// dayOfMonth), per-category list of charges, biggest expense.
+// Heat color still maps to spend intensity. Smart day indicators
+// surface salary / heavy-spend days at-a-glance.
+
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import {
+  Activity,
+  AlertTriangle,
+  CalendarRange,
+  Wallet,
+} from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { sliceForMonth, daysInMonth } from "@/lib/projections";
 import { currentMonthKey, monthKeyOf } from "@/lib/dates";
+import { getCategory } from "@/lib/categories";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -13,11 +29,22 @@ const ILS = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
 });
 
-type DayCell = { day: number; total: number; intensity: number; isFuture: boolean };
+type DayCell = {
+  day: number;
+  total: number;
+  income: number;
+  intensity: number;
+  isFuture: boolean;
+  hasSalary: boolean;
+};
 
 export function HeatmapMini() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  const monthKey = currentMonthKey();
 
   const data = useMemo<{
     days: DayCell[];
@@ -25,7 +52,6 @@ export function HeatmapMini() {
     monthDays: number;
   }>(() => {
     if (!hydrated) return { days: [], monthTotal: 0, monthDays: 30 };
-    const monthKey = currentMonthKey();
     const monthDays = daysInMonth(monthKey);
     const today = new Date();
     const todayMonth = monthKeyOf(today);
@@ -36,21 +62,48 @@ export function HeatmapMini() {
       if (entry.needsConfirmation) continue;
       const slice = sliceForMonth(entry, monthKey);
       if (!slice) continue;
+      if (entry.isRefund) continue;
       const d = slice.chargeDate.getDate();
       if (d >= 1 && d <= monthDays) {
         totals[d - 1] += slice.amount;
       }
+    }
+    const incomeByDay = new Array(monthDays).fill(0) as number[];
+    const salaryDays = new Set<number>();
+    for (const inc of incomes) {
+      if (!inc.active || inc.amount <= 0) continue;
+      const d = Math.min(monthDays, Math.max(1, inc.dayOfMonth));
+      incomeByDay[d - 1] += inc.amount;
+      salaryDays.add(d);
     }
     const max = Math.max(...totals, 0);
     const monthTotal = totals.reduce((a, b) => a + b, 0);
     const days: DayCell[] = totals.map((total, i) => ({
       day: i + 1,
       total,
+      income: incomeByDay[i],
       intensity: max > 0 ? Math.min(1, total / max) : 0,
       isFuture: i + 1 > todayDay,
+      hasSalary: salaryDays.has(i + 1),
     }));
     return { days, monthTotal, monthDays };
-  }, [hydrated, entries]);
+  }, [hydrated, entries, incomes, monthKey]);
+
+  const dayEntries = useMemo(() => {
+    if (selectedDay === null || !hydrated) return [];
+    return entries
+      .filter((e) => {
+        if (e.needsConfirmation) return false;
+        const slice = sliceForMonth(e, monthKey);
+        if (!slice) return false;
+        return slice.chargeDate.getDate() === selectedDay;
+      })
+      .map((e) => ({
+        entry: e,
+        amount: sliceForMonth(e, monthKey)!.amount,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [selectedDay, entries, hydrated, monthKey]);
 
   return (
     <motion.div
@@ -70,15 +123,19 @@ export function HeatmapMini() {
 
       <div dir="ltr" className="grid grid-cols-7 gap-1.5">
         {data.days.map((d) => {
+          const heavy = d.intensity >= 0.75;
           const bg = d.isFuture
             ? "rgba(255,255,255,0.04)"
-            : d.intensity === 0
-              ? "rgba(255,255,255,0.05)"
-              : `color-mix(in oklab, var(--neon) ${Math.round(
-                  18 + d.intensity * 72,
-                )}%, transparent)`;
+            : d.income > 0 && d.total === 0
+              ? "color-mix(in oklab, #34D399 26%, transparent)"
+              : d.intensity === 0
+                ? "rgba(255,255,255,0.05)"
+                : `color-mix(in oklab, var(--neon) ${Math.round(
+                    18 + d.intensity * 72,
+                  )}%, transparent)`;
           return (
-            <motion.div
+            <motion.button
+              type="button"
               key={d.day}
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -88,14 +145,30 @@ export function HeatmapMini() {
                 stiffness: 280,
                 damping: 22,
               }}
-              className="relative flex aspect-square items-center justify-center rounded-md"
+              onClick={() => {
+                hapticTap();
+                setSelectedDay(d.day);
+              }}
+              aria-label={`יום ${d.day} · ${ILS.format(d.total)}${d.hasSalary ? " · משכורת" : ""}`}
+              className="relative flex aspect-square items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 hover:brightness-125"
               style={{ background: bg }}
               title={`יום ${d.day} · ${ILS.format(d.total)}`}
             >
               <span className="text-[9px] font-medium text-foreground/70">
                 {d.day}
               </span>
-            </motion.div>
+              {d.hasSalary ? (
+                <Wallet
+                  className="pointer-events-none absolute right-0.5 top-0.5 size-2 text-[#34D399]"
+                  aria-hidden
+                />
+              ) : heavy ? (
+                <AlertTriangle
+                  className="pointer-events-none absolute right-0.5 top-0.5 size-2 text-[#F87171]"
+                  aria-hidden
+                />
+              ) : null}
+            </motion.button>
           );
         })}
       </div>
@@ -117,6 +190,185 @@ export function HeatmapMini() {
         </div>
         <span>סוער</span>
       </div>
+
+      <DayDetailSheet
+        open={selectedDay !== null}
+        day={selectedDay}
+        dayCell={
+          selectedDay !== null
+            ? data.days[selectedDay - 1] ?? null
+            : null
+        }
+        entries={dayEntries}
+        onOpenChange={(o) => {
+          if (!o) setSelectedDay(null);
+        }}
+      />
     </motion.div>
+  );
+}
+
+function DayDetailSheet({
+  open,
+  day,
+  dayCell,
+  entries,
+  onOpenChange,
+}: {
+  open: boolean;
+  day: number | null;
+  dayCell: DayCell | null;
+  entries: Array<{
+    entry: import("@/types/finance").ExpenseEntry;
+    amount: number;
+  }>;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!day || !dayCell) {
+    return <BottomSheet open={open} onOpenChange={onOpenChange} title="פירוט יום"><div /></BottomSheet>;
+  }
+  const categoriesUsed = Array.from(
+    new Set(entries.map((e) => e.entry.category)),
+  );
+  const biggest = entries[0];
+  return (
+    <BottomSheet open={open} onOpenChange={onOpenChange} title={`פירוט יום ${day}`}>
+      <header className="flex items-center justify-between gap-2 pt-1">
+        <div className="flex items-center gap-2">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-[color:var(--neon)]/15 text-[color:var(--neon)]">
+            <CalendarRange className="size-4" />
+          </span>
+          <span className="text-section text-foreground">{`יום ${day} בחודש`}</span>
+        </div>
+        {dayCell.hasSalary ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#34D399]/15 px-2 py-0.5 text-[10px] text-[#34D399]">
+            <Wallet className="size-3" />
+            משכורת ביום הזה
+          </span>
+        ) : null}
+      </header>
+
+      <div className="grid grid-cols-2 gap-2">
+        <DayStat
+          icon={<Activity className="size-3.5" />}
+          label="סך הוצאות"
+          value={ILS.format(Math.round(dayCell.total))}
+          tone={dayCell.total > 0 ? "#F87171" : "#A1A1AA"}
+        />
+        <DayStat
+          icon={<Wallet className="size-3.5" />}
+          label="סך הכנסות"
+          value={ILS.format(Math.round(dayCell.income))}
+          tone={dayCell.income > 0 ? "#34D399" : "#A1A1AA"}
+        />
+      </div>
+
+      {biggest ? (
+        <div className="rounded-2xl border border-white/8 bg-black/25 p-3">
+          <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+            ההוצאה הגדולה ביום
+          </span>
+          <div className="mt-1 flex items-baseline justify-between gap-2">
+            <span className="truncate text-caption text-foreground">
+              {biggest.entry.merchant ?? biggest.entry.note ?? "חיוב"}
+            </span>
+            <span
+              data-mono="true"
+              dir="ltr"
+              className="text-caption font-medium text-[#F87171]"
+            >
+              −{ILS.format(Math.round(biggest.amount))}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {categoriesUsed.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {categoriesUsed.map((c) => {
+            const meta = getCategory(c);
+            return (
+              <span
+                key={c}
+                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]"
+                style={{
+                  color: meta.accent,
+                  borderColor: `${meta.accent}44`,
+                  background: `${meta.accent}15`,
+                }}
+              >
+                {meta.label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <ul className="flex flex-col gap-1.5">
+        {entries.length === 0 ? (
+          <li className="rounded-2xl border border-white/8 bg-black/25 p-3 text-center text-caption text-muted-foreground">
+            לא חויב כלום ביום הזה. {dayCell.income > 0 ? "הכנסה צפויה." : "שקט."}
+          </li>
+        ) : (
+          entries.map(({ entry, amount }, idx) => {
+            const meta = getCategory(entry.category);
+            return (
+              <li
+                key={`${entry.id}-${idx}`}
+                className="flex items-center justify-between gap-2 rounded-xl border border-white/6 bg-black/25 p-2.5"
+              >
+                <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                  <span className="truncate text-[12px] text-foreground">
+                    {entry.merchant ?? entry.note ?? "חיוב"}
+                  </span>
+                  <span
+                    className="text-[10px]"
+                    style={{ color: meta.accent }}
+                  >
+                    {meta.label}
+                  </span>
+                </div>
+                <span
+                  data-mono="true"
+                  dir="ltr"
+                  className="text-[12px] font-medium text-[#F87171]"
+                >
+                  −{ILS.format(Math.round(amount))}
+                </span>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </BottomSheet>
+  );
+}
+
+function DayStat({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-2xl border border-white/8 bg-black/25 p-2.5">
+      <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+        {icon}
+        {label}
+      </span>
+      <span
+        data-mono="true"
+        dir="ltr"
+        className="text-body font-medium"
+        style={{ color: tone }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }

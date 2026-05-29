@@ -1,14 +1,27 @@
 "use client";
 
+// Phase 304 — interactive category donut.
+// Tap a slice / list row → select. Center text + the slice itself
+// react: selected stroke widens, other slices fade. Center shows
+// per-category stats (amount, percentage, transaction count, avg).
+// Long-form drilldown still available via the explicit "פתח פירוט"
+// button inside the center.
+
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { ArrowLeft } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
-import { categoryTotals, sliceForMonth } from "@/lib/projections";
-import { currentMonthKey } from "@/lib/dates";
-import { CATEGORIES, type CategoryId } from "@/lib/categories";
+import { sliceForMonth } from "@/lib/projections";
+import { addMonths, currentMonthKey } from "@/lib/dates";
+import {
+  CATEGORIES,
+  getCategory,
+  type CategoryId,
+} from "@/lib/categories";
+import type { MonthKey } from "@/types/finance";
 import { CategoryDrilldownSheet } from "@/components/dashboard/category-drilldown-sheet";
-import { tap } from "@/lib/haptics";
+import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -18,39 +31,83 @@ const ILS = new Intl.NumberFormat("he-IL", {
 
 const SIZE = 168;
 const STROKE = 18;
-const RADIUS = (SIZE - STROKE) / 2;
+const STROKE_SELECTED = 26;
+const RADIUS = (SIZE - STROKE_SELECTED) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+type PeriodKey = "this" | "prev" | "prev2";
+const PERIODS: Array<{ key: PeriodKey; label: string }> = [
+  { key: "this", label: "החודש" },
+  { key: "prev", label: "חודש שעבר" },
+  { key: "prev2", label: "לפני 2 חודשים" },
+];
+
+function monthKeyFor(p: PeriodKey): MonthKey {
+  if (p === "this") return currentMonthKey();
+  if (p === "prev") return addMonths(currentMonthKey(), -1);
+  return addMonths(currentMonthKey(), -2);
+}
 
 export function CategoryDonut() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
+  const [period, setPeriod] = useState<PeriodKey>("this");
+  const [selected, setSelected] = useState<CategoryId | null>(null);
   const [drilldown, setDrilldown] = useState<CategoryId | null>(null);
-  const monthKey = currentMonthKey();
+  const monthKey = monthKeyFor(period);
 
   const data = useMemo(() => {
-    if (!hydrated) return { slices: [], total: 0 };
-    // Only count entries with a slice this month, and exclude user-side pending.
-    const livedEntries = entries.filter((e) => {
-      if (e.needsConfirmation) return false;
-      return sliceForMonth(e, monthKey) !== null;
-    });
-    const totals = categoryTotals({
-      entries: livedEntries,
-      monthKey,
-    });
-    const total = Array.from(totals.values()).reduce((a, b) => a + b, 0);
-    const slices = CATEGORIES.map((c) => ({
-      id: c.id as CategoryId,
-      label: c.label,
-      accent: c.accent,
-      amount: totals.get(c.id) ?? 0,
-    }))
+    if (!hydrated) {
+      return {
+        slices: [] as Array<{
+          id: CategoryId;
+          label: string;
+          accent: string;
+          amount: number;
+          count: number;
+          biggest: number;
+        }>,
+        total: 0,
+        count: 0,
+      };
+    }
+    type Agg = {
+      id: CategoryId;
+      label: string;
+      accent: string;
+      amount: number;
+      count: number;
+      biggest: number;
+    };
+    const map = new Map<CategoryId, Agg>();
+    for (const e of entries) {
+      if (e.needsConfirmation) continue;
+      const slice = sliceForMonth(e, monthKey);
+      if (!slice) continue;
+      if (e.isRefund) continue;
+      const meta = getCategory(e.category);
+      const cur = map.get(e.category) ?? {
+        id: e.category,
+        label: meta.label,
+        accent: meta.accent,
+        amount: 0,
+        count: 0,
+        biggest: 0,
+      };
+      cur.amount += slice.amount;
+      cur.count += 1;
+      if (slice.amount > cur.biggest) cur.biggest = slice.amount;
+      map.set(e.category, cur);
+    }
+    const slices = CATEGORIES.map((c) => map.get(c.id as CategoryId))
+      .filter((s): s is Agg => Boolean(s))
       .filter((s) => s.amount > 0)
       .sort((a, b) => b.amount - a.amount);
-    return { slices, total };
+    const total = slices.reduce((acc, s) => acc + s.amount, 0);
+    const count = slices.reduce((acc, s) => acc + s.count, 0);
+    return { slices, total, count };
   }, [hydrated, entries, monthKey]);
 
-  // Pre-compute the dasharray offset for each slice.
   const arcs = useMemo(() => {
     if (data.total <= 0) return [];
     let acc = 0;
@@ -68,6 +125,10 @@ export function CategoryDonut() {
     });
   }, [data]);
 
+  const selectedAgg = selected
+    ? data.slices.find((s) => s.id === selected) ?? null
+    : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -75,11 +136,35 @@ export function CategoryDonut() {
       transition={{ delay: 0.1, duration: 0.4 }}
       className="glass-card flex flex-col gap-3 rounded-3xl p-5"
     >
-      <header className="flex items-baseline justify-between">
+      <header className="flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground/90">
           פילוח לפי קטגוריה
         </h3>
-        <span className="text-xs text-muted-foreground">החודש</span>
+        <div className="flex gap-1.5" role="radiogroup" aria-label="טווח זמן">
+          {PERIODS.map((p) => {
+            const active = period === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => {
+                  hapticTap();
+                  setPeriod(p.key);
+                  setSelected(null);
+                }}
+                className={`rounded-full px-2.5 py-0.5 text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+                  active
+                    ? "bg-[color:var(--neon)]/20 text-[color:var(--neon)]"
+                    : "border border-white/10 bg-black/30 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
       </header>
 
       <div className="flex items-center gap-4">
@@ -94,82 +179,149 @@ export function CategoryDonut() {
               strokeWidth={STROKE}
               fill="none"
             />
-            {arcs.map((a, idx) => (
-              <motion.circle
-                key={a.id}
-                cx={SIZE / 2}
-                cy={SIZE / 2}
-                r={RADIUS}
-                stroke={a.accent}
-                strokeWidth={STROKE}
-                fill="none"
-                strokeLinecap="butt"
-                initial={{ strokeDasharray: `0 ${CIRCUMFERENCE}` }}
-                animate={{
-                  strokeDasharray: `${a.length} ${CIRCUMFERENCE - a.length}`,
-                  strokeDashoffset: -a.offset,
-                }}
-                transition={{
-                  delay: 0.15 + idx * 0.05,
-                  duration: 0.7,
-                  ease: "easeOut",
-                }}
-                style={{
-                  transform: `rotate(-90deg)`,
-                  transformOrigin: "center",
-                }}
-              />
-            ))}
+            {arcs.map((a, idx) => {
+              const isSelected = selected === a.id;
+              const dim = selected !== null && !isSelected;
+              return (
+                <motion.circle
+                  key={a.id}
+                  cx={SIZE / 2}
+                  cy={SIZE / 2}
+                  r={RADIUS}
+                  stroke={a.accent}
+                  fill="none"
+                  strokeLinecap="butt"
+                  initial={{ strokeDasharray: `0 ${CIRCUMFERENCE}` }}
+                  animate={{
+                    strokeDasharray: `${a.length} ${CIRCUMFERENCE - a.length}`,
+                    strokeDashoffset: -a.offset,
+                    strokeWidth: isSelected ? STROKE_SELECTED : STROKE,
+                    opacity: dim ? 0.35 : 1,
+                  }}
+                  transition={{
+                    delay: 0.15 + idx * 0.05,
+                    duration: 0.45,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  style={{
+                    transform: `rotate(-90deg)`,
+                    transformOrigin: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    hapticTap();
+                    setSelected((cur) => (cur === a.id ? null : a.id));
+                  }}
+                />
+              );
+            })}
           </svg>
 
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-              סך הכל
-            </span>
-            <span
-              dir="ltr"
-              className="font-mono text-xl font-semibold text-foreground"
-            >
-              {ILS.format(data.total)}
-            </span>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            {selectedAgg ? (
+              <>
+                <span
+                  className="text-[10px] uppercase tracking-[0.22em]"
+                  style={{ color: selectedAgg.accent }}
+                >
+                  {selectedAgg.label}
+                </span>
+                <span
+                  dir="ltr"
+                  className="font-mono text-lg font-semibold text-foreground"
+                >
+                  {ILS.format(Math.round(selectedAgg.amount))}
+                </span>
+                <span className="text-[10px] text-muted-foreground/85">
+                  {Math.round(
+                    (selectedAgg.amount / Math.max(1, data.total)) * 100,
+                  )}
+                  % · {selectedAgg.count} פעולות
+                </span>
+                <span className="text-[10px] text-muted-foreground/70">
+                  גדול: {ILS.format(Math.round(selectedAgg.biggest))}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+                  סך הכל
+                </span>
+                <span
+                  dir="ltr"
+                  className="font-mono text-xl font-semibold text-foreground"
+                >
+                  {ILS.format(data.total)}
+                </span>
+                <span className="text-[10px] text-muted-foreground/70">
+                  {data.count} פעולות
+                </span>
+              </>
+            )}
           </div>
         </div>
 
         <ul className="flex flex-1 flex-col gap-1">
-          {data.slices.slice(0, 5).map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  tap();
-                  setDrilldown(s.id);
-                }}
-                className="flex w-full items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-xs transition-colors hover:bg-white/5"
-              >
-                <span className="flex items-center gap-2 text-foreground/85">
+          {data.slices.slice(0, 5).map((s) => {
+            const active = selected === s.id;
+            return (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    hapticTap();
+                    setSelected((cur) => (cur === s.id ? null : s.id));
+                  }}
+                  aria-pressed={active}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-1.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
+                    active ? "bg-white/8" : "hover:bg-white/5"
+                  }`}
+                >
                   <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: s.accent }}
-                  />
-                  {s.label}
-                </span>
-                <span dir="ltr" className="font-mono text-foreground/70">
-                  {ILS.format(s.amount)}
-                </span>
-              </button>
-            </li>
-          ))}
+                    className="flex items-center gap-2"
+                    style={{
+                      color: active ? s.accent : "var(--foreground)",
+                    }}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: s.accent }}
+                    />
+                    {s.label}
+                  </span>
+                  <span dir="ltr" className="font-mono text-foreground/70">
+                    {ILS.format(s.amount)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
           {data.slices.length === 0 && (
             <li className="text-xs text-muted-foreground">
-              אין עדיין הוצאות החודש.
+              אין עדיין הוצאות בתקופה הזו.
             </li>
           )}
         </ul>
       </div>
 
+      {selectedAgg ? (
+        <button
+          type="button"
+          onClick={() => {
+            hapticTap();
+            setDrilldown(selectedAgg.id);
+          }}
+          aria-label={`פתח פירוט עסקאות בקטגוריית ${selectedAgg.label}`}
+          className="inline-flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+        >
+          פתח פירוט עסקאות
+          <ArrowLeft className="size-3" />
+        </button>
+      ) : null}
+
       {drilldown && (
         <CategoryDrilldownSheet
-          key={drilldown}
+          key={`${drilldown}-${monthKey}`}
           open={Boolean(drilldown)}
           onOpenChange={(v) => {
             if (!v) setDrilldown(null);
