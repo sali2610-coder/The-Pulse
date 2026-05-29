@@ -20,6 +20,7 @@ import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
+import { ObligationsAndWeek } from "@/components/future/obligations-and-week";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -37,18 +38,8 @@ const LiquidityCurveCard = lazy(() =>
       m.LiquidityCurveCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const CashflowBucketsCard = lazy(() =>
-  import("@/components/dashboard/cashflow-buckets-card").then((m) => ({
-    default:
-      m.CashflowBucketsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const UpcomingOutflowsCard = lazy(() =>
-  import("@/components/dashboard/upcoming-outflows-card").then((m) => ({
-    default:
-      m.UpcomingOutflowsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 287 — CashflowBucketsCard + UpcomingOutflowsCard now live
+// behind the ObligationsAndWeek lens selector below.
 const ForecastTimelineCard = lazy(() =>
   import("@/components/dashboard/forecast-timeline-card").then((m) => ({
     default:
@@ -81,14 +72,12 @@ export function FutureTab() {
           <LiquidityCurveCard />
         </Safe>
       </div>
+      {/* Phase 287 — "התחייבויות לפי מקור" + "השבוע הבא" merged into
+         one button-driven container. Default closed; user picks the
+         lens. Only one open at a time. */}
       <div className="sm:col-span-6">
-        <Safe name="CashflowBucketsCard">
-          <CashflowBucketsCard />
-        </Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="UpcomingOutflowsCard">
-          <UpcomingOutflowsCard />
+        <Safe name="ObligationsAndWeek">
+          <ObligationsAndWeek />
         </Safe>
       </div>
       <div className="sm:col-span-6">
