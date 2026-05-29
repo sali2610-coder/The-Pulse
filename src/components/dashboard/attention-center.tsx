@@ -26,17 +26,22 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
+  Banknote,
   CalendarCheck,
   Check,
   CheckCircle2,
   CreditCard,
+  Landmark,
   Lightbulb,
   ListChecks,
   Receipt,
   Sparkles,
   Trash2,
+  Wallet,
   XCircle,
 } from "lucide-react";
+
+import type { Account, ExpenseEntry } from "@/types/finance";
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
@@ -60,6 +65,8 @@ const ILS = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
 });
 
+type ConfirmSource = "credit" | "cash" | "bank" | "wallet";
+
 type AttentionItem = {
   id: string;
   group: "confirm" | "risk" | "review";
@@ -72,10 +79,84 @@ type AttentionItem = {
   /** Confirm group only — the underlying ExpenseEntry id so the
    *  inline approve / delete chips can call the store directly. */
   entryId?: string;
+  /** Confirm group only — amount used for delete confirmation gating. */
+  amount?: number;
+  /** Confirm group only — payment source for tone + icon. */
+  source?: ConfirmSource;
   /** Review group only — maps the recurring-summary item kind to a
    *  DetectorKind + a stable targetId for the 7-day dismissal. */
   dismissKey?: { kind: DetectorKind; targetId: string };
+  /** Confirm group only — date sort key so the list shows newest
+   *  first and falls back to amount desc when timestamps tie. */
+  whenMs?: number;
 };
+
+const SOURCE_TONE: Record<ConfirmSource, string> = {
+  credit: "#60A5FA",
+  cash: "#34D399",
+  bank: "#22D3EE",
+  wallet: "#A78BFA",
+};
+
+const SOURCE_LABEL: Record<ConfirmSource, string> = {
+  credit: "אשראי",
+  cash: "מזומן",
+  bank: "בנק",
+  wallet: "Wallet",
+};
+
+function sourceIcon(s: ConfirmSource): React.ReactNode {
+  if (s === "credit") return <CreditCard className="size-3.5" />;
+  if (s === "cash") return <Banknote className="size-3.5" />;
+  if (s === "bank") return <Landmark className="size-3.5" />;
+  return <Wallet className="size-3.5" />;
+}
+
+function classifySource(e: ExpenseEntry, accounts: Account[]): ConfirmSource {
+  if (e.source === "wallet") return "wallet";
+  if (e.paymentMethod === "cash") return "cash";
+  if (e.accountId) {
+    const acc = accounts.find((a) => a.id === e.accountId);
+    if (acc?.kind === "bank") return "bank";
+    if (acc?.kind === "card") return "credit";
+  }
+  if (e.cardLast4) return "credit";
+  return "credit";
+}
+
+function cardLabelFor(e: ExpenseEntry, accounts: Account[]): string | null {
+  if (e.accountId) {
+    const acc = accounts.find((a) => a.id === e.accountId);
+    if (acc?.kind === "card") {
+      const parts: string[] = [];
+      if (acc.label) parts.push(acc.label);
+      const tail = acc.cardLast4 ?? e.cardLast4;
+      if (tail) parts.push(`****${tail}`);
+      return parts.length ? parts.join(" ") : null;
+    }
+  }
+  if (e.cardLast4) return `****${e.cardLast4}`;
+  return null;
+}
+
+function formatWhen(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `היום ${hh}:${mm}`;
+  }
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mo}`;
+}
 
 const GROUP_LABEL: Record<AttentionItem["group"], string> = {
   confirm: "ממתינים לאישור",
@@ -106,19 +187,43 @@ export function AttentionCenter() {
     const out: AttentionItem[] = [];
 
     // 1. Pending confirmations — strongest urgency.
+    const confirmRows: AttentionItem[] = [];
     for (const e of entries) {
       if (!e.needsConfirmation || e.confirmedAt) continue;
-      out.push({
+      const source = classifySource(e, accounts);
+      const tone = SOURCE_TONE[source];
+      const whenStr = formatWhen(e.chargeDate ?? e.createdAt);
+      const cardStr = source === "credit" ? cardLabelFor(e, accounts) : null;
+      const detailParts = [
+        ILS.format(Math.round(Math.abs(e.amount))),
+        SOURCE_LABEL[source],
+        cardStr,
+        whenStr,
+        "ממתין לקטגוריה",
+      ].filter((p): p is string => Boolean(p));
+      const whenMs = new Date(e.chargeDate ?? e.createdAt ?? 0).getTime();
+      confirmRows.push({
         id: `confirm:${e.id}`,
         group: "confirm",
         title: e.merchant || e.note || "חיוב ממתין לאישור",
-        detail: `${ILS.format(Math.round(Math.abs(e.amount)))} · נדרש זיהוי קטגוריה`,
-        tone: "#FBBF24",
-        icon: <Receipt className="size-3.5" />,
+        detail: detailParts.join(" • "),
+        tone,
+        icon: sourceIcon(source),
         goTo: "dashboard",
         entryId: e.id,
+        amount: Math.abs(e.amount),
+        source,
+        whenMs: Number.isFinite(whenMs) ? whenMs : 0,
       });
     }
+    // Sort newest first, then by amount desc on ties.
+    confirmRows.sort((a, b) => {
+      const dt = (b.whenMs ?? 0) - (a.whenMs ?? 0);
+      if (dt !== 0) return dt;
+      return (b.amount ?? 0) - (a.amount ?? 0);
+    });
+    out.push(...confirmRows);
+    void Receipt;
 
     // 2. AI risk insights — top 3.
     const ai = gatherAiInsights({
@@ -229,6 +334,13 @@ export function AttentionCenter() {
 
   function handleDelete(it: AttentionItem) {
     if (!it.entryId) return;
+    // Phase 305 — confirm on larger amounts so the user can't
+    // accidentally drop a real ₪1,250 charge with a single tap.
+    if ((it.amount ?? 0) >= 500 && typeof window !== "undefined") {
+      const amountStr = ILS.format(Math.round(it.amount ?? 0));
+      const ok = window.confirm(`למחוק את החיוב ${amountStr} מהרשימה?`);
+      if (!ok) return;
+    }
     hapticTap();
     dismissPending(it.entryId);
   }
