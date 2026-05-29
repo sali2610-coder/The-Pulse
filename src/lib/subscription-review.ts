@@ -49,9 +49,10 @@ export type SubscriptionReviewCandidate = {
 };
 
 /** Phase 296 — minimum confidence floor. Anything below this is
- *  treated as noise and hidden. Exported so the UI can run the same
- *  filter on subsets it builds. */
-export const MIN_REVIEW_CONFIDENCE = 0.7;
+ *  treated as noise and hidden. Phase 310 — bumped from 0.7 → 0.85
+ *  after the "ניתוח פאקו 73%" false alert. Only high-signal items
+ *  reach the user now. */
+export const MIN_REVIEW_CONFIDENCE = 0.85;
 
 const STALE_DAYS_THRESHOLD = 45;
 const RISING_PCT_THRESHOLD = 0.15; // 15% MoM bump signals drift
@@ -85,12 +86,12 @@ export function subscriptionReview(args: {
       (now.getTime() - new Date(lastMatched.chargeDate).getTime()) /
       86_400_000;
     if (ageDays >= STALE_DAYS_THRESHOLD) {
-      // Confidence ramps up the longer the gap stays open. 45 → 0.7,
-      // 90 → 0.9, 180+ → 1.0. The user's app installs already filter
-      // active rules, so this is "you might have forgotten me".
+      // Confidence ramps up the longer the gap stays open. Phase 310
+      // — base bumped to 0.85 so this never fires until the gap
+      // genuinely looks like a forgotten rule. 45 → 0.85, 180+ → 1.0.
       const confidence = Math.min(
         1,
-        0.7 + ((ageDays - STALE_DAYS_THRESHOLD) / 180) * 0.3,
+        0.85 + ((ageDays - STALE_DAYS_THRESHOLD) / 180) * 0.15,
       );
       out.push({
         ruleId: rule.id,
@@ -123,8 +124,9 @@ export function subscriptionReview(args: {
     if (m2 > 0 && m1 > 0 && (m1 - m2) / m2 >= RISING_PCT_THRESHOLD) {
       const delta = m1 - (m3 > 0 ? m3 : m2);
       const pct = (m1 - m2) / m2;
-      // 15% bump → 0.7 baseline; bigger jumps map closer to 1.0.
-      const confidence = Math.min(1, 0.7 + (pct - RISING_PCT_THRESHOLD) * 1.5);
+      // Phase 310 — 15% bump → 0.85 baseline; bigger jumps map
+      // closer to 1.0.
+      const confidence = Math.min(1, 0.85 + (pct - RISING_PCT_THRESHOLD) * 1.5);
       out.push({
         ruleId: rule.id,
         label: rule.label,
@@ -136,69 +138,15 @@ export function subscriptionReview(args: {
     }
   }
 
-  // 3. Duplicate-looking rules — same category + overlapping label tokens.
-  // Phase 296 — much stricter. Token overlap alone produced false
-  // alerts like "אחריות רכב" vs "רכב". We now require:
-  //   • ≥ 2 shared 3+ char tokens OR canonical-merchant-key match
-  //   • amount within ±25% AND ≤ ₪50 absolute delta
-  //   • not linked to different cards (intentional split)
-  //   • category matches
-  // and we only emit when the combined confidence ≥ MIN_REVIEW_CONFIDENCE.
-  for (let i = 0; i < activeRules.length; i++) {
-    const a = activeRules[i];
-    for (let j = i + 1; j < activeRules.length; j++) {
-      const b = activeRules[j];
-      if (a.category !== b.category) continue;
-      if (
-        a.linkedCardId &&
-        b.linkedCardId &&
-        a.linkedCardId !== b.linkedCardId
-      ) {
-        // Different card per rule — looks intentional (e.g. same
-        // subscription paid by two cards).
-        continue;
-      }
-      const shared = sharedTokenCount(a.label, b.label);
-      const sameCanonical = canonicalLabelMatch(a.label, b.label);
-      const longSharedBrand = sharedLongTokenCount(a.label, b.label, 5);
-      // Accept either:
-      //   • canonical match (identical token bag)
-      //   • ≥ 2 shared 3+ char tokens
-      //   • exactly 1 shared "brand-like" token (≥ 5 chars) — like
-      //     "netflix" in "Netflix Family" vs "Netflix Premium"
-      if (!sameCanonical && shared < 2 && longSharedBrand < 1) continue;
-
-      const amtDelta = Math.abs(a.estimatedAmount - b.estimatedAmount);
-      const amtRel =
-        Math.max(a.estimatedAmount, b.estimatedAmount) > 0
-          ? amtDelta / Math.max(a.estimatedAmount, b.estimatedAmount)
-          : 1;
-      if (amtRel > 0.25 && amtDelta > 50) continue;
-
-      // Confidence: canonical-match base 0.92 (very high), 2-token
-      // base 0.8, single-brand-token base 0.78. Penalize amount
-      // divergence so a ±25% spread drops the score by ~0.075.
-      let confidence: number;
-      if (sameCanonical) confidence = 0.92;
-      else if (shared >= 2) confidence = 0.8 + Math.min(0.1, (shared - 2) * 0.04);
-      else confidence = 0.78;
-      confidence -= amtRel * 0.3;
-      confidence = Math.max(0, Math.min(1, confidence));
-      if (confidence < MIN_REVIEW_CONFIDENCE) continue;
-
-      out.push({
-        ruleId: b.id,
-        label: b.label,
-        amount: b.estimatedAmount,
-        reason: "duplicate_lookalike",
-        reasonText: sameCanonical
-          ? `שם זהה ל־"${a.label}" באותה קטגוריה`
-          : `${shared} מילים זהות ל־"${a.label}" באותה קטגוריה (פער של ${Math.round(amtDelta)}₪)`,
-        duplicateOfRuleId: a.id,
-        confidence,
-      });
-    }
-  }
+  // Phase 310 — duplicate_lookalike branch removed entirely.
+  // The label-token heuristic produced false alerts on rules
+  // that shared a single generic Hebrew word ("ניתוח פאקו" vs
+  // "ניתוח דם", "אחריות רכב" vs "רכב", etc.). Until the user
+  // has a real per-transaction duplicate signal (same card + same
+  // amount + same minute), this detector stays off.
+  // The ReviewReason union still includes "duplicate_lookalike"
+  // so type consumers (UI labels, dismissal storage) keep working
+  // if the detector is re-enabled later.
 
   // 4. Low-value signal — small amount AND only 1-2 matched charges
   //    in the last 3 months. The user might be paying for something
@@ -222,10 +170,10 @@ export function subscriptionReview(args: {
         amount: rule.estimatedAmount,
         reason: "low_value_signal",
         reasonText: `חיוב קטן (${Math.round(rule.estimatedAmount)} ש"ח) עם כיסוי נמוך לאחרונה — שווה לוודא שאתה משתמש בשירות.`,
-        // Heuristic — soft confidence, but still passes the floor
-        // because a tiny rule with no recent matches is worth a
-        // glance.
-        confidence: 0.72,
+        // Phase 310 — soft confidence bumped above the 0.85 floor.
+        // Only fires for tiny rules with sparse coverage; the user
+        // can still dismiss via the existing chip.
+        confidence: 0.86,
       });
     }
   }
@@ -236,34 +184,10 @@ export function subscriptionReview(args: {
   return out.filter((c) => c.confidence >= MIN_REVIEW_CONFIDENCE);
 }
 
-function sharedTokenCount(a: string, b: string): number {
-  const ta = new Set(tokenize(a));
-  let n = 0;
-  for (const t of new Set(tokenize(b))) {
-    if (ta.has(t) && t.length >= 3) n += 1;
-  }
-  return n;
-}
-
-function sharedLongTokenCount(a: string, b: string, minLen: number): number {
-  const ta = new Set(tokenize(a));
-  let n = 0;
-  for (const t of new Set(tokenize(b))) {
-    if (ta.has(t) && t.length >= minLen) n += 1;
-  }
-  return n;
-}
-
-function canonicalLabelMatch(a: string, b: string): boolean {
-  return canonical(a) === canonical(b);
-}
-
-function canonical(s: string): string {
-  return tokenize(s)
-    .filter((t) => t.length >= 3)
-    .sort()
-    .join("|");
-}
+// Phase 310 — sharedTokenCount / sharedLongTokenCount /
+// canonicalLabelMatch / canonical helpers removed along with the
+// duplicate_lookalike branch. tokenize() is no longer referenced
+// here either.
 
 function sumMatchedForRule(args: {
   entries: ExpenseEntry[];
@@ -299,10 +223,3 @@ function countMatchedForRule(args: {
   return n;
 }
 
-function tokenize(s: string): string[] {
-  return s
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-}

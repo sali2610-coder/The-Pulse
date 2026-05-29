@@ -86,7 +86,10 @@ describe("subscriptionReview", () => {
     expect(out.find((c) => c.reason === "rising_price")).toBeDefined();
   });
 
-  it("flags duplicate_lookalike when two rules share a label token + category", () => {
+  it("Phase 310 — duplicate_lookalike detector is disabled (no fires)", () => {
+    // Even with strong overlap, the duplicate branch no longer
+    // emits. Drop too noisy; user feedback "ניתוח פאקו 73%" false
+    // positive.
     const a = rule({ id: "r1", label: "Netflix Family" });
     const b = rule({ id: "r2", label: "Netflix Premium" });
     const out = subscriptionReview({
@@ -94,22 +97,6 @@ describe("subscriptionReview", () => {
       entries: [
         matchedEntry(a.id, 80, "2026-05-01T00:00:00.000Z"),
         matchedEntry(b.id, 80, "2026-05-01T00:00:00.000Z"),
-      ],
-      now: NOW,
-    });
-    const dup = out.find((c) => c.reason === "duplicate_lookalike");
-    expect(dup).toBeDefined();
-    expect(dup?.duplicateOfRuleId).toBe(a.id);
-  });
-
-  it("does NOT flag duplicate when only short overlap (e.g. 'a')", () => {
-    const a = rule({ id: "r1", label: "A Sub" });
-    const b = rule({ id: "r2", label: "A Different" });
-    const out = subscriptionReview({
-      rules: [a, b],
-      entries: [
-        matchedEntry(a.id, 50, "2026-05-01T00:00:00.000Z"),
-        matchedEntry(b.id, 50, "2026-05-01T00:00:00.000Z"),
       ],
       now: NOW,
     });
@@ -158,26 +145,22 @@ describe("subscriptionReview", () => {
     expect(out.find((c) => c.reason === "duplicate_lookalike")).toBeUndefined();
   });
 
-  it("Phase 296 — every emitted candidate has confidence ≥ MIN_REVIEW_CONFIDENCE", () => {
-    const a = rule({ id: "r1", label: "Netflix Family" });
-    const b = rule({ id: "r2", label: "Netflix Premium" });
+  it("Phase 310 — every emitted candidate has confidence ≥ MIN_REVIEW_CONFIDENCE (0.85)", () => {
     const stale = rule({
       id: "r3",
       label: "Stale",
       // matched 90 days ago
     });
     const out = subscriptionReview({
-      rules: [a, b, stale],
+      rules: [stale],
       entries: [
-        matchedEntry(a.id, 80, "2026-05-01T00:00:00.000Z"),
-        matchedEntry(b.id, 80, "2026-05-01T00:00:00.000Z"),
         matchedEntry(stale.id, 30, "2026-02-01T00:00:00.000Z"),
       ],
       now: NOW,
     });
     expect(out.length).toBeGreaterThan(0);
     for (const c of out) {
-      expect(c.confidence).toBeGreaterThanOrEqual(0.7);
+      expect(c.confidence).toBeGreaterThanOrEqual(0.85);
     }
   });
 
