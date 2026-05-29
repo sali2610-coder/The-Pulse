@@ -22,17 +22,20 @@
 // sees next.
 
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
   CalendarCheck,
+  Check,
   CheckCircle2,
   CreditCard,
   Lightbulb,
   ListChecks,
   Receipt,
   Sparkles,
+  Trash2,
+  XCircle,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
@@ -45,7 +48,11 @@ import {
 import { gatherAiInsights } from "@/lib/ai-insights";
 import { buildRecurringSectionSummary } from "@/lib/recurring-section-summary";
 import { navigateToTab, type TabId } from "@/lib/tab-nav";
-import { tap as hapticTap } from "@/lib/haptics";
+import { tap as hapticTap, success as hapticSuccess } from "@/lib/haptics";
+import {
+  dismissInsight,
+  type DetectorKind,
+} from "@/lib/insight-dismiss";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -62,6 +69,12 @@ type AttentionItem = {
   icon: React.ReactNode;
   goTo: TabId;
   section?: string;
+  /** Confirm group only — the underlying ExpenseEntry id so the
+   *  inline approve / delete chips can call the store directly. */
+  entryId?: string;
+  /** Review group only — maps the recurring-summary item kind to a
+   *  DetectorKind + a stable targetId for the 7-day dismissal. */
+  dismissKey?: { kind: DetectorKind; targetId: string };
 };
 
 const GROUP_LABEL: Record<AttentionItem["group"], string> = {
@@ -103,6 +116,7 @@ export function AttentionCenter() {
         tone: "#FBBF24",
         icon: <Receipt className="size-3.5" />,
         goTo: "dashboard",
+        entryId: e.id,
       });
     }
 
@@ -138,6 +152,19 @@ export function AttentionCenter() {
       monthKey,
     });
     for (const it of recurring.insightItems.slice(0, 3)) {
+      // Map insight kind → DetectorKind for inline 7-day dismissal.
+      // endingSoon is a positive signal — no dismissal exposed.
+      let dismissKey: { kind: DetectorKind; targetId: string } | undefined;
+      if (it.kind === "drift") {
+        const ruleId = it.id.replace(/^drift:/, "");
+        dismissKey = { kind: "rule-drift", targetId: ruleId };
+      } else if (it.kind === "dormant") {
+        const ruleId = it.id.replace(/^dormant:/, "");
+        dismissKey = { kind: "dormant-rule", targetId: ruleId };
+      } else if (it.kind === "subscription") {
+        const merchantKey = it.id.replace(/^subscription:/, "");
+        dismissKey = { kind: "subscription", targetId: merchantKey };
+      }
       out.push({
         id: `review:${it.id}`,
         group: "review",
@@ -156,6 +183,7 @@ export function AttentionCenter() {
           ),
         goTo: "analytics",
         section: "expenses-recurring",
+        dismissKey,
       });
     }
 
@@ -181,10 +209,34 @@ export function AttentionCenter() {
     return map;
   }, [items]);
 
-  function handleItem(it: AttentionItem) {
+  const confirmExpense = useFinanceStore((s) => s.confirmExpense);
+  const dismissPending = useFinanceStore((s) => s.dismissPending);
+
+  function handleOpen(it: AttentionItem) {
     hapticTap();
     closeAttentionCenter();
     navigateToTab(it.goTo, it.section);
+  }
+
+  function handleApprove(it: AttentionItem) {
+    if (!it.entryId) return;
+    hapticSuccess();
+    // Confirm without any patch — keeps the existing category /
+    // amount / merchant. The user can still edit via the "פתח" action
+    // if anything needs correction.
+    confirmExpense(it.entryId, {});
+  }
+
+  function handleDelete(it: AttentionItem) {
+    if (!it.entryId) return;
+    hapticTap();
+    dismissPending(it.entryId);
+  }
+
+  function handleDismiss(it: AttentionItem) {
+    if (!it.dismissKey) return;
+    hapticTap();
+    dismissInsight(it.dismissKey.kind, it.dismissKey.targetId);
   }
 
   return (
@@ -243,49 +295,52 @@ export function AttentionCenter() {
                   </span>
                 </header>
                 <ul className="flex flex-col gap-1.5">
-                  {list.map((it, idx) => (
-                    <motion.li
-                      key={it.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        delay: Math.min(idx * 0.04, 0.25),
-                        duration: 0.2,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleItem(it)}
-                        aria-label={`פתח: ${it.title}`}
-                        className="flex w-full items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-3 text-start transition-colors hover:border-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+                  <AnimatePresence initial={false}>
+                    {list.map((it, idx) => (
+                      <motion.li
+                        key={it.id}
+                        layout
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                        transition={{
+                          delay: Math.min(idx * 0.04, 0.25),
+                          duration: 0.22,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                        className="flex flex-col gap-2 rounded-2xl border border-white/8 bg-black/25 p-3 text-start"
                       >
-                        <span
-                          className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md"
-                          style={{
-                            background: `${it.tone}22`,
-                            color: it.tone,
-                          }}
-                        >
-                          {it.icon}
-                        </span>
-                        <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                          <span className="text-body text-foreground">
-                            {it.title}
+                        <div className="flex items-start gap-2.5">
+                          <span
+                            className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md"
+                            style={{
+                              background: `${it.tone}22`,
+                              color: it.tone,
+                            }}
+                          >
+                            {it.icon}
                           </span>
-                          {it.detail ? (
-                            <span className="text-caption text-muted-foreground/85">
-                              {it.detail}
+                          <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                            <span className="text-body text-foreground">
+                              {it.title}
                             </span>
-                          ) : null}
+                            {it.detail ? (
+                              <span className="text-caption text-muted-foreground/85">
+                                {it.detail}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                        <ArrowLeft
-                          className="mt-1 size-3.5 shrink-0 text-muted-foreground/70"
-                          aria-hidden
+                        <ActionRow
+                          item={it}
+                          onOpen={() => handleOpen(it)}
+                          onApprove={() => handleApprove(it)}
+                          onDelete={() => handleDelete(it)}
+                          onDismiss={() => handleDismiss(it)}
                         />
-                      </button>
-                    </motion.li>
-                  ))}
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
                 </ul>
               </section>
             );
@@ -298,6 +353,119 @@ export function AttentionCenter() {
 
 /** Read-only count for badges. Same engine as the sheet content
  *  so a "4" on the tab always matches the number of cards shown. */
+function ActionRow({
+  item,
+  onOpen,
+  onApprove,
+  onDelete,
+  onDismiss,
+}: {
+  item: AttentionItem;
+  onOpen: () => void;
+  onApprove: () => void;
+  onDelete: () => void;
+  onDismiss: () => void;
+}) {
+  if (item.group === "confirm") {
+    return (
+      <div className="flex items-center gap-1.5 pt-1">
+        <ActionChip
+          tone="#34D399"
+          icon={<Check className="size-3" />}
+          label="אישור"
+          onClick={onApprove}
+          aria="אשר את החיוב כפי שהוא"
+        />
+        <ActionChip
+          tone="#60A5FA"
+          icon={<ArrowLeft className="size-3" />}
+          label="פתח"
+          onClick={onOpen}
+          aria="פתח את מסך האישור עם עריכה מלאה"
+        />
+        <div className="ms-auto">
+          <ActionChip
+            tone="#F87171"
+            icon={<Trash2 className="size-3" />}
+            label="מחק"
+            onClick={onDelete}
+            aria="מחק את החיוב הממתין"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (item.group === "risk") {
+    return (
+      <div className="flex items-center gap-1.5 pt-1">
+        <ActionChip
+          tone="#FBBF24"
+          icon={<Lightbulb className="size-3" />}
+          label="פתח פירוט"
+          onClick={onOpen}
+          aria="פתח את פירוט הסיכון בתובנות AI"
+        />
+      </div>
+    );
+  }
+
+  // review
+  return (
+    <div className="flex items-center gap-1.5 pt-1">
+      <ActionChip
+        tone="#60A5FA"
+        icon={<ArrowLeft className="size-3" />}
+        label="פתח"
+        onClick={onOpen}
+        aria="פתח את המסך הקשור"
+      />
+      {item.dismissKey ? (
+        <div className="ms-auto">
+          <ActionChip
+            tone="#A1A1AA"
+            icon={<XCircle className="size-3" />}
+            label="התעלם"
+            onClick={onDismiss}
+            aria="התעלם מהתובנה ל-7 ימים"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ActionChip({
+  tone,
+  icon,
+  label,
+  onClick,
+  aria,
+}: {
+  tone: string;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  aria: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={aria}
+      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 active:scale-95"
+      style={{
+        color: tone,
+        borderColor: `${tone}55`,
+        background: `${tone}15`,
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
 export function useAttentionCount(): number {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
