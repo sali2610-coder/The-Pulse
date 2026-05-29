@@ -32,10 +32,13 @@ const MonthlyCashflowCard = lazy(() =>
       m.MonthlyCashflowCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const LiquidityCurveCard = lazy(() =>
-  import("@/components/dashboard/liquidity-curve-card").then((m) => ({
+// Phase 313 — LiquidityCurveCard + AnchorTrajectoryCard consolidated
+// into the new CashflowForecast35 container. Both component files
+// stay on disk for other surfaces.
+const CashflowForecast35 = lazy(() =>
+  import("@/components/future/cashflow-forecast-35").then((m) => ({
     default:
-      m.LiquidityCurveCard as unknown as React.ComponentType<Record<string, unknown>>,
+      m.CashflowForecast35 as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 // Phase 287 — CashflowBucketsCard + UpcomingOutflowsCard now live
@@ -44,12 +47,6 @@ const ForecastTimelineCard = lazy(() =>
   import("@/components/dashboard/forecast-timeline-card").then((m) => ({
     default:
       m.ForecastTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const AnchorTrajectoryCard = lazy(() =>
-  import("@/components/dashboard/anchor-trajectory-card").then((m) => ({
-    default:
-      m.AnchorTrajectoryCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 
@@ -67,9 +64,11 @@ export function FutureTab() {
           <MonthlyCashflowCard />
         </Safe>
       </div>
+      {/* Phase 313 — single unified 35-day forecast container.
+         Replaces LiquidityCurveCard + AnchorTrajectoryCard. */}
       <div className="sm:col-span-6">
-        <Safe name="LiquidityCurveCard">
-          <LiquidityCurveCard />
+        <Safe name="CashflowForecast35">
+          <CashflowForecast35 />
         </Safe>
       </div>
       {/* Phase 287 — "התחייבויות לפי מקור" + "השבוע הבא" merged into
@@ -83,11 +82,6 @@ export function FutureTab() {
       <div className="sm:col-span-6">
         <Safe name="ForecastTimelineCard">
           <ForecastTimelineCard />
-        </Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="AnchorTrajectoryCard">
-          <AnchorTrajectoryCard />
         </Safe>
       </div>
     </div>
