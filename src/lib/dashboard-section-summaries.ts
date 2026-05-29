@@ -15,8 +15,11 @@ import type {
 } from "@/types/finance";
 import { liquidityCurve } from "@/lib/liquidity-curve";
 import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
-import { buildRiskWarnings } from "@/lib/risk-warnings";
 import { monthKeyOf } from "@/lib/dates";
+import { detectAnomalies } from "@/lib/anomalies";
+import { subscriptionReview } from "@/lib/subscription-review";
+import { detectSubscriptionCandidates } from "@/lib/subscription-detector";
+import { isInsightDismissed } from "@/lib/insight-dismiss";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -150,28 +153,38 @@ export function computeSummaries(input: SummariesInput): DashboardSummaries {
     tone: "info",
   };
 
-  // ── Watch summary — count of risk warnings ──
-  const warnings = buildRiskWarnings({
-    accounts: input.accounts,
-    loans: input.loans,
-    incomes: input.incomes,
+  // ── Watch summary — counts what's actually IN the section body.
+  //
+  // Phase 315 — RiskWarningsCard moved to the Expenses tab in
+  // Phase 301; deriving this chip from buildRiskWarnings produced
+  // a "1 התראה" badge while the section body itself was empty,
+  // which read as a fake alert. Now we count the same detectors
+  // the body renders: AnomaliesCard / SubscriptionReviewCard /
+  // SubscriptionRadarCard. Honor dismissed insights so a chip the
+  // user already ignored doesn't keep nagging.
+  const anomalies = detectAnomalies({
+    entries: input.entries,
+    monthKey,
+  });
+  const subscriptionReviewItems = subscriptionReview({
     rules: input.rules,
     entries: input.entries,
-    statuses: input.statuses,
-    monthlyBudget: input.monthlyBudget,
-    monthKey,
     now,
   });
-  const alertCount = warnings.filter((w) => w.severity === "alert").length;
-  const warnCount = warnings.filter((w) => w.severity === "warn").length;
+  const subscriptionCandidates = detectSubscriptionCandidates({
+    entries: input.entries,
+    rules: input.rules,
+  }).filter((c) => !isInsightDismissed("subscription", c.merchantKey));
+  const watchTotal =
+    anomalies.length +
+    subscriptionReviewItems.length +
+    subscriptionCandidates.length;
   const watch: SectionSummary =
-    alertCount > 0
-      ? { value: `${alertCount} התראות`, tone: "danger" }
-      : warnCount > 0
-        ? { value: `${warnCount} אזהרות`, tone: "warn" }
-        : warnings.length > 0
-          ? { value: `${warnings.length} שווה לבדוק`, tone: "info" }
-          : { value: "אין חריגות", tone: "ok" };
+    watchTotal === 0
+      ? { value: "הכל תקין", tone: "ok" }
+      : anomalies.length > 0
+        ? { value: `${watchTotal} לבדיקה`, tone: "warn" }
+        : { value: `${watchTotal} לבדיקה`, tone: "info" };
 
   return { future, cards, obligations, income, analytics, watch };
 }
