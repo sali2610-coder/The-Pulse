@@ -9,7 +9,7 @@
 // existing sliceForMonth + incomes loop that recent-activity already
 // consumed.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownToLine,
@@ -51,9 +51,41 @@ const HOUR_FMT = new Intl.DateTimeFormat("he-IL", {
   minute: "2-digit",
 });
 
-function timeAgo(date: Date, now: Date = new Date()): string {
+// Phase 321 — relative-time chip. Shows "עכשיו" (< 1 min), "לפני N
+// דק'" (< 60 min), "לפני N שעות" (< 24h, same day). Returns null
+// when the entry has no real time-of-day (synthetic future slice or
+// income projection from dayOfMonth) — better silent than fake.
+function relativeChip(
+  date: Date,
+  hasTime: boolean,
+  now: Date,
+): string | null {
+  if (!hasTime) return null;
+  const diff = now.getTime() - date.getTime();
+  if (diff < 0) return null;
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "עכשיו";
+  if (minutes < 60) return `לפני ${minutes} דק'`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24 && date.getDate() === now.getDate()) {
+    return `לפני ${hours} שעות`;
+  }
+  return null;
+}
+
+function timeAgo(date: Date, hasTime: boolean, now: Date = new Date()): string {
+  if (!hasTime) {
+    const todayKey = startOfDay(now);
+    const dayKey = startOfDay(date);
+    if (dayKey === todayKey) return "היום";
+    if (dayKey === todayKey - 86_400_000) return "אתמול";
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mo = String(date.getMonth() + 1).padStart(2, "0");
+    return `${dd}.${mo}`;
+  }
   const diffMs = date.getTime() - now.getTime();
   const minutes = Math.round(diffMs / 60_000);
+  if (Math.abs(minutes) < 1) return "עכשיו";
   if (Math.abs(minutes) < 60) return TIME_FMT.format(minutes, "minute");
   const hours = Math.round(diffMs / 3_600_000);
   if (Math.abs(hours) < 24) return TIME_FMT.format(hours, "hour");
@@ -62,16 +94,38 @@ function timeAgo(date: Date, now: Date = new Date()): string {
 
 // Phase 314 — richer per-row label: "היום · HH:mm" / "אתמול · HH:mm"
 // / "DD.MM · HH:mm" so the user reads when each activity actually
-// happened without doing relative-time math in their head.
-function whenLabel(date: Date, now: Date = new Date()): string {
+// happened.
+//
+// Phase 321 — if the entry has no real time-of-day (synthetic future
+// installment slice or income projection from dayOfMonth), suppress
+// the HH:mm half. "היום · 00:00" reads like a bug; date-only is
+// honest about what we know.
+function whenLabel(
+  date: Date,
+  hasTime: boolean,
+  now: Date = new Date(),
+): string {
   const todayKey = startOfDay(now);
   const dayKey = startOfDay(date);
   const hh = HOUR_FMT.format(date);
-  if (dayKey === todayKey) return `היום · ${hh}`;
-  if (dayKey === todayKey - 86_400_000) return `אתמול · ${hh}`;
+  if (dayKey === todayKey) return hasTime ? `היום · ${hh}` : "היום";
+  if (dayKey === todayKey - 86_400_000) {
+    return hasTime ? `אתמול · ${hh}` : "אתמול";
+  }
   const dd = String(date.getDate()).padStart(2, "0");
   const mo = String(date.getMonth() + 1).padStart(2, "0");
-  return `${dd}.${mo} · ${hh}`;
+  return hasTime ? `${dd}.${mo} · ${hh}` : `${dd}.${mo}`;
+}
+
+// Re-render every 30s so the relative chip ages live without
+// requiring a store mutation.
+function useNow(intervalMs: number): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
 }
 
 function startOfDay(d: Date): number {
@@ -97,6 +151,11 @@ type ActivityItem = {
   direction: Direction;
   amount: number;
   ts: Date;
+  /** Phase 321 — true when `ts` carries a real HH:mm:ss (a recorded
+   *  charge / refund / wallet event). False for synthetic projected
+   *  dates (future installment slices, income projections from
+   *  dayOfMonth). Drives label formatting + relative-chip gating. */
+  hasRealTime: boolean;
   title: string;
   category?: CategoryId;
   source?: "manual" | "auto" | "sms" | "wallet";
@@ -171,6 +230,9 @@ export function RecentActivity() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ExpenseEntry | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  // Phase 321 — live tick so "עכשיו / לפני N דק'" ages without
+  // needing a store mutation. 30s cadence is plenty for human reads.
+  const now = useNow(30_000);
 
   const items = useMemo<ActivityItem[]>(() => {
     if (!hydrated) return [];
@@ -181,20 +243,40 @@ export function RecentActivity() {
       const slice = sliceForMonth(e, monthKey);
       // Phase 314 — Wallet partials / manual entries without a
       // chargeDate previously fell through `sliceForMonth` and
-      // disappeared from RecentActivity entirely (and from the
-      // "today" filter). Fall back to createdAt so they always
-      // surface.
+      // disappeared from RecentActivity entirely.
+      //
+      // Phase 321 — sliceForMonth synthesizes a `new Date(y, m-1, day)`
+      // at midnight local time, stripping the real time-of-day. For
+      // the FIRST slice (same calendar day as the entry's source
+      // timestamp) we re-hydrate the real time from chargeDate /
+      // createdAt so "היום · 00:00" never appears. Future slices stay
+      // midnight (no real time exists for them) and get hasRealTime
+      // false so the UI hides the bogus HH:mm.
+      const sourceIso = e.chargeDate ?? e.createdAt;
       let ts: Date;
       let amount: number;
+      let hasRealTime = false;
       if (slice) {
         ts = slice.chargeDate;
+        if (sourceIso) {
+          const src = new Date(sourceIso);
+          if (
+            !Number.isNaN(src.getTime()) &&
+            src.getFullYear() === ts.getFullYear() &&
+            src.getMonth() === ts.getMonth() &&
+            src.getDate() === ts.getDate()
+          ) {
+            ts = src;
+            hasRealTime = true;
+          }
+        }
         amount = slice.amount;
       } else {
-        const iso = e.chargeDate ?? e.createdAt;
-        if (!iso) continue;
-        const d = new Date(iso);
+        if (!sourceIso) continue;
+        const d = new Date(sourceIso);
         if (Number.isNaN(d.getTime())) continue;
         ts = d;
+        hasRealTime = true;
         amount = Math.abs(e.amount) / Math.max(1, e.installments);
       }
       out.push({
@@ -203,6 +285,7 @@ export function RecentActivity() {
         direction: e.isRefund ? "in" : "out",
         amount,
         ts,
+        hasRealTime,
         title: e.merchant ?? e.note ?? getCategory(e.category as CategoryId).label,
         category: e.category as CategoryId,
         source: e.source,
@@ -228,6 +311,8 @@ export function RecentActivity() {
         direction: "in",
         amount: inc.amount,
         ts: date,
+        // Income projections come from `dayOfMonth` only — no time.
+        hasRealTime: false,
         title: inc.label,
         paySource: "income",
       });
@@ -340,11 +425,13 @@ export function RecentActivity() {
               direction="in"
               title="הכנסה אחרונה"
               item={summary.lastIncome}
+              now={now}
             />
             <SummaryTile
               direction="out"
               title="הוצאה אחרונה"
               item={summary.lastExpense}
+              now={now}
             />
             <button
               type="button"
@@ -422,6 +509,7 @@ export function RecentActivity() {
                     <ActivityRow
                       key={item.id}
                       item={item}
+                      now={now}
                       delay={Math.min(idx * 0.025, 0.2)}
                       onTap={() => handleRowTap(item)}
                     />
@@ -448,10 +536,12 @@ export function RecentActivity() {
 function ActivityRow({
   item,
   delay,
+  now,
   onTap,
 }: {
   item: ActivityItem;
   delay: number;
+  now: Date;
   onTap?: () => void;
 }) {
   const tappable = Boolean(item.entryId && onTap);
@@ -518,8 +608,19 @@ function ActivityRow({
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-muted-foreground/85">
-            {whenLabel(item.ts)}
+            {whenLabel(item.ts, item.hasRealTime, now)}
           </span>
+          {(() => {
+            const chip = relativeChip(item.ts, item.hasRealTime, now);
+            return chip ? (
+              <span
+                className="rounded-full bg-[color:var(--neon)]/10 px-1.5 py-0.5 text-[9px] font-medium text-[color:var(--neon)]"
+                aria-label={`זמן יחסי: ${chip}`}
+              >
+                {chip}
+              </span>
+            ) : null;
+          })()}
           {item.installments && item.installments > 1 ? (
             <Pill tone="neutral" icon={<Repeat2 className="size-2.5" />}>
               {item.installments}× תשלומים
@@ -551,10 +652,12 @@ function SummaryTile({
   direction,
   title,
   item,
+  now,
 }: {
   direction: Direction;
   title: string;
   item: ActivityItem | null;
+  now: Date;
 }) {
   const accent = direction === "in" ? "#34D399" : "#F87171";
   if (!item) {
@@ -595,7 +698,7 @@ function SummaryTile({
         {item.title}
       </span>
       <span className="text-[9.5px] text-muted-foreground/85">
-        {timeAgo(item.ts)}
+        {timeAgo(item.ts, item.hasRealTime, now)}
       </span>
     </div>
   );
