@@ -297,7 +297,12 @@ export const useFinanceStore = create<State & Actions>()(
       rules: [],
       statuses: [],
       monthlyBudget: 0,
-      budgetMode: "manual",
+      // Phase 307 — fresh-install defaults flipped to match the
+      // preferences the brief calls out: budget computed by the
+      // engine (Auto), 0 manual cap, large text. updatedAt stays 0
+      // so cloud reconcile still treats these as defaults and a
+      // saved-state row from cloud always wins.
+      budgetMode: "auto",
       budgetSafetyBuffer: 0,
       budgetSettingsUpdatedAt: 0,
       budgetSettingsCloudAt: 0,
@@ -306,7 +311,7 @@ export const useFinanceStore = create<State & Actions>()(
       loans: [],
       incomes: [],
       audioEnabled: true,
-      textScale: "normal",
+      textScale: "large",
       textScaleUpdatedAt: 0,
       textScaleCloudAt: 0,
 
