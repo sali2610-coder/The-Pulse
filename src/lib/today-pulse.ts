@@ -30,6 +30,11 @@ export type TodayPulse = {
   countToday: number;
   /** Entries still waiting for the user (Wallet partial / awaiting confirm). */
   pendingForReview: number;
+  /** Phase 302 — sum of ExpenseEntry.amount across pending entries
+   *  whose chargeDate (or createdAt as fallback) is today. Lets the
+   *  UI surface "ממתין לאישור" without hiding the value. */
+  pendingTodayAmount: number;
+  pendingTodayCount: number;
   /** Daily allowance — same number DailyAllowanceCard reads. 0 when no budget. */
   allowance: number;
   /** Coarse vibe — drives card glow tint without re-deriving thresholds. */
@@ -51,17 +56,55 @@ export function todayPulse(args: {
   let refundedToday = 0;
   let countToday = 0;
   let pending = 0;
+  let pendingTodayAmount = 0;
+  let pendingTodayCount = 0;
+
+  // Phase 302 — local-day helper. Uses chargeDate when available,
+  // falling back to createdAt. Compares year/month/day instead of
+  // bare getDate() so a Jan 1 vs Feb 1 collision is impossible.
+  const isSameLocalDay = (iso: string | undefined): boolean => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === today
+    );
+  };
 
   for (const e of args.entries) {
-    if (e.needsConfirmation && !e.confirmedAt) pending++;
-    if (e.needsConfirmation) continue;
-    if (e.bankPending) continue;
+    const isPending =
+      (e.needsConfirmation && !e.confirmedAt) || e.bankPending;
+    if (isPending) {
+      pending++;
+      // Pending entries booked for today should be visible in the
+      // pulse — labeled "ממתין לאישור" by the UI, not silently
+      // dropped. The check tolerates a missing chargeDate (Wallet
+      // partials sometimes only carry receivedAt → createdAt).
+      if (
+        isSameLocalDay(e.chargeDate) ||
+        isSameLocalDay(e.createdAt)
+      ) {
+        pendingTodayAmount += Math.abs(e.amount) / Math.max(1, e.installments);
+        pendingTodayCount++;
+      }
+      continue;
+    }
     if (e.excludeFromBudget) continue;
     if (e.currency && e.currency !== "ILS") continue;
     const slice = sliceForMonth(e, monthKey);
     if (!slice) continue;
-    if (slice.chargeDate.getDate() !== today) continue;
-    if (slice.chargeDate.getTime() > now.getTime()) continue;
+    // Phase 302 — match by year/month/day. Drop the previous
+    // "slice.chargeDate > now" clock filter so an entry booked
+    // earlier today (with the slice's noon chargeDate) still counts
+    // even when "now" is before noon.
+    if (
+      slice.chargeDate.getFullYear() !== now.getFullYear() ||
+      slice.chargeDate.getMonth() !== now.getMonth() ||
+      slice.chargeDate.getDate() !== today
+    ) {
+      continue;
+    }
     if (e.isRefund) {
       refundedToday += slice.amount;
     } else {
@@ -100,6 +143,8 @@ export function todayPulse(args: {
     refundedToday: round2(refundedToday),
     countToday,
     pendingForReview: pending,
+    pendingTodayAmount: round2(pendingTodayAmount),
+    pendingTodayCount,
     allowance,
     vibe,
   };

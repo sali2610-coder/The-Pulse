@@ -71,6 +71,43 @@ describe("todayPulse", () => {
     expect(p.pendingForReview).toBe(1);
   });
 
+  it("Phase 302 — pending entries booked today expose pendingTodayAmount + count", () => {
+    const p = todayPulse({
+      entries: [
+        entry({
+          amount: 1,
+          iso: "2026-05-15T09:30:00Z",
+          needsConfirmation: true,
+        }),
+        entry({
+          amount: 80,
+          iso: "2026-05-15T07:00:00Z",
+          bankPending: true,
+        }),
+      ],
+      rules: [],
+      statuses: [],
+      monthlyBudget: 0,
+      now: NOW,
+    });
+    expect(p.pendingTodayCount).toBe(2);
+    expect(p.pendingTodayAmount).toBe(81);
+    expect(p.pendingForReview).toBeGreaterThanOrEqual(1);
+  });
+
+  it("Phase 302 — entry booked earlier today (slice.chargeDate noon) is included even when 'now' is before noon", () => {
+    const morning = new Date("2026-05-15T05:00:00.000Z");
+    const p = todayPulse({
+      entries: [entry({ amount: 1, iso: "2026-05-15T03:00:00Z" })],
+      rules: [],
+      statuses: [],
+      monthlyBudget: 0,
+      now: morning,
+    });
+    expect(p.spentToday).toBe(1);
+    expect(p.countToday).toBe(1);
+  });
+
   it("vibe escalates when today's spend exceeds allowance", () => {
     // monthlyBudget 1000, only ~mid-month → allowance ~60/day. 200 spent → hot
     const p = todayPulse({

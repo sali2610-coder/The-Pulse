@@ -137,9 +137,23 @@ export function TodayPulseCard() {
         <span className="text-[11px] text-muted-foreground">
           {pulse.countToday > 0
             ? `על פני ${pulse.countToday} חיובים היום`
-            : "אין חיובים היום"}
+            : pulse.pendingTodayCount > 0
+              ? `כולל ${pulse.pendingTodayCount} ממתינים לאישור היום`
+              : "אין חיובים היום"}
         </span>
       </div>
+
+      {/* Phase 302 — pending-today strip. Surfaces the value the
+         user added today even while it's still waiting for category
+         confirmation, instead of silently hiding it. */}
+      {pulse.pendingTodayCount > 0 ? (
+        <div className="mt-2 flex items-center justify-between rounded-xl border border-[#FBBF24]/40 bg-[#FBBF24]/10 px-3 py-1.5 text-[11px] text-[#FBBF24]">
+          <span>ממתין לאישור היום</span>
+          <span data-mono="true" dir="ltr" className="font-medium">
+            {ILS.format(Math.round(pulse.pendingTodayAmount))}
+          </span>
+        </div>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         {pulse.allowance > 0 ? (
