@@ -380,9 +380,21 @@ export const useFinanceStore = create<State & Actions>()(
         // 2. Fuzzy match across sources (SMS arrived first, statement
         //    re-imports the same charge later, or vice-versa). Blocks
         //    duplicates outright.
-        const fuzzyHit = findFuzzyDuplicate(fuzzyCandidate, get().entries);
-        if (fuzzyHit) {
-          return { entry: fuzzyHit, duplicate: true };
+        //
+        // Phase 328 — manual entries are NEVER auto-blocked. The user
+        // explicitly typed them; two ₪2 credit purchases on the same
+        // card in the same day are a legitimate use case and must
+        // save. Fuzzy block remains for the original cross-source
+        // case (SMS replay / statement re-import), where it actually
+        // prevents the duplicate it was designed for. Suspected-dup
+        // detection (Phase 249) still surfaces a soft warning badge
+        // on the activity list once both entries are in the store.
+        const isManual = (input.source ?? "manual") === "manual";
+        if (!isManual) {
+          const fuzzyHit = findFuzzyDuplicate(fuzzyCandidate, get().entries);
+          if (fuzzyHit) {
+            return { entry: fuzzyHit, duplicate: true };
+          }
         }
 
         const now = new Date();
