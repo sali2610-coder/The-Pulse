@@ -155,12 +155,8 @@ const SmartInsightsCard = lazy(() =>
       m.SmartInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const SmartRecommendationsCard = lazy(() =>
-  import("@/components/dashboard/smart-recommendations-card").then((m) => ({
-    default:
-      m.SmartRecommendationsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 330 — "הצעות חכמות" removed from Home. Duplicate of Insights
+// tab content; component file stays on disk for other surfaces.
 
 // Phase 295 — "פירוט מתקדם" overflow section retired. The six lazy
 // declarations it hosted (PulseBar, SmartSummaryCard,
@@ -435,11 +431,9 @@ export function DashboardTab() {
               <SmartInsightsCard />
             </Safe>
           </div>
-          <div className="sm:col-span-6">
-            <Safe name="SmartRecommendationsCard">
-              <SmartRecommendationsCard />
-            </Safe>
-          </div>
+          {/* Phase 330 — SmartRecommendationsCard removed from Home.
+             Duplicates the Insights tab; user couldn't tell the two
+             apart. Component file remains for other surfaces. */}
         </DashboardSection>
 
         {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
