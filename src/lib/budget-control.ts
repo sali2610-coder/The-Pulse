@@ -244,3 +244,51 @@ export function budgetControlAvailable(
   if (!breakdown.hasAnchors) return null;
   return breakdown.available;
 }
+
+const ILS_LABEL = new Intl.NumberFormat("he-IL", {
+  style: "currency",
+  currency: "ILS",
+  maximumFractionDigits: 0,
+});
+
+const DAY_LABEL = new Intl.DateTimeFormat("he-IL", {
+  day: "numeric",
+  month: "long",
+});
+
+/** Phase 331 — single-sentence forecast for the simplified Settings
+ *  control. Always describes the bottom line in plain Hebrew so the
+ *  user never has to read a table to know if they're OK. */
+export function buildBudgetSentence(args: {
+  breakdown: BudgetControlBreakdown;
+  /** Optional projected end-of-period balance from
+   *  buildFinancialSnapshot — when present it overrides the raw
+   *  cycle math with a pace-aware forecast. */
+  projectedEndOfMonth?: number;
+}): string {
+  const { breakdown } = args;
+  if (!breakdown.hasAnchors) {
+    return "חסר חשבון בנק עם יתרה — Pulse יחשב ברגע שתגדיר.";
+  }
+  const cycleEnd = new Date(breakdown.cycleEndAt);
+  const cycleLabel = Number.isNaN(cycleEnd.getTime())
+    ? "סוף המחזור"
+    : DAY_LABEL.format(cycleEnd);
+
+  if (breakdown.available < 0) {
+    return `יש חריגה צפויה של ${ILS_LABEL.format(Math.round(Math.abs(breakdown.available)))} עד ${cycleLabel}.`;
+  }
+  if (
+    args.projectedEndOfMonth !== undefined &&
+    args.projectedEndOfMonth < 0
+  ) {
+    return `אם תמשיך בקצב הנוכחי, תסיים את החודש סביב ${ILS_LABEL.format(Math.round(args.projectedEndOfMonth))}.`;
+  }
+  if (
+    args.projectedEndOfMonth !== undefined &&
+    args.projectedEndOfMonth < 1000
+  ) {
+    return `אם תמשיך בקצב הנוכחי, תסיים את החודש סביב ${ILS_LABEL.format(Math.round(args.projectedEndOfMonth))}.`;
+  }
+  return `תסיים את התקופה עם ${ILS_LABEL.format(Math.round(breakdown.available))} פנויים.`;
+}
