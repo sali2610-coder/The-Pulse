@@ -69,14 +69,25 @@ export function CategoryPickerSheet({
   const findCat = (id: CategoryId) => CATEGORIES.find((c) => c.id === id);
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="בחר קטגוריה">
-      <div className="flex flex-col gap-2 pt-2">
-        <h2 className="text-right text-lg font-semibold text-foreground">
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="בחר קטגוריה"
+      fullScreen
+      lockDismiss
+    >
+      <div className="flex items-baseline justify-between gap-2 pt-1">
+        <h2 className="text-right text-[17px] font-semibold text-foreground">
           בחר קטגוריה
         </h2>
-        <p className="text-right text-sm text-muted-foreground">
-          הקש על קטגוריה כדי לסווג את החיוב.
-        </p>
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-label="סגור"
+          className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-[11px] text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+        >
+          חזור
+        </button>
       </div>
 
       {/* Search */}
@@ -140,11 +151,11 @@ export function CategoryPickerSheet({
         )}
       </AnimatePresence>
 
-      {/* All categories grid */}
+      {/* All categories grid — compact tiles with subtle stagger */}
       <div
         role="radiogroup"
         aria-label="קטגוריית הוצאה"
-        className="grid grid-cols-3 gap-3"
+        className="grid grid-cols-3 gap-2"
       >
         {filtered.map((cat, idx) => {
           const Icon = cat.icon;
@@ -157,30 +168,29 @@ export function CategoryPickerSheet({
               aria-checked={isSelected}
               aria-label={cat.label}
               onClick={() => pick(cat.id)}
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                delay: Math.min(idx, 8) * 0.025,
+                delay: Math.min(idx, 12) * 0.02,
                 type: "spring",
-                stiffness: 280,
-                damping: 24,
+                stiffness: 300,
+                damping: 26,
               }}
-              whileTap={{ scale: 0.94 }}
-              whileHover={{ y: -2 }}
-              className={`group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border bg-surface/70 p-3 text-center transition-colors ${
+              whileTap={{ scale: 0.95 }}
+              className={`group relative flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl border bg-surface/70 p-2.5 text-center transition-colors ${
                 isSelected
-                  ? "border-[color:var(--neon)] bg-[color:var(--neon)]/8 shadow-[0_0_0_1px_var(--neon)] glow-neon"
+                  ? "border-[color:var(--neon)] bg-[color:var(--neon)]/8 shadow-[0_0_0_1px_var(--neon)]"
                   : "border-white/8 hover:border-white/14"
               }`}
               style={{ color: isSelected ? cat.accent : undefined }}
             >
               <span
-                className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                className="flex size-10 items-center justify-center rounded-xl"
                 style={{ background: `${cat.accent}22`, color: cat.accent }}
               >
-                <Icon className="h-6 w-6" strokeWidth={1.6} />
+                <Icon className="size-5" strokeWidth={1.7} />
               </span>
-              <span className="text-xs font-medium text-foreground/90">
+              <span className="text-[11.5px] font-medium text-foreground/90">
                 {cat.label}
               </span>
             </motion.button>

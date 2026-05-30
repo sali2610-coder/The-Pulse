@@ -24,6 +24,11 @@ type BottomSheetProps = {
    *  body. Footer stays pinned to the bottom over the safe-area pad
    *  so action buttons never get pushed off-screen by content. */
   footer?: React.ReactNode;
+  /** Phase 329 — when true the drag gesture stays for elastic feel
+   *  but never closes the sheet. Action surfaces (expense entry)
+   *  rely on explicit ביטול / שמור buttons; an accidental tiny
+   *  downward drag must not blow away the user's typed values. */
+  lockDismiss?: boolean;
 };
 
 const DISMISS_VELOCITY = 600;
@@ -38,6 +43,7 @@ export function BottomSheet({
   noHandle = false,
   fullScreen = false,
   footer,
+  lockDismiss = false,
 }: BottomSheetProps) {
   const reduced = useReducedMotion();
   return (
@@ -65,8 +71,9 @@ export function BottomSheet({
                   transition={reduced ? REDUCED : SPRING_SOFT}
                   drag={reduced ? false : "y"}
                   dragConstraints={{ top: 0, bottom: 0 }}
-                  dragElastic={{ top: 0, bottom: 0.5 }}
+                  dragElastic={lockDismiss ? 0.08 : { top: 0, bottom: 0.5 }}
                   onDragEnd={(_, info) => {
+                    if (lockDismiss) return;
                     if (
                       info.offset.y > DISMISS_DISTANCE ||
                       info.velocity.y > DISMISS_VELOCITY

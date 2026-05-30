@@ -177,6 +177,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
         onOpenChange={handleOpenChange}
         title="תיעוד הוצאה"
         fullScreen
+        lockDismiss
         footer={
           <div className="flex gap-2.5 px-4">
             <button
@@ -203,17 +204,20 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
           </div>
         }
       >
-        <div className="relative flex flex-col gap-5 px-1 pt-2">
-          <header className="flex flex-col gap-1">
-            <h2 className="text-right text-[20px] font-semibold text-foreground">
+        {/* Phase 329 — tightened gap stack so all fields fit on a
+           single screen (iPhone SE) without inner scrolling. Header
+           shrinks to a single line + caption; form rows use gap-3. */}
+        <div className="relative flex flex-col gap-3 px-1 pt-1">
+          <header className="flex items-baseline justify-between gap-2">
+            <h2 className="text-right text-[17px] font-semibold text-foreground">
               תיעוד הוצאה
             </h2>
-            <p className="text-right text-[12.5px] text-muted-foreground">
-              מזומן, אונליין, או כל הוצאה ידנית.
-            </p>
+            <span className="text-[10.5px] text-muted-foreground">
+              מזומן · אשראי · בנק
+            </span>
           </header>
 
-          <form ref={formRef} onSubmit={submit} className="flex flex-col gap-5">
+          <form ref={formRef} onSubmit={submit} className="flex flex-col gap-3">
             <Controller
               control={control}
               name="amount"
