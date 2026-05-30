@@ -80,6 +80,17 @@ function fuzzyMatches(
     return false;
   }
   if (!merchantsMatch(candidate.merchant, entry.merchant)) return false;
+  // Phase 327 — when NEITHER side carries any identity signal
+  // (merchant / cardLast4 / accountId) we can't claim "same charge"
+  // from amount + date alone. Two manual ₪1 entries on the same day
+  // were silently rejected as duplicates because of this gap.
+  const candidateIdentity = Boolean(
+    candidate.merchant || candidate.cardLast4 || candidate.accountId,
+  );
+  const entryIdentity = Boolean(
+    entry.merchant || entry.cardLast4 || entry.accountId,
+  );
+  if (!candidateIdentity && !entryIdentity) return false;
   return true;
 }
 

@@ -104,10 +104,23 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
 
       return result;
     },
-    onSuccess: ({ matched }) => {
+    onSuccess: ({ matched, duplicate, merged }) => {
+      // Phase 327 — surface duplicate / merge instead of silently
+      // closing with a success overlay. The user reported "2 test
+      // expenses didn't propagate" — fuzzy-dedup was the culprit:
+      // it returned `{ duplicate: true }` but the sheet closed as
+      // if the entry was saved. Now we say so.
+      if (duplicate) {
+        toast.warning("זוהה כדומה לחיוב קיים — לא נשמר שוב.", {
+          description: "אם זה חיוב חדש, ערוך סכום או הערה ונסה שוב.",
+        });
+        return;
+      }
       hapticsSuccess();
       setShowSuccess(true);
-      if (matched) {
+      if (merged) {
+        toast.success("חיוב קיים עודכן עם הנתונים החדשים.");
+      } else if (matched) {
         toast.success(`שודך אוטומטית: ${matched.label}`);
       }
       closeTimer.current = setTimeout(() => {
@@ -143,11 +156,19 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
   const submit = handleSubmit((values) => mutation.mutate(values));
 
   // Phase 326 — promoted to full-screen sheet with a sticky
-  // two-button footer (ביטול / שמור הוצאה). Body owns the form
-  // fields with breathing-room spacing; footer never gets pushed by
-  // content or by the iOS keyboard because it lives outside the
-  // scroll container.
-  const formId = "expense-form";
+  // two-button footer (ביטול / שמור הוצאה).
+  //
+  // Phase 327 — the previous wiring used `<button form="expense-form">`
+  // on the sticky footer. Inside a base-ui Dialog portal sitting under
+  // a draggable Framer Motion popup, that attribute didn't always
+  // trigger the form's submit handler, so taps on שמור silently
+  // no-op'd and the user saw "expense didn't propagate." The footer
+  // button now calls `formRef.current?.requestSubmit()` directly —
+  // bulletproof across portal layouts and pointer-event listeners.
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const requestSubmit = () => {
+    formRef.current?.requestSubmit();
+  };
 
   return (
     <>
@@ -169,8 +190,11 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
               ביטול
             </button>
             <button
-              type="submit"
-              form={formId}
+              type="button"
+              onClick={() => {
+                tap();
+                requestSubmit();
+              }}
               disabled={!isValid || mutation.isPending}
               className="btn-confirm flex h-12 flex-1 items-center justify-center rounded-2xl text-[14px] font-semibold transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
             >
@@ -189,7 +213,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
             </p>
           </header>
 
-          <form id={formId} onSubmit={submit} className="flex flex-col gap-5">
+          <form ref={formRef} onSubmit={submit} className="flex flex-col gap-5">
             <Controller
               control={control}
               name="amount"
