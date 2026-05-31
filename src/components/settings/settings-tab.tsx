@@ -1,25 +1,29 @@
 "use client";
 
 // Phase 231 — Settings reorganized into a calm consumer surface.
+// Phase 332 — collapsed-by-default accordions with one-open mutex.
 //
-// Top of tab: the few cards a regular user actually touches.
-// Below that: grouped collapsible accordions for the rest.
-// Bottom: Developer Mode toggle that, when on, surfaces the
-// technical diagnostics block.
-//
-// All financial engines unchanged — this is a layout refactor only.
+// Top of tab: compact identity row (TextSize + Auth).
+// Below: a flat list of accordion folders. Exactly one folder is
+// open at a time; opening another auto-closes the current one. The
+// active section id is persisted to localStorage so a reload (or
+// tab switch) reopens the last folder the user was reading.
 
+import { useState } from "react";
 import {
   BellRing,
+  CalendarRange,
   CreditCard,
   Database,
   FileDown,
   HandCoins,
   Landmark,
   Lightbulb,
+  ListChecks,
   PiggyBank,
   Repeat,
   ShieldCheck,
+  Target,
 } from "lucide-react";
 
 import { BudgetInput } from "./budget-input";
@@ -36,7 +40,6 @@ import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-pane
 import { SubscriptionSuggestions } from "./subscription-suggestions";
 import { RuleDriftCard } from "./rule-drift-card";
 import { DormantRulesCard } from "./dormant-rules-card";
-import { BudgetRecommendationCard } from "./budget-recommendation-card";
 import { BackupsCard } from "./backups-card";
 import { CloudSyncCard } from "./cloud-sync-card";
 import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
@@ -50,41 +53,78 @@ import { ShortcutHealthCard } from "./shortcut-health-card";
 import { ShortcutOnboardingCard } from "./shortcut-onboarding-card";
 import { PushDeliveryMatrix } from "./push-delivery-matrix";
 import { BudgetSettingsDiagnostics } from "./budget-settings-diagnostics";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { useDevMode } from "@/lib/use-dev-mode";
+
+const ACTIVE_KEY = "sally.settings.openSection.v1";
+
+function readActive(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(ACTIVE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeActive(next: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (next === null) window.localStorage.removeItem(ACTIVE_KEY);
+    else window.localStorage.setItem(ACTIVE_KEY, next);
+  } catch {
+    /* ignore — private mode */
+  }
+}
 
 export function SettingsTab() {
   const { on: devOn } = useDevMode();
+  // Lazy initial state reads localStorage exactly once — no effect,
+  // no React-19 set-state-in-effect lint trip.
+  const [openKey, setOpenKey] = useState<string | null>(() => readActive());
+
+  function handleToggle(next: string | null) {
+    setOpenKey(next);
+    writeActive(next);
+  }
+
+  const mutex = {
+    mutexOpenKey: openKey,
+    onMutexToggle: handleToggle,
+  } as const;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ── Always-visible top stack ──────────────────────────── */}
-      <TextSizeCard />
-      <AuthCard />
-      <BudgetInput />
-      <BudgetRecommendationCard />
+    <div className="flex flex-col gap-3">
+      {/* Compact identity row — text size + auth share a slim band so
+         the accordion list starts higher on screen. */}
+      <div className="flex flex-col gap-2">
+        <TextSizeCard />
+        <AuthCard />
+      </div>
 
-      {/* ── Data groups ── */}
+      {/* ── User-requested accordion order ───────────────────── */}
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.accounts"
         title="חשבונות בנק וכרטיסים"
         subtitle="ניהול יתרות, חיוב יומי וכרטיסים"
         icon={<Landmark className="size-4" />}
-        defaultCollapsed={true}
       >
         <AccountsPanel />
       </SettingsAccordion>
 
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.recurring"
         title="הוצאות קבועות ומנויים"
         subtitle="חיובים חוזרים, מקובצים לפי כרטיס"
         icon={<Repeat className="size-4" />}
-        defaultCollapsed={true}
       >
         <RecurringRulesPanel />
       </SettingsAccordion>
 
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.loans"
         title="הלוואות"
         subtitle="תשלומים חודשיים ויתרה"
@@ -94,6 +134,7 @@ export function SettingsTab() {
       </SettingsAccordion>
 
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.income"
         title="הכנסות"
         subtitle="משכורות, פנסיה והכנסות צפויות"
@@ -102,23 +143,55 @@ export function SettingsTab() {
         <IncomePanel />
       </SettingsAccordion>
 
-      {/* ── Smart suggestions ─────────────────────────────────── */}
       <SettingsAccordion
-        storageKey="settings.suggestions"
+        {...mutex}
+        storageKey="settings.budget-control"
+        title="בקרת תקציב אוטומטית"
+        subtitle="חישוב שקט ברקע אחרי כל פעולה"
+        icon={<Target className="size-4" />}
+      >
+        <BudgetInput />
+      </SettingsAccordion>
+
+      <SettingsAccordion
+        {...mutex}
+        storageKey="settings.smart-suggestions"
         title="הצעות חכמות"
-        subtitle="חיובים חוזרים שזוהו, מנויים, סחיפת קצב"
+        subtitle="חיובים חוזרים שזוהו ושחיקת קצב"
         icon={<Lightbulb className="size-4" />}
       >
         <div className="flex flex-col gap-3">
-          <SubscriptionSuggestions />
           <RecurringSuggestionsCard />
           <RuleDriftCard />
+        </div>
+      </SettingsAccordion>
+
+      <SettingsAccordion
+        {...mutex}
+        storageKey="settings.checks-subs"
+        title="בדיקות ומנויים"
+        subtitle="מנויים שזוהו וכללים רדומים"
+        icon={<ListChecks className="size-4" />}
+      >
+        <div className="flex flex-col gap-3">
+          <SubscriptionSuggestions />
           <DormantRulesCard />
         </div>
       </SettingsAccordion>
 
-      {/* ── Notifications ─────────────────────────────────────── */}
       <SettingsAccordion
+        {...mutex}
+        storageKey="settings.month-activity"
+        title="פעילות החודש"
+        subtitle="כל מה שזז החודש — הוצאות והכנסות"
+        icon={<CalendarRange className="size-4" />}
+      >
+        <RecentActivity />
+      </SettingsAccordion>
+
+      {/* ── Secondary / system folders ─────────────────────── */}
+      <SettingsAccordion
+        {...mutex}
         storageKey="settings.notifications"
         title="התראות"
         subtitle="Web Push, אישור הוצאה ב-iPhone, צליל"
@@ -132,8 +205,8 @@ export function SettingsTab() {
         </div>
       </SettingsAccordion>
 
-      {/* ── Shortcut (iPhone payment automation) ─────────────── */}
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.shortcut"
         title="קיצור iPhone — קליטה אוטומטית"
         subtitle="חיבור Apple Pay / כרטיסי האשראי לזרימה ב-Pulse"
@@ -145,8 +218,8 @@ export function SettingsTab() {
         </div>
       </SettingsAccordion>
 
-      {/* ── Import / export ────────────────────────────────────── */}
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.io"
         title="ייבוא וייצוא"
         subtitle="דפי חיוב, גיבוי Sally, ניתוח קבלות"
@@ -159,8 +232,8 @@ export function SettingsTab() {
         </div>
       </SettingsAccordion>
 
-      {/* ── Backups ───────────────────────────────────────────── */}
       <SettingsAccordion
+        {...mutex}
         storageKey="settings.backups"
         title="גיבויים"
         subtitle="גיבוי מקומי + ענן, התאוששות"
@@ -174,11 +247,11 @@ export function SettingsTab() {
 
       {devOn ? (
         <SettingsAccordion
+          {...mutex}
           storageKey="settings.dev"
           title="אבחון טכני"
           subtitle="Cloud Sync, מזהה מכשיר, יומן Push"
           icon={<ShieldCheck className="size-4" />}
-          defaultCollapsed={true}
         >
           <div className="flex flex-col gap-3">
             <CloudSyncCard />

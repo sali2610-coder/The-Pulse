@@ -25,6 +25,14 @@ export function SettingsAccordion({
   icon,
   defaultCollapsed = true,
   children,
+  /** Phase 332 — opt-in mutex mode. When mutexOpenKey is provided
+   *  the accordion is controlled by the parent: it's open iff
+   *  mutexOpenKey === storageKey. Toggling fires onMutexToggle with
+   *  either storageKey (open) or null (close). Persistence is still
+   *  driven by the same dashboard-section-store so reload restores
+   *  whichever section was last open. */
+  mutexOpenKey,
+  onMutexToggle,
 }: {
   storageKey: string;
   title: string;
@@ -32,10 +40,14 @@ export function SettingsAccordion({
   icon?: ReactNode;
   defaultCollapsed?: boolean;
   children: ReactNode;
+  mutexOpenKey?: string | null;
+  onMutexToggle?: (next: string | null) => void;
 }) {
+  const mutex = mutexOpenKey !== undefined && onMutexToggle !== undefined;
   const [collapsed, setCollapsed] = useState<boolean>(defaultCollapsed);
 
   useEffect(() => {
+    if (mutex) return;
     let cancelled = false;
     const pull = () => {
       Promise.resolve().then(() => {
@@ -49,26 +61,47 @@ export function SettingsAccordion({
       cancelled = true;
       unsub();
     };
-  }, [storageKey, defaultCollapsed]);
+  }, [storageKey, defaultCollapsed, mutex]);
+
+  const effectiveCollapsed = mutex
+    ? mutexOpenKey !== storageKey
+    : collapsed;
 
   function toggle() {
+    tap();
+    if (mutex) {
+      const next = mutexOpenKey === storageKey ? null : storageKey;
+      onMutexToggle(next);
+      return;
+    }
     const next = !collapsed;
     setCollapsed(next);
     writeSectionCollapsed(storageKey, next);
-    tap();
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/60 bg-surface/50 backdrop-blur-md">
+    <section
+      className={`group overflow-hidden rounded-2xl border bg-surface/50 backdrop-blur-md transition-shadow ${
+        effectiveCollapsed
+          ? "border-border/60 hover:border-white/15"
+          : "border-[color:var(--neon)]/30 shadow-[0_0_0_1px_color-mix(in_srgb,var(--neon)_20%,transparent),0_20px_50px_-30px_color-mix(in_srgb,var(--neon)_40%,transparent)]"
+      }`}
+    >
       <button
         type="button"
         onClick={toggle}
-        aria-expanded={!collapsed}
-        className="flex min-h-14 w-full items-center justify-between gap-3 px-5 py-4 text-start transition-colors hover:bg-white/2"
+        aria-expanded={!effectiveCollapsed}
+        className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/2"
       >
         <div className="flex items-center gap-2.5">
           {icon ? (
-            <span className="flex size-8 items-center justify-center rounded-xl bg-white/5 text-[color:var(--neon)]">
+            <span
+              className={`flex size-7 items-center justify-center rounded-xl transition-colors ${
+                effectiveCollapsed
+                  ? "bg-white/5 text-[color:var(--neon)]"
+                  : "bg-[color:var(--neon)]/15 text-[color:var(--neon)]"
+              }`}
+            >
               {icon}
             </span>
           ) : null}
@@ -82,8 +115,8 @@ export function SettingsAccordion({
           </div>
         </div>
         <motion.span
-          animate={{ rotate: collapsed ? 0 : 180 }}
-          transition={{ duration: 0.2 }}
+          animate={{ rotate: effectiveCollapsed ? 0 : 180 }}
+          transition={{ type: "spring", stiffness: 260, damping: 22 }}
           className="text-muted-foreground"
         >
           <ChevronDown className="size-5" />
@@ -91,13 +124,13 @@ export function SettingsAccordion({
       </button>
 
       <AnimatePresence initial={false}>
-        {!collapsed ? (
+        {!effectiveCollapsed ? (
           <motion.div
             key="body"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
             <div className="flex flex-col gap-3 border-t border-white/8 p-4">
