@@ -6,6 +6,7 @@ import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { NativeShellProvider } from "@/components/app/native-shell-provider";
 import { TextScaleBootstrap } from "@/components/system/text-scale-bootstrap";
+import { ThemeApplier } from "@/components/theme/theme-applier";
 
 // Clerk is intentionally NOT imported here. Auth is disabled at the app
 // level — the dashboard is a single-user public app served straight from
@@ -35,6 +36,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <NativeShellProvider />
         {/* Phase 226 — apply persisted text-scale preference at mount. */}
         <TextScaleBootstrap />
+        {/* Phase 334 — apply persisted color-scheme preference at mount. */}
+        <ThemeApplier />
         {children}
         <Toaster richColors position="top-center" dir="rtl" />
       </MotionConfig>

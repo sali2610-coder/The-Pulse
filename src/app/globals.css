@@ -97,6 +97,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #0A0A0A;
   --foreground: #F5F5F5;
   --surface: #1A1A1A;
@@ -118,6 +119,14 @@
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.12);
   --ring: #00E5FF;
+  /* Phase 334 — glass card tokens. Component styles read these so a
+     theme flip recolors every glass surface without per-component
+     edits. */
+  --glass-from: rgba(26, 26, 26, 0.92);
+  --glass-to: rgba(20, 20, 20, 0.86);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-shadow-inset: rgba(255, 255, 255, 0.04);
+  --glass-shadow-drop: rgba(0, 0, 0, 0.6);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -131,6 +140,43 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Phase 334 — Day Mode.
+   Mirrors .dark token by token. The background uses a very soft warm
+   off-white ("cream") so the dark-mode glass surfaces translate into
+   light-mode glass surfaces (white-cream tint + thin gray border)
+   instead of a flat clinical white. Action colors (green / red / gold
+   / teal) keep their hex values everywhere — only the neutral chrome
+   shifts. */
+.light {
+  color-scheme: light;
+  --background: #F7F6F2;
+  --foreground: #15171C;
+  --surface: #FFFFFF;
+  --neon: #0EA5E9;
+  --gold: #B8860B;
+  --card: #FFFFFF;
+  --card-foreground: #15171C;
+  --popover: #FFFFFF;
+  --popover-foreground: #15171C;
+  --primary: #0EA5E9;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EFEDE7;
+  --secondary-foreground: #15171C;
+  --muted: #ECEAE3;
+  --muted-foreground: #5A5F69;
+  --accent: #ECEAE3;
+  --accent-foreground: #15171C;
+  --destructive: #DC2626;
+  --border: rgba(15, 17, 25, 0.10);
+  --input: rgba(15, 17, 25, 0.14);
+  --ring: #0EA5E9;
+  --glass-from: rgba(255, 255, 255, 0.88);
+  --glass-to: rgba(247, 246, 242, 0.85);
+  --glass-border: rgba(15, 17, 25, 0.08);
+  --glass-shadow-inset: rgba(255, 255, 255, 0.6);
+  --glass-shadow-drop: rgba(15, 17, 25, 0.10);
 }
 
 @layer base {
@@ -328,13 +374,13 @@
     background:
       linear-gradient(
         180deg,
-        rgba(26, 26, 26, 0.92) 0%,
-        rgba(20, 20, 20, 0.86) 100%
+        var(--glass-from) 0%,
+        var(--glass-to) 100%
       );
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--glass-border);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.04) inset,
-      0 20px 40px -20px rgba(0, 0, 0, 0.6);
+      0 1px 0 var(--glass-shadow-inset) inset,
+      0 20px 40px -20px var(--glass-shadow-drop);
     backdrop-filter: blur(14px);
   }
   .glass-card-pending {

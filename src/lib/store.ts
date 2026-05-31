@@ -136,6 +136,10 @@ type State = {
    *  the text-scale row. Reconcile uses this to keep local
    *  authoritative until cloud catches up. */
   textScaleCloudAt: number;
+  /** Phase 334 — color scheme. "auto" follows OS prefers-color-scheme,
+   *  "dark" / "light" override. Default "dark" preserves the existing
+   *  premium fintech identity for users who don't touch the toggle. */
+  theme: "dark" | "light" | "auto";
 };
 
 type Actions = {
@@ -241,6 +245,10 @@ type Actions = {
    *  records the last successful cloud upsert. */
   setTextScale: (scale: "compact" | "normal" | "large") => void;
   markTextScaleCloudSynced: (ms: number) => void;
+  /** Phase 334 — color scheme switch. Persists via the same Zustand
+   *  persist layer; no cloud sync wire-up yet (kept local-only to ship
+   *  the toggle without a schema migration upstream). */
+  setTheme: (theme: "dark" | "light" | "auto") => void;
   setAudioEnabled: (v: boolean) => void;
   setLastSyncedAt: (ms: number) => void;
   setHydrated: (v: boolean) => void;
@@ -318,6 +326,7 @@ export const useFinanceStore = create<State & Actions>()(
       textScale: "large",
       textScaleUpdatedAt: 0,
       textScaleCloudAt: 0,
+      theme: "dark",
 
       addExpense: (input) => {
         const cleanMerchant = input.merchant
@@ -1088,6 +1097,12 @@ export const useFinanceStore = create<State & Actions>()(
         set({ textScaleCloudAt: Math.max(0, Math.floor(ms)) });
       },
 
+      setTheme: (theme) => {
+        const next: "dark" | "light" | "auto" =
+          theme === "light" || theme === "auto" ? theme : "dark";
+        set({ theme: next });
+      },
+
       setBudgetSafetyBuffer: (value) => {
         const safe = Number.isFinite(value) && value >= 0 ? value : 0;
         set({
@@ -1119,7 +1134,7 @@ export const useFinanceStore = create<State & Actions>()(
     }),
     {
       name: "sally.finance",
-      version: 14,
+      version: 15,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         entries: s.entries,
@@ -1138,6 +1153,7 @@ export const useFinanceStore = create<State & Actions>()(
         textScale: s.textScale,
         textScaleUpdatedAt: s.textScaleUpdatedAt,
         textScaleCloudAt: s.textScaleCloudAt,
+        theme: s.theme,
       }),
       migrate: (raw, fromVersion) => {
         const persisted = (raw ?? {}) as Partial<State>;
@@ -1266,6 +1282,11 @@ export const useFinanceStore = create<State & Actions>()(
             actualByMonth: i.actualByMonth ?? {},
           }));
           migrated = { ...migrated, incomes };
+        }
+        if (fromVersion < 15) {
+          // Phase 334 — color-scheme preference. Default "dark" so
+          // existing users keep the exact UI they're used to.
+          migrated = { ...migrated, theme: migrated.theme ?? "dark" };
         }
         return migrated;
       },

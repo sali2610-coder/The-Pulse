@@ -47,6 +47,7 @@ import { ReceiptScanCard } from "./receipt-scan-card";
 import { PushDiagnosticsCard } from "./push-diagnostics-card";
 import { SallyCsvImportCard } from "./sally-csv-import-card";
 import { TextSizeCard } from "./text-size-card";
+import { ThemeCard } from "./theme-card";
 import { DevModeToggleCard } from "./dev-mode-toggle-card";
 import { SettingsAccordion } from "./settings-accordion";
 import { ShortcutHealthCard } from "./shortcut-health-card";
@@ -99,6 +100,7 @@ export function SettingsTab() {
          the accordion list starts higher on screen. */}
       <div className="flex flex-col gap-2">
         <TextSizeCard />
+        <ThemeCard />
         <AuthCard />
       </div>
 
