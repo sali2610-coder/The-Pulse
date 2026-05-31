@@ -24,6 +24,7 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { forecastEndOfMonth, type EndOfMonthForecast } from "@/lib/forecast";
+import { sliceForMonth } from "@/lib/projections";
 
 export type WhatIfOverrides = {
   variableSpendCut?: number;
@@ -106,16 +107,51 @@ export function simulateForecast(args: {
     return { baseline, simulated: baseline, delta: 0 };
   }
 
-  // Apply the variable-spend cut against the slice projection.
+  // Phase 333 — monthly baselines for the slider math.
+  //
+  // The baseline values above are "remaining this cycle" — they go to
+  // zero once the user is past the dayOfMonth of an income or a rule.
+  // That meant the salary / recurring sliders silently no-op'd on the
+  // late side of the month, even though the user genuinely wanted to
+  // simulate a steady-state monthly change. We now apply each pct to
+  // `max(remainingThisCycle, totalActiveMonthly)` so:
+  //
+  //   - When something hasn't happened yet this cycle, baseline ===
+  //     monthly and the math is unchanged (preserves existing tests).
+  //   - When the cycle is past, monthly > 0 still drives a real delta.
+  const totalMonthlyIncome = args.incomes
+    .filter((i) => i.active && i.amount > 0)
+    .reduce((s, i) => s + i.amount, 0);
+  const totalMonthlyRecurring = args.rules
+    .filter((r) => r.active && !r.installmentTotal)
+    .reduce((s, r) => s + r.estimatedAmount, 0);
+  let totalMonthlyVariable = 0;
+  for (const e of args.entries) {
+    if (e.needsConfirmation || e.bankPending || e.isRefund) continue;
+    if (e.excludeFromBudget) continue;
+    if (e.currency && e.currency !== "ILS") continue;
+    const slice = sliceForMonth(e, args.monthKey);
+    if (!slice) continue;
+    totalMonthlyVariable += slice.amount;
+  }
+
+  const incomeBase = Math.max(baseline.expectedIncome, totalMonthlyIncome);
+  const recurringBase = Math.max(baseline.pendingFixed, totalMonthlyRecurring);
+  const variableBase = Math.max(
+    baseline.futureCardSlices,
+    totalMonthlyVariable,
+  );
+
+  // Apply the variable-spend cut against the wider monthly base.
   const trimmedFutureCardSlices = baseline.futureCardSlices * (1 - cut);
-  const savedFromCut = baseline.futureCardSlices - trimmedFutureCardSlices;
+  const savedFromCut = variableBase * cut;
   // Phase 275 — recurring cut shrinks pendingFixed.
   const trimmedPendingFixed = baseline.pendingFixed * (1 - recurringCut);
-  const savedFromRecurring = baseline.pendingFixed - trimmedPendingFixed;
-  // Salary multiplier on expectedIncome — separate from the one-time
-  // injection so the UI can show both levers.
+  const savedFromRecurring = recurringBase * recurringCut;
+  // Salary multiplier — separate from the one-time injection so the UI
+  // can show both levers.
   const salaryAdjusted = baseline.expectedIncome * (1 + salaryDelta);
-  const salaryDeltaAbs = salaryAdjusted - baseline.expectedIncome;
+  const salaryDeltaAbs = incomeBase * salaryDelta;
 
   const simulated: EndOfMonthForecast = {
     ...baseline,
