@@ -12,6 +12,7 @@
 import type { ExpenseEntry, Income, MonthKey } from "@/types/finance";
 import { monthKeyOf } from "@/lib/dates";
 import { sliceForMonth } from "@/lib/projections";
+import { incomeForMonth } from "@/lib/income-month";
 
 export type IncomeSource = {
   id: string;
@@ -59,13 +60,19 @@ export function incomeBreakdown(args: {
   for (const inc of args.incomes) {
     if (!inc.active) continue;
     if (inc.amount <= 0) continue;
+    // Phase 335 — when the user typed an actual amount for this
+    // specific month, the source row + total should reflect what
+    // actually landed. Future-month projections still read the
+    // baseline; this is the current month only.
+    const monthAmount = incomeForMonth(inc, monthKey);
+    if (monthAmount <= 0) continue;
     sources.push({
       id: inc.id,
       label: inc.label,
-      amount: inc.amount,
+      amount: monthAmount,
       share: 0, // filled below once total known
     });
-    total += inc.amount;
+    total += monthAmount;
   }
   const refund = refundCreditThisMonth({
     entries: args.entries,

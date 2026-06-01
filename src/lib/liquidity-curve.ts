@@ -25,6 +25,7 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
+import { incomeForMonth } from "@/lib/income-month";
 
 export type LiquidityEventKind =
   | "income"
@@ -131,10 +132,16 @@ export function liquidityCurve(args: {
       });
       if (date.getTime() > horizon.getTime()) break;
       if (date.getTime() > now.getTime()) {
+        // Phase 335 — respect per-month actual override. If the
+        // user typed "actually got 12,800 this month" the event for
+        // that month uses 12,800; events for future months stay on
+        // the expected baseline (no override yet).
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        const monthAmount = incomeForMonth(inc, monthKey);
         events.push({
           whenISO: date.toISOString(),
           label: inc.label,
-          amount: inc.amount,
+          amount: monthAmount,
           kind: "income",
         });
       }

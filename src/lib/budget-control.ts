@@ -32,6 +32,7 @@ import { liquidityCurve } from "@/lib/liquidity-curve";
 import { sliceForMonth, buildStatusMap } from "@/lib/projections";
 import { addMonths, monthKeyOf } from "@/lib/dates";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
+import { incomeForMonth } from "@/lib/income-month";
 
 export type BudgetControlBreakdown = {
   cycleEndAt: string;
@@ -165,7 +166,8 @@ export function buildBudgetControlBreakdown(args: {
       // alone, so treat any same-day income as still-to-come; the
       // user can refresh the anchor and the next cycle reflects it.
       void isFirstDayOfWindow;
-      expectedIncome += inc.amount;
+      // Phase 335 — respect per-month override.
+      expectedIncome += incomeForMonth(inc, monthKey);
     }
 
     // Recurring rules — pending only. A `paid` status this month

@@ -38,6 +38,7 @@ import type {
 import { sliceForMonth } from "@/lib/projections";
 import { monthKeyOf, addMonths } from "@/lib/dates";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
+import { incomeForMonth } from "@/lib/income-month";
 
 export type RiskLevel = "safe" | "watch" | "tight" | "overdraft";
 
@@ -168,10 +169,13 @@ export function buildFinancialSnapshot(args: {
     )
     .reduce((sum, a) => sum + (a.anchorBalance ?? 0), 0);
 
-  // Expected income: pay-days still ahead this month.
+  // Expected income: pay-days still ahead this month. Phase 335 —
+  // respect per-month actual override so a "received 12,800 instead
+  // of 13,000" edit propagates to the snapshot and every reader
+  // (Pulse / Budget / EOM forecast).
   const expectedIncomeUntilNextMonth = args.incomes
     .filter((i) => i.active && (!isCurrentMonth || i.dayOfMonth >= today))
-    .reduce((sum, i) => sum + i.amount, 0);
+    .reduce((sum, i) => sum + incomeForMonth(i, monthKey), 0);
 
   // Pending recurring rules — split into "fixed monthly" vs "installment".
   const paidThisMonth = new Set(
