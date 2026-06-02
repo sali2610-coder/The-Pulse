@@ -19,6 +19,9 @@ import { useMemo, useState } from "react";
 import { useFinanceStore } from "@/lib/store";
 import { liquidityCurve } from "@/lib/liquidity-curve";
 import { FutureBalanceExplain } from "@/components/dashboard/simple/future-balance-explain";
+import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
+import { todayPulse } from "@/lib/today-pulse";
+import { currentMonthKey } from "@/lib/dates";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -104,7 +107,48 @@ export function HeroFutureBalanceCard() {
   }, [curve]);
 
   const [offset, setOffset] = useState<number | null>(null);
+  // Phase 338 — "עכשיו" preset is NOT a forecast offset. When live
+  // is true the card renders a Live Snapshot instead of curve math:
+  // current bank balance + today's activity, no future events.
+  const [live, setLive] = useState(false);
   const activeOffset = offset ?? defaultOffset;
+
+  // Phase 338 — Live Snapshot data. Computed unconditionally so the
+  // values are ready the moment the user taps "עכשיו"; cost is
+  // O(entries) and Zustand selectors already memoize the inputs.
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const snap = useMemo(() => {
+    if (!hydrated) return null;
+    return buildFinancialSnapshot({
+      accounts,
+      loans,
+      incomes,
+      entries,
+      rules,
+      statuses,
+      monthlyBudget,
+      monthKey: currentMonthKey(),
+    });
+  }, [
+    hydrated,
+    accounts,
+    loans,
+    incomes,
+    entries,
+    rules,
+    statuses,
+    monthlyBudget,
+  ]);
+  const pulse = useMemo(() => {
+    if (!hydrated) return null;
+    return todayPulse({
+      entries,
+      rules,
+      statuses,
+      monthlyBudget,
+      incomes,
+    });
+  }, [hydrated, entries, rules, statuses, monthlyBudget, incomes]);
 
   if (!hydrated || !curve) return <Skeleton />;
 
@@ -160,6 +204,90 @@ export function HeroFutureBalanceCard() {
       : "ok";
   const color =
     tone === "danger" ? "#F87171" : tone === "warn" ? "#F59E0B" : "#34D399";
+
+  // ── Live Snapshot branch ───────────────────────────────────────
+  if (live && snap && pulse) {
+    const liveBalance = Math.round(snap.currentBalance);
+    const liveNegative = liveBalance < 0;
+    const liveColor = liveNegative ? "#F87171" : "#34D399";
+    const todayInflows = Math.round(pulse.refundedToday);
+    const todayOutflows = Math.round(pulse.spentToday);
+    const monthOutflows = Math.round(snap.actualSpentThisMonth);
+
+    return (
+      <section
+        className="glass-card relative flex flex-col gap-3 overflow-hidden rounded-3xl p-6"
+        style={{
+          background: `linear-gradient(135deg, ${liveColor}14 0%, transparent 60%)`,
+        }}
+        aria-label="איפה אני עכשיו"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-micro text-muted-foreground">איפה אני עכשיו</span>
+          <span className="text-caption text-muted-foreground" dir="rtl">
+            {DAY_FMT.format(new Date())}
+          </span>
+        </div>
+
+        <span
+          data-mono="true"
+          dir="ltr"
+          className="text-hero"
+          style={{ color: liveColor }}
+        >
+          {liveNegative ? "−" : ""}
+          {ILS.format(Math.abs(liveBalance))}
+        </span>
+
+        <span className="text-caption text-muted-foreground/85">
+          מצב חשבון חי לפי הנתונים שכבר נרשמו
+        </span>
+
+        <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
+          <span>
+            נכנס היום{" "}
+            <span data-mono="true" dir="ltr" className="text-[#34D399]">
+              +{ILS.format(todayInflows)}
+            </span>
+          </span>
+          <span>
+            יצא היום{" "}
+            <span data-mono="true" dir="ltr" className="text-[#F87171]">
+              −{ILS.format(todayOutflows)}
+            </span>
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-black/25 px-3 py-2 text-caption text-muted-foreground">
+          <span>
+            סך יציאות החודש{" "}
+            <span data-mono="true" dir="ltr" className="text-foreground">
+              −{ILS.format(monthOutflows)}
+            </span>
+          </span>
+          <span>
+            פעולות היום ·{" "}
+            <span data-mono="true" dir="ltr" className="text-foreground">
+              {pulse.countToday}
+            </span>
+          </span>
+        </div>
+
+        <DatePicker
+          clamped={clamped}
+          defaultOffset={defaultOffset}
+          minOffset={minOffset}
+          maxOffset={maxOffset}
+          live={live}
+          onLive={() => setLive(true)}
+          onPick={(v) => {
+            setLive(false);
+            setOffset(v);
+          }}
+        />
+      </section>
+    );
+  }
 
   return (
     <section
@@ -229,7 +357,12 @@ export function HeroFutureBalanceCard() {
         defaultOffset={defaultOffset}
         minOffset={minOffset}
         maxOffset={maxOffset}
-        onPick={(v) => setOffset(v)}
+        live={live}
+        onLive={() => setLive(true)}
+        onPick={(v) => {
+          setLive(false);
+          setOffset(v);
+        }}
       />
 
       {/* Phase 240 — transparent math breakdown. Collapsed by default. */}
@@ -254,12 +387,19 @@ function DatePicker({
   defaultOffset,
   minOffset,
   maxOffset,
+  live,
+  onLive,
   onPick,
 }: {
   clamped: number;
   defaultOffset: number;
   minOffset: number;
   maxOffset: number;
+  /** Phase 338 — live snapshot active flag + setter. The "עכשיו"
+   *  preset is rendered as the first chip; tapping any other chip
+   *  exits live mode via onPick. */
+  live: boolean;
+  onLive: () => void;
   onPick: (offset: number) => void;
 }) {
   const [customOpen, setCustomOpen] = useState(false);
@@ -293,8 +433,20 @@ function DatePicker({
   return (
     <div className="flex flex-col gap-2 pt-1">
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          data-no-min-tap
+          onClick={onLive}
+          className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
+            live
+              ? "bg-[#34D399]/25 text-[#34D399] shadow-[inset_0_0_0_1px_#34D39988]"
+              : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          עכשיו
+        </button>
         {presets.map((p) => {
-          const active = clamped === p.offset;
+          const active = !live && clamped === p.offset;
           if (p.offset < minOffset || p.offset > maxOffset) return null;
           return (
             <button
