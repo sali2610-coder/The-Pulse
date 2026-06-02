@@ -10,11 +10,14 @@ import { describe, expect, it } from "vitest";
 
 import { expenseFormSchema } from "@/lib/schema";
 
+// Phase 336 — paymentDate is required on manual entry. Default to a
+// noon-anchored ISO so the schema's min-length(10) check passes.
 const BASE = {
   amount: 100,
   category: "food" as const,
   installments: 1,
   note: undefined,
+  paymentDate: new Date(2026, 4, 30, 12, 0, 0).toISOString(),
 };
 
 describe("expenseFormSchema", () => {
@@ -83,5 +86,38 @@ describe("expenseFormSchema", () => {
       paymentSource: "wire",
     });
     expect(r.success).toBe(false);
+  });
+
+  // Phase 336 — paymentDate field.
+  it("requires paymentDate on manual entry", () => {
+    const { paymentDate: _drop, ...without } = BASE;
+    void _drop;
+    const r = expenseFormSchema.safeParse({
+      ...without,
+      paymentSource: "cash",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const issues = r.error.issues.map((i) => i.path.join("."));
+      expect(issues).toContain("paymentDate");
+    }
+  });
+
+  it("rejects an empty paymentDate string", () => {
+    const r = expenseFormSchema.safeParse({
+      ...BASE,
+      paymentSource: "cash",
+      paymentDate: "",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts a back-dated paymentDate inside the current month", () => {
+    const r = expenseFormSchema.safeParse({
+      ...BASE,
+      paymentSource: "cash",
+      paymentDate: new Date(2026, 4, 28, 12, 0, 0).toISOString(),
+    });
+    expect(r.success).toBe(true);
   });
 });
