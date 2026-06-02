@@ -26,6 +26,12 @@ export const expenseFormSchema = z
       .min(1, { message: "מינימום תשלום אחד" })
       .max(60, { message: "עד 60 תשלומים" }),
     note: z.string().max(200, { message: "הערה ארוכה מדי" }).optional(),
+    /** Phase 336 — date the transaction actually happened (manual
+     *  back-dating). ISO date string at local noon. Default = today.
+     *  Engines route this through ExpenseEntry.chargeDate so every
+     *  per-day surface (today pulse, recent activity, heatmap, daily
+     *  budget) attaches the entry to the right day. */
+    paymentDate: z.string().min(10, { message: "תאריך תשלום לא תקין" }),
   })
   .superRefine((val, ctx) => {
     if (val.paymentSource === "card" && !val.accountId) {

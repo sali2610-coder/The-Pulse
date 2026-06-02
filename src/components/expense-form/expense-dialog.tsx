@@ -24,7 +24,14 @@ import { InstallmentsInput } from "./installments-input";
 import { SourceAccountPicker } from "./source-account-picker";
 import { ExpenseImpactPreview } from "./expense-impact-preview";
 import { SuccessOverlay } from "./success-overlay";
+import { PaymentDatePicker } from "./payment-date-picker";
 import { CategoryPickerSheet } from "@/components/confirmation/category-picker-sheet";
+
+function todayNoonIso(): string {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString();
+}
 
 type Props = {
   open: boolean;
@@ -59,6 +66,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
       accountId: undefined,
       installments: 1,
       note: "",
+      paymentDate: todayNoonIso(),
     },
   });
 
@@ -76,7 +84,14 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
       // the right account.
       const paymentMethod =
         values.paymentSource === "card" ? "credit" : "cash";
-      const result = addExpense({
+      // Phase 336 — paymentDate routes to ExpenseEntry.chargeDate so
+       // every per-day surface (Pulse / heatmap / RecentActivity /
+       // Daily Budget) attaches the entry to the user-picked day. For
+       // credit purchases the future card-settlement date is still
+       // derived from chargeDate + slice math in the projections
+       // engine, so back-dating the transaction shifts both the
+       // recorded day AND the projected settlement.
+       const result = addExpense({
         amount: values.amount,
         category: values.category,
         note: values.note?.trim() || undefined,
@@ -84,6 +99,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
         paymentMethod,
         source: "manual",
         accountId: values.accountId,
+        chargeDate: values.paymentDate,
       });
 
       const payload: ExpensePayload = {
@@ -125,7 +141,15 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
       }
       closeTimer.current = setTimeout(() => {
         setShowSuccess(false);
-        reset();
+        reset({
+          amount: undefined,
+          category: undefined,
+          paymentSource: "card",
+          accountId: undefined,
+          installments: 1,
+          note: "",
+          paymentDate: todayNoonIso(),
+        });
         onOpenChange(false);
       }, 1400);
     },
@@ -148,7 +172,17 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
       }
       setShowSuccess(false);
       mutation.reset();
-      reset();
+      // Phase 336 — re-seed paymentDate to "today" on every close so
+      // a sheet that survives across midnight reopens on the new day.
+      reset({
+        amount: undefined,
+        category: undefined,
+        paymentSource: "card",
+        accountId: undefined,
+        installments: 1,
+        note: "",
+        paymentDate: todayNoonIso(),
+      });
     }
     onOpenChange(next);
   };
@@ -290,6 +324,17 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
                   value={field.value}
                   onChange={field.onChange}
                   amount={watchedAmount}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="paymentDate"
+              render={({ field }) => (
+                <PaymentDatePicker
+                  value={field.value}
+                  onChange={field.onChange}
                 />
               )}
             />
