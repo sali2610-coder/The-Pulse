@@ -19,6 +19,7 @@ import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { FloatingCTA } from "@/components/dashboard/floating-cta";
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
+import { WithdrawalDialog } from "@/components/expense-form/withdrawal-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
 import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
@@ -187,6 +188,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
   const loans = useFinanceStore((s) => s.loans);
@@ -452,9 +454,16 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        <FloatingCTA onClick={() => setOpen(true)} />
+        <FloatingCTA
+          onExpense={() => setOpen(true)}
+          onWithdrawal={() => setWithdrawalOpen(true)}
+        />
 
         <ExpenseDialog open={open} onOpenChange={setOpen} />
+        <WithdrawalDialog
+          open={withdrawalOpen}
+          onOpenChange={setWithdrawalOpen}
+        />
       </div>
     </SnapshotProvider>
   );

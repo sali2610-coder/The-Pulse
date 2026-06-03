@@ -168,6 +168,9 @@ type ActivityItem = {
   bankPending?: boolean;
   needsConfirmation?: boolean;
   excludeFromBudget?: boolean;
+  /** Phase 348 — "withdrawal" entries render with their own badge
+   *  + a gold accent instead of the standard red expense color. */
+  isWithdrawal?: boolean;
   /** Phase 306 — broad payment source for the filter chips. */
   paySource: "income" | "credit" | "cash" | "bank" | "wallet";
 };
@@ -298,6 +301,7 @@ export function RecentActivity() {
         bankPending: e.bankPending,
         needsConfirmation: e.needsConfirmation,
         excludeFromBudget: e.excludeFromBudget,
+        isWithdrawal: e.transactionType === "withdrawal",
         paySource: classifyPaySource(e),
       });
     }
@@ -551,7 +555,13 @@ function ActivityRow({
   const tappable = Boolean(item.entryId && onTap);
   const cat = item.category ? getCategory(item.category) : null;
   const isIn = item.direction === "in";
-  const accent = isIn ? "#34D399" : cat?.accent ?? "#F87171";
+  // Phase 348 — withdrawal rows render in gold so the user can
+   // tell at a glance "moved between accounts" from "spent".
+   const accent = isIn
+     ? "#34D399"
+     : item.isWithdrawal
+       ? "#D4AF37"
+       : cat?.accent ?? "#F87171";
   const sign = isIn ? "+" : "−";
   const Icon = isIn
     ? ArrowDownToLine
@@ -608,6 +618,7 @@ function ActivityRow({
             <Pill tone="gold">בנק תלוי</Pill>
           ) : null}
           {item.isRefund ? <Pill tone="green">זיכוי</Pill> : null}
+          {item.isWithdrawal ? <Pill tone="gold">משיכה</Pill> : null}
           {item.excludeFromBudget ? <Pill tone="gold">חוץ-תקציב</Pill> : null}
         </div>
         <div className="flex items-center gap-1.5">

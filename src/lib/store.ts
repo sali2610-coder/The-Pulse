@@ -42,6 +42,21 @@ type AddExpenseInput = {
   /** Original Wallet notification body, retained so the confirmation sheet
    *  can offer a re-parse later. */
   rawNotificationBody?: string;
+  /** Phase 348 — withdrawal flow. Defaults to "expense" when unset
+   *  so every existing caller keeps its semantics. */
+  transactionType?: "expense" | "withdrawal";
+  withdrawalKind?:
+    | "cash"
+    | "atm"
+    | "transfer"
+    | "bit"
+    | "paybox"
+    | "business"
+    | "owner"
+    | "investment"
+    | "savings"
+    | "other";
+  withdrawalDestination?: string;
 };
 
 type AddRuleInput = {
@@ -425,6 +440,9 @@ export const useFinanceStore = create<State & Actions>()(
           bankPending: input.bankPending,
           needsConfirmation: input.needsConfirmation,
           rawNotificationBody: input.rawNotificationBody,
+          transactionType: input.transactionType,
+          withdrawalKind: input.withdrawalKind,
+          withdrawalDestination: input.withdrawalDestination,
         };
 
         const matched = findMatchingRule({

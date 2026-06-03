@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { NewExpenseButton } from "@/components/dashboard/new-expense-button";
+import { NewActionButton } from "@/components/dashboard/new-action-button";
 import { SPRING_SOFT } from "@/lib/motion-tokens";
 
 /**
@@ -25,7 +25,13 @@ import { SPRING_SOFT } from "@/lib/motion-tokens";
  * pb-24 so timeline rows can scroll past the FAB area without being
  * permanently covered.
  */
-export function FloatingCTA({ onClick }: { onClick: () => void }) {
+export function FloatingCTA({
+  onExpense,
+  onWithdrawal,
+}: {
+  onExpense: () => void;
+  onWithdrawal: () => void;
+}) {
   const [visible, setVisible] = useState(true);
   const lastYRef = useRef(0);
   const accumulatedRef = useRef(0);
@@ -98,7 +104,10 @@ export function FloatingCTA({ onClick }: { onClick: () => void }) {
             className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background via-background/80 to-transparent"
           />
           <div className="pointer-events-auto relative w-full max-w-md">
-            <NewExpenseButton onClick={onClick} />
+            <NewActionButton
+              onExpense={onExpense}
+              onWithdrawal={onWithdrawal}
+            />
           </div>
         </motion.div>
       ) : null}

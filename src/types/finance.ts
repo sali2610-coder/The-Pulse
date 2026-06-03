@@ -135,7 +135,31 @@ export type ExpenseEntry = {
    *  for one-off reimbursable items or test rows the user wants to
    *  track but not count. */
   excludeFromBudget?: boolean;
+  /** Phase 348 — entry classification. "expense" (default) covers
+   *  every legacy entry; "withdrawal" tags ATM / Bit / PayBox /
+   *  bank-transfer / savings movements so reports can split "spent"
+   *  from "moved between accounts". The bank still sees the cash
+   *  leave, but the user-facing language is different. */
+  transactionType?: TransactionType;
+  /** Phase 348 — withdrawal sub-classification (only meaningful when
+   *  transactionType === "withdrawal"). */
+  withdrawalKind?: WithdrawalKind;
+  /** Phase 348 — free-form withdrawal destination ("חיסכון" / "אבא"). */
+  withdrawalDestination?: string;
 };
+
+export type TransactionType = "expense" | "withdrawal";
+export type WithdrawalKind =
+  | "cash"
+  | "atm"
+  | "transfer"
+  | "bit"
+  | "paybox"
+  | "business"
+  | "owner"
+  | "investment"
+  | "savings"
+  | "other";
 
 /** Recurring outflow. Two flavours share this shape:
  *
