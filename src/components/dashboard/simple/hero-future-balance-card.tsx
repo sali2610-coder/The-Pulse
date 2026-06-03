@@ -32,6 +32,8 @@ import { useFinanceStore } from "@/lib/store";
 import { liquidityCurve } from "@/lib/liquidity-curve";
 import { FutureBalanceExplain } from "@/components/dashboard/simple/future-balance-explain";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
+import { forecastHealthScore } from "@/lib/forecast-health";
+import { PulseForecastGauge } from "@/components/dashboard/simple/pulse-forecast-gauge";
 import { todayPulse } from "@/lib/today-pulse";
 import { currentMonthKey } from "@/lib/dates";
 import { tap as hapticTap } from "@/lib/haptics";
@@ -353,37 +355,91 @@ export function HeroFutureBalanceCard() {
         </span>
       </div>
 
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
-          key={`${activePresetKey ?? "default"}|${balance}`}
-          initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-          transition={{ type: "spring", stiffness: 220, damping: 22 }}
-          data-mono="true"
-          dir="ltr"
-          className="text-hero"
-          style={{ color }}
-        >
-          {negative ? "−" : ""}
-          {ILS.format(Math.abs(balance))}
-        </motion.span>
-      </AnimatePresence>
+      {/* Phase 346 — Pulse Forecast: headline + reactive mini gauge.
+         The gauge sweeps the moment the user taps a chip, scoring
+         the chosen target balance instead of the static "today"
+         snapshot. Risk pill + reason line render beneath. */}
+      {(() => {
+        const health = forecastHealthScore({
+          startingBalance: curve.startingBalance,
+          projectedBalance: point.balance,
+          daysAhead: clamped,
+          deltaInflow: inflows,
+          deltaOutflow: outflows,
+        });
+        return (
+          <>
+            <div className="flex items-end justify-between gap-3">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={`${activePresetKey ?? "default"}|${balance}`}
+                  initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+                  transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                  data-mono="true"
+                  dir="ltr"
+                  className="text-hero"
+                  style={{ color }}
+                >
+                  {negative ? "−" : ""}
+                  {ILS.format(Math.abs(balance))}
+                </motion.span>
+              </AnimatePresence>
+              <motion.div
+                layout
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 22 }}
+                className="shrink-0"
+              >
+                <PulseForecastGauge score={health.score} band={health.band} />
+              </motion.div>
+            </div>
 
-      <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
-        <span>
-          הכנסות{" "}
-          <span data-mono="true" dir="ltr" className="text-[#34D399]">
-            +{ILS.format(Math.round(inflows))}
-          </span>
-        </span>
-        <span>
-          יציאות{" "}
-          <span data-mono="true" dir="ltr" className="text-[#F87171]">
-            −{ILS.format(Math.round(outflows))}
-          </span>
-        </span>
-      </div>
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.div
+                key={`risk|${activePresetKey ?? "default"}|${health.band}`}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-start justify-between gap-3"
+              >
+                <div className="flex min-w-0 flex-col gap-0.5 leading-tight">
+                  <span
+                    className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em]"
+                    style={{
+                      color: bandTone(health.band),
+                      background: `${bandTone(health.band)}1f`,
+                      boxShadow: `inset 0 0 0 1px ${bandTone(health.band)}55`,
+                    }}
+                  >
+                    {health.label}
+                  </span>
+                  <p className="line-clamp-2 text-[11.5px] text-muted-foreground/85">
+                    {health.reason}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-0.5 text-caption text-muted-foreground">
+                  <span>
+                    הכנסות{" "}
+                    <span data-mono="true" dir="ltr" className="text-[#34D399]">
+                      +{ILS.format(Math.round(inflows))}
+                    </span>
+                  </span>
+                  <span>
+                    יציאות{" "}
+                    <span data-mono="true" dir="ltr" className="text-[#F87171]">
+                      −{ILS.format(Math.round(outflows))}
+                    </span>
+                  </span>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </>
+        );
+      })()}
 
       {/* Phase 342 — salary banner only when the active selection is
          the "1 לחודש הבא" or "10 לחודש הבא" payday context, so the
@@ -455,6 +511,14 @@ function Skeleton() {
 }
 
 type PresetKey = "live" | "next10" | "eom" | "first" | "next-month-10" | "custom";
+
+// Phase 346 — band → hex for the risk pill + gauge glow.
+function bandTone(band: "safe" | "watch" | "tight" | "danger"): string {
+  if (band === "safe") return "#34D399";
+  if (band === "watch") return "#60A5FA";
+  if (band === "tight") return "#F59E0B";
+  return "#F87171";
+}
 
 // Phase 342 — title mirrors the active chip. Default falls back to
 // the generic forecast prompt for the initial render.
