@@ -388,6 +388,11 @@ export function forecastEndOfMonth(args: {
       .map((s) => statusKey(s.ruleId)),
   );
   let pendingFixed = 0;
+  // Phase 353 — credit-routed recurring rules contribute via the
+  // card's billing day, not the rule's own dayOfMonth. Track them
+  // separately so the credit-lane sum below adds them once and the
+  // bank-fixed lane never sees them.
+  let creditRoutedRulesThisMonth = 0;
   for (const r of args.rules) {
     if (!r.active) continue;
     if (paidThisMonth.has(statusKey(r.id))) continue;
@@ -404,6 +409,24 @@ export function forecastEndOfMonth(args: {
       if (!impact) continue;
       if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
       pendingFixed += impact.amount;
+    } else if (r.paymentSource === "card") {
+      // Default lens — route credit-source rules through the card's
+      // billing day instead of bank-fixed. Mirrors the snapshot's
+      // Phase 352 behavior so every surface stays in sync.
+      const impact = effectiveCashImpactForRule({
+        rule: r,
+        accounts: args.accounts,
+        monthKey: args.monthKey,
+      });
+      if (!impact) continue;
+      if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
+      if (
+        !startOfMonthForecast &&
+        impact.effectiveCashDate.getTime() <= now.getTime()
+      ) {
+        continue;
+      }
+      creditRoutedRulesThisMonth += impact.amount;
     } else {
       pendingFixed += r.estimatedAmount;
     }
@@ -419,7 +442,9 @@ export function forecastEndOfMonth(args: {
     .reduce((sum, l) => sum + l.monthlyInstallment, 0);
 
   // 5. Future card slices — entry slices in this month not yet posted.
-  let futureCardSlices = 0;
+  // Seeded with credit-routed recurring rules so the card lane carries
+  // them onto the forecast in the default lens too.
+  let futureCardSlices = creditRoutedRulesThisMonth;
   if (args.useEffectiveCashDates) {
     // Phase 213 lens — walk every CashImpact across all entries.
     // Only the ones whose effectiveCashDate lands in this monthKey
