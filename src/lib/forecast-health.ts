@@ -25,7 +25,24 @@
 //      in the window, score drops a tier even if the absolute number
 //      is positive.
 
-export type ForecastHealthBand = "safe" | "watch" | "tight" | "danger";
+// Phase 350 — five-band risk engine.
+//
+//   safe   → bank impact lands well above the daily burn budget
+//   steady → comfortable cushion, balanced net Δ
+//   watch  → margin shrinking, pending commitments climbing
+//   risk   → small headroom and direction trending negative
+//   danger → projected balance < 0 OR runway already collapsed
+//
+// The bands are computed from cushion-days + direction + pending
+// commitments + days-to-salary so the gauge needle reflects more
+// than just the projected number.
+
+export type ForecastHealthBand =
+  | "safe"
+  | "steady"
+  | "watch"
+  | "risk"
+  | "danger";
 
 export type ForecastHealth = {
   /** 0..100 — 0 worst, 100 best. */
@@ -39,9 +56,10 @@ export type ForecastHealth = {
 
 const BAND_LABEL: Record<ForecastHealthBand, string> = {
   safe: "צפי בטוח",
-  watch: "צפי מאוזן",
-  tight: "צפי הדוק",
-  danger: "צפי בסיכון",
+  steady: "צפי יציב",
+  watch: "צפי רגיש",
+  risk: "צפי בסיכון",
+  danger: "צפי מסוכן",
 };
 
 export function forecastHealthScore(args: {
@@ -50,6 +68,11 @@ export function forecastHealthScore(args: {
   daysAhead: number;
   deltaInflow: number;
   deltaOutflow: number;
+  /** Phase 350 — extra risk signals. All optional so callers that
+   *  don't have them yet keep working. */
+  pendingCommitmentsCount?: number;
+  daysToNextSalary?: number | null;
+  openCreditTransactionsCount?: number;
 }): ForecastHealth {
   const {
     startingBalance,
@@ -57,6 +80,9 @@ export function forecastHealthScore(args: {
     daysAhead,
     deltaInflow,
     deltaOutflow,
+    pendingCommitmentsCount = 0,
+    daysToNextSalary = null,
+    openCreditTransactionsCount = 0,
   } = args;
 
   // Headline check — projected negative is always "danger".
@@ -72,52 +98,73 @@ export function forecastHealthScore(args: {
     };
   }
 
-  // Cushion = projected balance vs a notional daily burn. The
-  // notional burn falls back to a flat ₪50/day when the user has
-  // no outflow yet (a fresh forecast), so the score doesn't divide
-  // by zero.
+  // Cushion = projected balance vs notional daily burn. Floors at
+  // ₪50/day so a fresh forecast doesn't divide by zero.
   const dailyBurn = Math.max(50, deltaOutflow / Math.max(1, daysAhead));
   const cushionDays = projectedBalance / dailyBurn;
 
   // Direction signal — net Δ over the window.
   const netDelta = deltaInflow - deltaOutflow;
+  // Commitment pressure — many open credit transactions or pending
+  // bank obligations bleed the score even when the absolute number
+  // is OK.
+  const commitmentPressure = Math.min(
+    1,
+    (openCreditTransactionsCount + pendingCommitmentsCount) / 12,
+  );
 
   let band: ForecastHealthBand;
   let reason: string;
 
-  if (cushionDays >= 30 && netDelta >= 0) {
+  if (cushionDays >= 30 && netDelta >= 0 && commitmentPressure < 0.4) {
     band = "safe";
     reason =
       projectedBalance >= startingBalance
         ? "התזרים מתחזק בטווח הזה — היתרה תעלה."
         : "יש כרית בטחון של מעל חודש קדימה.";
+  } else if (cushionDays >= 20 && netDelta >= 0) {
+    band = "steady";
+    reason =
+      daysToNextSalary !== null && daysToNextSalary <= daysAhead
+        ? "משכורת בדרך — הקצב הצפוי שומר על יציבות."
+        : "הקצב יציב והכרית סבירה.";
   } else if (cushionDays >= 10) {
     band = "watch";
     reason =
       netDelta < 0
-        ? "יותר יוצא מנכנס בטווח — שמור על הקצב."
-        : "כרית בטחון בינונית. עוקבים אחר חיובים גדולים.";
+        ? "יותר יוצא מנכנס בטווח. שמור על הקצב."
+        : commitmentPressure > 0.5
+          ? "הרבה חיובים פתוחים. שווה לסקור לפני קנייה חדשה."
+          : "כרית בטחון בינונית.";
   } else if (cushionDays >= 3) {
-    band = "tight";
+    band = "risk";
     reason =
       netDelta < 0
         ? "התזרים יורד. כדאי לדחות חיוב גדול אם אפשר."
         : "מרווח דק. כל חיוב נוסף יורגש.";
   } else {
-    band = "tight";
-    reason = "מרווח קצר מאוד עד תום הטווח.";
+    band = "danger";
+    reason =
+      daysToNextSalary !== null && daysToNextSalary > daysAhead
+        ? "מרווח קצר מאוד והמשכורת עוד רחוקה."
+        : "מרווח קצר מאוד עד תום הטווח.";
   }
 
-  // 0..100 normalization. cushionDays mapped to [0..60] for the
-  // numeric score so the inline needle sweeps visibly between
-  // ranges. Direction trim subtracts up to 20 pts when net Δ is
-  // negative regardless of cushion.
+  // 0..100 normalization. cushionDays mapped to [0..60]. Direction
+  // trim up to 20 pts. Commitment pressure trims up to 10 pts.
   const cushionScore = clamp01(cushionDays / 60) * 100;
   const directionPenalty =
     netDelta < 0
       ? Math.min(20, Math.abs(netDelta) / Math.max(1, startingBalance) * 20)
       : 0;
-  const score = Math.max(0, Math.min(100, Math.round(cushionScore - directionPenalty)));
+  const commitmentPenalty = commitmentPressure * 10;
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(cushionScore - directionPenalty - commitmentPenalty),
+    ),
+  );
 
   return {
     score,

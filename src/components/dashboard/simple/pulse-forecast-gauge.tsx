@@ -32,8 +32,9 @@ const END_DEG = 360;
 
 const BAND_ACCENT: Record<ForecastHealthBand, string> = {
   safe: "#34D399",
-  watch: "#60A5FA",
-  tight: "#F59E0B",
+  steady: "#22D3EE",
+  watch: "#FBBF24",
+  risk: "#F59E0B",
   danger: "#F87171",
 };
 

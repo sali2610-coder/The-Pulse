@@ -289,36 +289,35 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* Phase 282 — premium financial-health gauge. Single needle,
-           single score. Reads from the same buildFinancialSnapshot
-           every other card uses so the dashboard never disagrees with
-           itself. */}
+        {/* Phase 350 — "איפה אני אהיה" promoted above the health
+           gauge. It IS the hero: live snapshot by default, reactive
+           gauge, risk band, per-event timeline. Health gauge is now
+           a support widget that sits underneath. */}
+        <div className="sm:col-span-6">
+          <Safe name="HeroFutureBalanceCard">
+            <HeroFutureBalanceCard />
+          </Safe>
+        </div>
+
+        {/* Phase 282 — financial-health gauge. Single needle, single
+           score. Reads from buildFinancialSnapshot. Phase 350 trim:
+           kept here as a support widget under the forecast hero. */}
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="FinancialHealthGauge">
             <FinancialHealthGauge />
           </Safe>
         </div>
 
-        {/* Phase 295 — "טייס פיננסי" is now Home's primary AI hero.
-           Promoted from inside "פירוט מתקדם" so the smart Copilot
-           narrative reads first, not last. */}
+        {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="CopilotCard">
             <CopilotCard />
           </Safe>
         </div>
 
-        {/* ── HERO — Phase 325: HeroSpendableCard lifted directly under
-           Pulse as the Daily Budget Strip. Remaining hero rows keep
-           the risk signal + future-balance planner. */}
         <div className="sm:col-span-6">
           <Safe name="HeroInsightCard">
             <HeroInsightCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6">
-          <Safe name="HeroFutureBalanceCard">
-            <HeroFutureBalanceCard />
           </Safe>
         </div>
 

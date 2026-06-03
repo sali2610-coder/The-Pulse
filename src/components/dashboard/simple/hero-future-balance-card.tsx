@@ -133,11 +133,13 @@ export function HeroFutureBalanceCard() {
   // Phase 338 — "עכשיו" preset is NOT a forecast offset. When live
   // is true the card renders a Live Snapshot instead of curve math:
   // current bank balance + today's activity, no future events.
-  const [live, setLive] = useState(false);
+  // Phase 350 — default = live. The user lands on the LIVE snapshot
+  // so the card reads as the app's heartbeat first, forecast second.
+  const [live, setLive] = useState(true);
   // Phase 342 — track which preset is active so the headline title
   // can mirror the chip ("איפה אהיה ב-10 לחודש הבא", etc.). Custom
   // day-input uses "custom"; default-fallback uses null.
-  const [activePresetKey, setActivePresetKey] = useState<string | null>(null);
+  const [activePresetKey, setActivePresetKey] = useState<string | null>("live");
   const activeOffset = offset ?? defaultOffset;
 
   // Phase 338 — Live Snapshot data. Computed unconditionally so the
@@ -360,12 +362,28 @@ export function HeroFutureBalanceCard() {
          the chosen target balance instead of the static "today"
          snapshot. Risk pill + reason line render beneath. */}
       {(() => {
+        // Phase 350 — feed extra risk signals: open pending entries,
+        // open credit transactions, days-to-next-salary.
+        const pendingCount = (pulse?.pendingForReview ?? 0);
+        const openCredit = entries.filter(
+          (e) => e.paymentMethod === "credit" && !e.confirmedAt,
+        ).length;
+        const salaryIso = curve.nextSalaryAt;
+        const daysToSalary = salaryIso
+          ? Math.round(
+              (new Date(salaryIso).getTime() - new Date().getTime()) /
+                86_400_000,
+            )
+          : null;
         const health = forecastHealthScore({
           startingBalance: curve.startingBalance,
           projectedBalance: point.balance,
           daysAhead: clamped,
           deltaInflow: inflows,
           deltaOutflow: outflows,
+          pendingCommitmentsCount: pendingCount,
+          openCreditTransactionsCount: openCredit,
+          daysToNextSalary: daysToSalary,
         });
         return (
           <>
@@ -513,10 +531,14 @@ function Skeleton() {
 type PresetKey = "live" | "next10" | "eom" | "first" | "next-month-10" | "custom";
 
 // Phase 346 — band → hex for the risk pill + gauge glow.
-function bandTone(band: "safe" | "watch" | "tight" | "danger"): string {
+// Phase 350 — 5 bands.
+function bandTone(
+  band: "safe" | "steady" | "watch" | "risk" | "danger",
+): string {
   if (band === "safe") return "#34D399";
-  if (band === "watch") return "#60A5FA";
-  if (band === "tight") return "#F59E0B";
+  if (band === "steady") return "#22D3EE";
+  if (band === "watch") return "#FBBF24";
+  if (band === "risk") return "#F59E0B";
   return "#F87171";
 }
 

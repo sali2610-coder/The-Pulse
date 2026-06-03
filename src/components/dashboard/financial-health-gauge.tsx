@@ -144,25 +144,27 @@ export function FinancialHealthGauge() {
   const needleTip = polar(CX, CY, R - 12, needleDeg);
   const needleBackTail = polar(CX, CY, 12, needleDeg + 180);
 
+  // Phase 350 — compact support-widget layout. The forecast hero
+  // owns the dashboard's main reactive gauge now; this card is a
+  // single-line glance: left = mini arc + score, right = label +
+  // status pill. ~40% shorter than the previous hero version.
   return (
     <>
       <motion.section
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] via-black/45 to-white/[0.01] p-3 backdrop-blur-md"
+        transition={{ duration: 0.4 }}
+        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] via-black/40 to-white/[0.01] p-3 backdrop-blur-md"
         style={{
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 24px 60px -40px ${tone.glow}88, inset 0 0 60px ${tone.glow}10`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 36px -28px ${tone.glow}99`,
         }}
         aria-label={`מד בריאות פיננסית. ציון ${health.score} מתוך 100. ${statusLabel(health.score)}.`}
       >
-        {/* Faint radial wash behind the gauge — adds depth without
-           competing with the arc gradient. */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
-            background: `radial-gradient(60% 80% at 50% 100%, ${tone.glow}1f, transparent 70%)`,
+            background: `radial-gradient(50% 70% at 50% 100%, ${tone.glow}14, transparent 70%)`,
           }}
         />
 
@@ -173,10 +175,16 @@ export function FinancialHealthGauge() {
             setSheetOpen(true);
           }}
           aria-label="פתח פירוט בריאות פיננסית"
-          className="relative flex w-full flex-col items-center gap-1 text-center focus-visible:outline-none"
+          className="relative flex w-full items-center gap-3 text-start focus-visible:outline-none"
         >
-          <header className="flex w-full items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+          <Speedometer
+            score={health.score}
+            tone={tone}
+            needleTip={needleTip}
+            needleBackTail={needleBackTail}
+          />
+          <div className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
               <span
                 className="inline-flex size-1.5 rounded-full"
                 style={{
@@ -186,24 +194,17 @@ export function FinancialHealthGauge() {
               />
               בריאות פיננסית
             </span>
+            <p className="line-clamp-2 text-[11.5px] text-muted-foreground/85">
+              {health.label}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
             <StatusPill score={health.score} tone={tone} />
-          </header>
-
-          <Speedometer
-            score={health.score}
-            tone={tone}
-            needleTip={needleTip}
-            needleBackTail={needleBackTail}
-          />
-
-          <p className="-mt-1 line-clamp-1 text-[11px] text-muted-foreground/85">
-            {health.label}
-          </p>
-
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
-            פתח פירוט
-            <ChevronLeft className="size-3" />
-          </span>
+            <span className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/60">
+              פירוט
+              <ChevronLeft className="size-3" />
+            </span>
+          </div>
         </button>
       </motion.section>
 
@@ -233,7 +234,7 @@ function Speedometer({
   return (
     <svg
       viewBox={`0 0 ${VIEWBOX.w} ${VIEWBOX.h}`}
-      className="block h-[132px] w-full max-w-[300px]"
+      className="block h-[72px] w-[120px] shrink-0"
       role="img"
       aria-hidden
     >
