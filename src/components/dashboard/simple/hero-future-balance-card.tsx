@@ -15,6 +15,18 @@
 // the picker doesn't overflow on small phones.
 
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Briefcase,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Flag,
+  Sparkles,
+  Target,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { liquidityCurve } from "@/lib/liquidity-curve";
@@ -22,6 +34,7 @@ import { FutureBalanceExplain } from "@/components/dashboard/simple/future-balan
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { todayPulse } from "@/lib/today-pulse";
 import { currentMonthKey } from "@/lib/dates";
+import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -70,6 +83,14 @@ function offsetToEndOfMonth(now: Date): number {
   return Math.max(0, daysBetween(eom, now));
 }
 
+/** Phase 342 — offset to the Nth day of the NEXT calendar month,
+ *  regardless of where today sits. Distinct from offsetToDayOfMonth
+ *  which auto-picks "this month" when the day is still ahead. */
+function offsetToDayOfNextMonth(now: Date, day: number): number {
+  const target = new Date(now.getFullYear(), now.getMonth() + 1, day);
+  return daysBetween(target, now);
+}
+
 export function HeroFutureBalanceCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const accounts = useFinanceStore((s) => s.accounts);
@@ -111,6 +132,10 @@ export function HeroFutureBalanceCard() {
   // is true the card renders a Live Snapshot instead of curve math:
   // current bank balance + today's activity, no future events.
   const [live, setLive] = useState(false);
+  // Phase 342 — track which preset is active so the headline title
+  // can mirror the chip ("איפה אהיה ב-10 לחודש הבא", etc.). Custom
+  // day-input uses "custom"; default-fallback uses null.
+  const [activePresetKey, setActivePresetKey] = useState<string | null>(null);
   const activeOffset = offset ?? defaultOffset;
 
   // Phase 338 — Live Snapshot data. Computed unconditionally so the
@@ -223,7 +248,15 @@ export function HeroFutureBalanceCard() {
         aria-label="איפה אני עכשיו"
       >
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-micro text-muted-foreground">איפה אני עכשיו</span>
+          <motion.span
+            key="live-title"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className="text-micro text-muted-foreground"
+          >
+            איפה אני עכשיו
+          </motion.span>
           <span className="text-caption text-muted-foreground" dir="rtl">
             {DAY_FMT.format(new Date())}
           </span>
@@ -279,10 +312,15 @@ export function HeroFutureBalanceCard() {
           minOffset={minOffset}
           maxOffset={maxOffset}
           live={live}
-          onLive={() => setLive(true)}
-          onPick={(v) => {
+          activeKey={activePresetKey}
+          onLive={() => {
+            setLive(true);
+            setActivePresetKey("live");
+          }}
+          onPick={(v, key) => {
             setLive(false);
             setOffset(v);
+            setActivePresetKey(key);
           }}
         />
       </section>
@@ -298,16 +336,39 @@ export function HeroFutureBalanceCard() {
       aria-label="איפה הבנק יהיה בתאריך הקרוב"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-micro text-muted-foreground">איפה אהיה בתאריך</span>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={activePresetKey ?? "default"}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18 }}
+            className="text-micro text-muted-foreground"
+          >
+            {forecastTitleFor(activePresetKey)}
+          </motion.span>
+        </AnimatePresence>
         <span className="text-caption text-muted-foreground" dir="rtl">
           {DAY_FMT.format(new Date(point.whenISO))}
         </span>
       </div>
 
-      <span data-mono="true" dir="ltr" className="text-hero" style={{ color }}>
-        {negative ? "−" : ""}
-        {ILS.format(Math.abs(balance))}
-      </span>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={`${activePresetKey ?? "default"}|${balance}`}
+          initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+          transition={{ type: "spring", stiffness: 220, damping: 22 }}
+          data-mono="true"
+          dir="ltr"
+          className="text-hero"
+          style={{ color }}
+        >
+          {negative ? "−" : ""}
+          {ILS.format(Math.abs(balance))}
+        </motion.span>
+      </AnimatePresence>
 
       <div className="flex items-center justify-between gap-3 text-caption text-muted-foreground">
         <span>
@@ -324,7 +385,13 @@ export function HeroFutureBalanceCard() {
         </span>
       </div>
 
-      {lastSalaryISO ? (
+      {/* Phase 342 — salary banner only when the active selection is
+         the "1 לחודש הבא" or "10 לחודש הבא" payday context, so the
+         default view stays calm with just the two helper rows. */}
+      {lastSalaryISO &&
+      (activePresetKey === "first" ||
+        activePresetKey === "next-month-10" ||
+        activePresetKey === "next10") ? (
         <div
           className="flex items-baseline justify-between gap-2 rounded-2xl border border-[#34D399]/30 bg-[#34D399]/8 px-3 py-2"
           aria-label="קפיצת משכורת"
@@ -358,10 +425,15 @@ export function HeroFutureBalanceCard() {
         minOffset={minOffset}
         maxOffset={maxOffset}
         live={live}
-        onLive={() => setLive(true)}
-        onPick={(v) => {
+        activeKey={activePresetKey}
+        onLive={() => {
+          setLive(true);
+          setActivePresetKey("live");
+        }}
+        onPick={(v, key) => {
           setLive(false);
           setOffset(v);
+          setActivePresetKey(key);
         }}
       />
 
@@ -382,12 +454,41 @@ function Skeleton() {
   );
 }
 
+type PresetKey = "live" | "next10" | "eom" | "first" | "next-month-10" | "custom";
+
+// Phase 342 — title mirrors the active chip. Default falls back to
+// the generic forecast prompt for the initial render.
+function forecastTitleFor(key: string | null): string {
+  switch (key) {
+    case "next10":
+      return "איפה אהיה ב-10 הקרוב";
+    case "eom":
+      return "איפה אהיה בסוף החודש";
+    case "first":
+      return "איפה אהיה ב-1 לחודש הבא";
+    case "next-month-10":
+      return "איפה אהיה ב-10 לחודש הבא";
+    case "custom":
+      return "איפה אהיה בתאריך מותאם";
+    default:
+      return "איפה אהיה בתאריך";
+  }
+}
+
+type PresetMeta = {
+  key: PresetKey;
+  label: string;
+  icon: LucideIcon;
+  offset?: number; // undefined for live + custom (handled separately)
+};
+
 function DatePicker({
   clamped,
   defaultOffset,
   minOffset,
   maxOffset,
   live,
+  activeKey,
   onLive,
   onPick,
 }: {
@@ -395,30 +496,46 @@ function DatePicker({
   defaultOffset: number;
   minOffset: number;
   maxOffset: number;
-  /** Phase 338 — live snapshot active flag + setter. The "עכשיו"
-   *  preset is rendered as the first chip; tapping any other chip
-   *  exits live mode via onPick. */
   live: boolean;
+  activeKey: string | null;
   onLive: () => void;
-  onPick: (offset: number) => void;
+  onPick: (offset: number, key: PresetKey) => void;
 }) {
+  void defaultOffset;
   const [customOpen, setCustomOpen] = useState(false);
   const [customDay, setCustomDay] = useState<string>("");
 
   const now = new Date();
-  const presets: Array<{ key: string; label: string; offset: number }> = [
-    { key: "default", label: "ברירת מחדל", offset: defaultOffset },
+  // Phase 342 — reorder per spec: עכשיו → 10 הקרוב → סוף החודש →
+  // 1 לחודש הבא → 10 לחודש הבא → מותאם. Tagged with a Lucide icon
+  // each so the chip row reads like a wallet ribbon, not a filter.
+  const presets: PresetMeta[] = [
+    { key: "live", label: "עכשיו", icon: Zap },
+    {
+      key: "next10",
+      label: "10 הקרוב",
+      icon: CalendarDays,
+      offset: offsetToDayOfMonth(now, 10),
+    },
+    {
+      key: "eom",
+      label: "סוף החודש",
+      icon: Flag,
+      offset: offsetToEndOfMonth(now),
+    },
     {
       key: "first",
       label: "1 לחודש הבא",
-      offset: offsetToDayOfMonth(now, 1),
+      icon: Briefcase,
+      offset: offsetToDayOfNextMonth(now, 1),
     },
     {
-      key: "tenth",
+      key: "next-month-10",
       label: "10 לחודש הבא",
-      offset: offsetToDayOfMonth(now, 10),
+      icon: Sparkles,
+      offset: offsetToDayOfNextMonth(now, 10),
     },
-    { key: "eom", label: "סוף החודש", offset: offsetToEndOfMonth(now) },
+    { key: "custom", label: "מותאם", icon: Target },
   ];
 
   function applyCustom() {
@@ -426,103 +543,156 @@ function DatePicker({
     if (!Number.isFinite(n) || n < 1 || n > 31) return;
     const off = offsetToDayOfMonth(now, n);
     if (off < minOffset || off > maxOffset) return;
-    onPick(off);
+    hapticTap();
+    onPick(off, "custom");
     setCustomOpen(false);
   }
 
   return (
     <div className="flex flex-col gap-2 pt-1">
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          data-no-min-tap
-          onClick={onLive}
-          className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
-            live
-              ? "bg-[#34D399]/25 text-[#34D399] shadow-[inset_0_0_0_1px_#34D39988]"
-              : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          עכשיו
-        </button>
+      {/* Premium chip ribbon. Horizontal scroll on tight screens so
+         all 6 presets stay on one line; snap to each chip. */}
+      <div
+        className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="radiogroup"
+        aria-label="טווח זמן"
+      >
         {presets.map((p) => {
-          const active = !live && clamped === p.offset;
-          if (p.offset < minOffset || p.offset > maxOffset) return null;
+          let active: boolean;
+          if (p.key === "live") {
+            active = live;
+          } else if (p.key === "custom") {
+            active = !live && activeKey === "custom";
+          } else if (p.offset !== undefined) {
+            const inRange = p.offset >= minOffset && p.offset <= maxOffset;
+            if (!inRange) return null;
+            active = !live && activeKey === p.key && clamped === p.offset;
+          } else {
+            return null;
+          }
+
+          const Icon = p.icon;
+          const onClick = () => {
+            hapticTap();
+            if (p.key === "live") {
+              onLive();
+              setCustomOpen(false);
+              return;
+            }
+            if (p.key === "custom") {
+              setCustomOpen((v) => !v);
+              return;
+            }
+            if (p.offset !== undefined) {
+              onPick(p.offset, p.key);
+              setCustomOpen(false);
+            }
+          };
+
+          const accent =
+            p.key === "live" ? "#22D3EE" : "var(--neon)";
+
           return (
-            <button
+            <motion.button
               key={p.key}
               type="button"
+              role="radio"
+              aria-checked={active}
               data-no-min-tap
-              onClick={() => onPick(p.offset)}
-              className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
-                active
-                  ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
-                  : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={onClick}
+              whileTap={{ scale: 0.94 }}
+              className="relative inline-flex shrink-0 snap-center items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+              style={{
+                color: active ? accent : "rgba(255,255,255,0.75)",
+              }}
             >
+              {active ? (
+                <motion.span
+                  layoutId="hero-date-chip-pill"
+                  className="absolute inset-0 -z-10 rounded-full"
+                  style={{
+                    background: `color-mix(in srgb, ${accent} 18%, transparent)`,
+                    boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${accent} 55%, transparent), 0 0 18px -2px color-mix(in srgb, ${accent} 60%, transparent)`,
+                  }}
+                  transition={{ type: "spring", stiffness: 320, damping: 26 }}
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="absolute inset-0 -z-10 rounded-full border border-white/10 bg-white/5"
+                />
+              )}
+              <Icon className="size-3" />
               {p.label}
-            </button>
+            </motion.button>
           );
         })}
-        <button
-          type="button"
-          data-no-min-tap
-          onClick={() => setCustomOpen((v) => !v)}
-          className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
-            customOpen
-              ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
-              : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          מותאם
-        </button>
       </div>
 
-      {customOpen ? (
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2">
-          <span className="text-caption text-muted-foreground">
-            יום בחודש
-          </span>
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={2}
-            value={customDay}
-            onChange={(e) =>
-              setCustomDay(e.target.value.replace(/\D/g, "").slice(0, 2))
-            }
-            className="text-body h-10 w-16 rounded-md border border-white/12 bg-background/60 px-2 text-center text-foreground outline-none focus:border-[color:var(--neon)]/60"
-            aria-label="יום בחודש"
-            dir="ltr"
-          />
-          <button
-            type="button"
-            onClick={applyCustom}
-            className="tap-44 text-body rounded-md bg-[color:var(--neon)]/20 px-3 py-2 text-[color:var(--neon)] hover:bg-[color:var(--neon)]/30"
+      <AnimatePresence initial={false}>
+        {customOpen ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
           >
-            החל
-          </button>
-        </div>
-      ) : null}
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 p-2">
+              <span className="text-caption text-muted-foreground">
+                יום בחודש
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
+                value={customDay}
+                onChange={(e) =>
+                  setCustomDay(e.target.value.replace(/\D/g, "").slice(0, 2))
+                }
+                className="text-body h-10 w-16 rounded-md border border-white/12 bg-background/60 px-2 text-center text-foreground outline-none focus:border-[color:var(--neon)]/60"
+                aria-label="יום בחודש"
+                dir="ltr"
+              />
+              <button
+                type="button"
+                onClick={applyCustom}
+                className="tap-44 text-body rounded-md bg-[color:var(--neon)]/20 px-3 py-2 text-[color:var(--neon)] hover:bg-[color:var(--neon)]/30"
+              >
+                החל
+              </button>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-      <div className="flex items-center justify-between gap-2">
+      {/* −7 / +7 — demoted to a small footer row. */}
+      <div className="flex items-center justify-between gap-1.5 pt-0.5">
         <button
           type="button"
-          onClick={() => onPick(Math.max(minOffset, clamped - 7))}
-          disabled={clamped <= minOffset}
-          className="tap-44 text-caption flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-muted-foreground hover:bg-white/10 disabled:opacity-40"
+          onClick={() => {
+            hapticTap();
+            onPick(Math.max(minOffset, clamped - 7), "custom");
+          }}
+          disabled={clamped <= minOffset || live}
+          className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10.5px] text-muted-foreground transition-colors hover:bg-white/8 disabled:opacity-30"
           aria-label="הקדם בשבוע"
         >
-          −7 ימים
+          <ChevronRight className="size-3" />
+          7-
         </button>
         <button
           type="button"
-          onClick={() => onPick(Math.min(maxOffset, clamped + 7))}
-          disabled={clamped >= maxOffset}
-          className="tap-44 text-caption flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-muted-foreground hover:bg-white/10 disabled:opacity-40"
+          onClick={() => {
+            hapticTap();
+            onPick(Math.min(maxOffset, clamped + 7), "custom");
+          }}
+          disabled={clamped >= maxOffset || live}
+          className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10.5px] text-muted-foreground transition-colors hover:bg-white/8 disabled:opacity-30"
           aria-label="הוסף שבוע"
         >
-          +7 ימים
+          7+
+          <ChevronLeft className="size-3" />
         </button>
       </div>
     </div>
