@@ -26,6 +26,17 @@ export const expenseFormSchema = z
       .min(1, { message: "מינימום תשלום אחד" })
       .max(60, { message: "עד 60 תשלומים" }),
     note: z.string().max(200, { message: "הערה ארוכה מדי" }).optional(),
+    /** Phase 339 — structured store / place name. Optional. The
+     *  ExpenseDialog learns from prior entries per category and
+     *  surfaces chip suggestions (e.g. אמיר / רמי לוי / שופרסל once
+     *  the user has typed any of those under "סופר"). Routed to
+     *  ExpenseEntry.merchant so every downstream surface (recent
+     *  activity / dedup / per-category drilldowns) already consumes
+     *  it. `note` stays free-form for general remarks. */
+    merchantLabel: z
+      .string()
+      .max(60, { message: "שם מקום ארוך מדי" })
+      .optional(),
     /** Phase 336 — date the transaction actually happened (manual
      *  back-dating). ISO date string at local noon. Default = today.
      *  Engines route this through ExpenseEntry.chargeDate so every

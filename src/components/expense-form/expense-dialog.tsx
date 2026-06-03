@@ -25,6 +25,7 @@ import { SourceAccountPicker } from "./source-account-picker";
 import { ExpenseImpactPreview } from "./expense-impact-preview";
 import { SuccessOverlay } from "./success-overlay";
 import { PaymentDatePicker } from "./payment-date-picker";
+import { MerchantField } from "./merchant-field";
 import { CategoryPickerSheet } from "@/components/confirmation/category-picker-sheet";
 
 function todayNoonIso(): string {
@@ -66,6 +67,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
       accountId: undefined,
       installments: 1,
       note: "",
+      merchantLabel: "",
       paymentDate: todayNoonIso(),
     },
   });
@@ -100,6 +102,12 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
         source: "manual",
         accountId: values.accountId,
         chargeDate: values.paymentDate,
+        // Phase 339 — structured store / place name → ExpenseEntry.merchant.
+        // Every downstream surface that already keys off `merchant`
+        // (RecentActivity row title, dedup, category drilldowns) picks
+        // it up automatically, and the next entry in the same category
+        // will surface this name as a chip suggestion.
+        merchant: values.merchantLabel?.trim() || undefined,
       });
 
       const payload: ExpensePayload = {
@@ -148,6 +156,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
           accountId: undefined,
           installments: 1,
           note: "",
+          merchantLabel: "",
           paymentDate: todayNoonIso(),
         });
         onOpenChange(false);
@@ -181,6 +190,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
         accountId: undefined,
         installments: 1,
         note: "",
+        merchantLabel: "",
         paymentDate: todayNoonIso(),
       });
     }
@@ -346,6 +356,18 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
               accountId={watchedAccount}
               installments={watchedInstallments}
               source={watchedSource}
+            />
+
+            <Controller
+              control={control}
+              name="merchantLabel"
+              render={({ field }) => (
+                <MerchantField
+                  value={field.value}
+                  onChange={field.onChange}
+                  category={watchedCategory}
+                />
+              )}
             />
 
             <Controller

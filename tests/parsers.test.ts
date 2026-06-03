@@ -80,7 +80,10 @@ describe("parseSmsByIssuer", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result.issuer).toBe("cal");
-    expect(r.result.category).toBe("food"); // שופרסל → food
+    // Phase 339 — grocery merchants route to the dedicated
+    // `supermarket` bucket instead of `food` (which keeps cafés /
+    // restaurants / takeout).
+    expect(r.result.category).toBe("supermarket");
   });
 
   it("rejects unknown issuer", () => {

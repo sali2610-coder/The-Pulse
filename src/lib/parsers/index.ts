@@ -29,14 +29,16 @@ export type ParseSuccess = { ok: true; result: ParsedSms };
 export function categorize(merchant: string): CategoryId {
   const m = merchant.toLowerCase();
 
-  // Supermarkets / groceries (Hebrew + English variants — Wallet payloads
-  // often arrive in English).
+  // Supermarkets / groceries — Phase 339 routes these to the new
+  // dedicated `supermarket` bucket. Distinct from `food` (restaurants
+  // / cafés / takeout) so the monthly chart shows the grocery line
+  // separately.
   if (
-    /(שופר|רמי לוי|ויקטורי|אושר|טיב טעם|יוחננוף|מגה|shufersal|rami\s*levy|victory|tiv\s*ta|yochananof|mega|grocer|supermarket)/i.test(
+    /(שופר|רמי לוי|ויקטורי|אושר|טיב טעם|יוחננוף|מגה|אמיר|amir|shufersal|rami\s*levy|victory|tiv\s*ta|yochananof|mega|grocer|supermarket)/i.test(
       m,
     )
   ) {
-    return "food";
+    return "supermarket";
   }
   // Coffee shops + restaurants
   if (

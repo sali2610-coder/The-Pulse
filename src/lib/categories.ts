@@ -7,12 +7,14 @@ import {
   HeartPulse,
   GraduationCap,
   Gift,
+  ShoppingCart,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
 export type CategoryId =
   | "food"
+  | "supermarket"
   | "transport"
   | "shopping"
   | "entertainment"
@@ -35,6 +37,10 @@ export type Category = {
 // from this list so the user's brain can scan the dashboard fast.
 export const CATEGORIES: Category[] = [
   { id: "food", label: "אוכל", icon: Utensils, accent: "#F97316" },
+  // Phase 339 — supermarket is its own bucket. Distinct from "אוכל"
+  // (restaurants / takeout) and "קניות" (apparel / lifestyle) so the
+  // grocery line on every chart is visible per-month.
+  { id: "supermarket", label: "סופר", icon: ShoppingCart, accent: "#F59E0B" },
   { id: "transport", label: "תחבורה", icon: Car, accent: "#22D3EE" },
   { id: "shopping", label: "קניות", icon: ShoppingBag, accent: "#FACC15" },
   { id: "entertainment", label: "בילויים", icon: Film, accent: "#A78BFA" },
