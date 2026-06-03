@@ -27,7 +27,7 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { addMonths, monthKeyOf } from "@/lib/dates";
-import { ruleSchedule } from "@/lib/installment-schedule";
+import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
 import {
   effectiveCashImpactForRule,
   effectiveCashImpactStream,
@@ -165,9 +165,21 @@ export function buildCashFlowBuckets(args: {
   }
 
   // 2. Loans — one bucket each. dayOfMonth drives the debit.
+  //
+  // Phase 343 — `loanSchedule(loan, monthKey).active` gate added.
+  // Before this gate, a loan with a finite installment plan that had
+  // already completed (or hadn't started yet) still emitted an
+  // obligation each calendar month the window touched, and a loan
+  // with dayOfMonth ≤ horizon's day fired in BOTH calendar months
+  // when the window spanned a rollover — so a "10 לחודש הבא"
+  // forecast with an active dayOfMonth-5 loan counted that loan
+  // twice (current month + next month). The schedule check makes
+  // the emission idempotent per active month, matching the loans
+  // panel total.
   for (const loan of args.loans) {
     if (!loan.active) continue;
     for (const monthKey of monthsInWindow(now, horizon)) {
+      if (!loanSchedule(loan, monthKey).active) continue;
       const date = dateOfMonth(monthKey, loan.dayOfMonth);
       if (date.getTime() <= now.getTime()) continue;
       if (date.getTime() > horizon.getTime()) continue;

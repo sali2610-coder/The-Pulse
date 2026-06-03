@@ -29,6 +29,8 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { liquidityCurve } from "@/lib/liquidity-curve";
+import { activeMonthlyLoansTotal } from "@/lib/loans-active";
+import { monthKeyOf } from "@/lib/dates";
 
 export type FutureBalanceBreakdown = {
   whenISO: string;
@@ -79,7 +81,19 @@ export function buildFutureBalanceBreakdown(args: {
   let income = 0;
   let cardSettlements = 0;
   let bankFixed = 0;
-  let loans = 0;
+  // Phase 343 — loans is the canonical Σ monthlyInstallment of
+  // currently-active loans, matching the Loans Panel headline.
+  // Aggregating the per-event window sum (the previous behavior)
+  // double-counted any loan whose dayOfMonth landed in both calendar
+  // months when the forecast window spanned a rollover (e.g.
+  // "10 לחודש הבא" with today on the 3rd → 38-day window → loan with
+  // dayOfMonth=5 emits twice). The projected balance still uses the
+  // real per-event sum from the curve; the breakdown row mirrors
+  // the Loans Panel so the two surfaces never disagree.
+  const loans = activeMonthlyLoansTotal({
+    loans: args.loans,
+    monthKey: monthKeyOf(now),
+  });
   for (let i = 1; i <= clamped; i++) {
     for (const e of curve.points[i].events) {
       switch (e.kind) {
@@ -93,7 +107,7 @@ export function buildFutureBalanceBreakdown(args: {
           bankFixed += Math.abs(e.amount);
           break;
         case "loan":
-          loans += Math.abs(e.amount);
+          // counted in `loans` via activeMonthlyLoansTotal above.
           break;
       }
     }

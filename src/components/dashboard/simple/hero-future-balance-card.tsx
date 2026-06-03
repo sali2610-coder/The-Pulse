@@ -465,7 +465,7 @@ function forecastTitleFor(key: string | null): string {
     case "eom":
       return "איפה אהיה בסוף החודש";
     case "first":
-      return "איפה אהיה ב-1 לחודש הבא";
+      return "איפה אהיה ב-2 לחודש הבא";
     case "next-month-10":
       return "איפה אהיה ב-10 לחודש הבא";
     case "custom":
@@ -524,10 +524,14 @@ function DatePicker({
       offset: offsetToEndOfMonth(now),
     },
     {
+      // Phase 343 — moved from day-1 to day-2. The 1st of the month
+      // is salary-only; credit card settlements + many recurring
+      // direct debits land on the 2nd, so the forecast for "פוסט-
+      // משכורת" reads more accurately when anchored on day 2.
       key: "first",
-      label: "1 לחודש הבא",
+      label: "2 לחודש הבא",
       icon: Briefcase,
-      offset: offsetToDayOfNextMonth(now, 1),
+      offset: offsetToDayOfNextMonth(now, 2),
     },
     {
       key: "next-month-10",
