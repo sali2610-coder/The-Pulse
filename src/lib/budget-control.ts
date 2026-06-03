@@ -29,7 +29,8 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { liquidityCurve } from "@/lib/liquidity-curve";
-import { sliceForMonth, buildStatusMap } from "@/lib/projections";
+import { buildStatusMap } from "@/lib/projections";
+import { effectiveCashImpactStream } from "@/lib/effective-cash-date";
 import { addMonths, monthKeyOf } from "@/lib/dates";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
 import { incomeForMonth } from "@/lib/income-month";
@@ -194,23 +195,43 @@ export function buildBudgetControlBreakdown(args: {
     }
   }
 
-  // Card / entry slices — every slice with chargeDate inside the
-  // window AND > today. Past slices already touched the anchor.
+  // Card / entry impacts — Phase 349 routes EVERY entry through
+  // effectiveCashImpactStream so credit purchases land on the
+  // card's billing day, not on the transaction day. A ₪59.90 buy
+  // today on a card billed on the 2nd of next month now lives in
+  // `pendingCard` until that 2nd; the user's bank anchor is not
+  // touched twice. Cash entries still impact at chargeDate (the
+  // stream resolves cash kind to immediate impact).
   let pendingCard = 0;
   const cycleEndMs = cycleEndDay.getTime() + 86_399_999;
   const todayMs = today.getTime();
+  void monthKeyToday;
+  void monthKeyNext;
+  const cashImpacts = effectiveCashImpactStream({
+    entries: args.entries,
+    accounts: args.accounts,
+    now,
+  });
+  for (const impact of cashImpacts) {
+    if (impact.kind !== "card") continue;
+    const ms = impact.effectiveCashDate.getTime();
+    if (ms <= todayMs) continue;
+    if (ms > cycleEndMs) continue;
+    pendingCard += impact.amount;
+  }
+  // Future-dated CASH entries (Phase 336 forward-dated manual cash)
+  // are not routed through `card` kind — count them as direct bank
+  // pending impacts so the available math doesn't ignore them.
   for (const e of args.entries) {
     if (e.isRefund) continue;
     if (e.currency && e.currency !== "ILS") continue;
     if (e.excludeFromBudget) continue;
-    for (const monthKey of [monthKeyToday, monthKeyNext]) {
-      const slice = sliceForMonth(e, monthKey);
-      if (!slice) continue;
-      const ms = slice.chargeDate.getTime();
-      if (ms <= todayMs) continue;
-      if (ms > cycleEndMs) continue;
-      pendingCard += slice.amount;
-    }
+    if (e.paymentMethod !== "cash") continue;
+    const iso = e.chargeDate ?? e.createdAt;
+    if (!iso) continue;
+    const ms = new Date(iso).getTime();
+    if (!Number.isFinite(ms) || ms <= todayMs || ms > cycleEndMs) continue;
+    pendingCard += Math.abs(e.amount);
   }
 
   const available =
