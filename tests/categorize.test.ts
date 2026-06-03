@@ -2,17 +2,23 @@ import { describe, expect, it } from "vitest";
 import { categorize } from "@/lib/parsers";
 
 describe("categorize", () => {
+  // Phase 339 — grocery merchants route to the dedicated "supermarket"
+  // bucket instead of "food" (which now covers restaurants / cafés
+  // / takeout only).
   it("matches English Wallet-style supermarket merchants", () => {
-    expect(categorize("Shufersal")).toBe("food");
-    expect(categorize("SHUFERSAL DEAL")).toBe("food");
-    expect(categorize("Rami Levy")).toBe("food");
-    expect(categorize("Mega")).toBe("food");
+    expect(categorize("Shufersal")).toBe("supermarket");
+    expect(categorize("SHUFERSAL DEAL")).toBe("supermarket");
+    expect(categorize("Rami Levy")).toBe("supermarket");
+    expect(categorize("Mega")).toBe("supermarket");
+    expect(categorize("Amir")).toBe("supermarket");
   });
 
   it("matches Hebrew supermarkets", () => {
-    expect(categorize("שופרסל")).toBe("food");
-    expect(categorize("שופרסל דיל סניף 123")).toBe("food");
-    expect(categorize("רמי לוי")).toBe("food");
+    expect(categorize("שופרסל")).toBe("supermarket");
+    expect(categorize("שופרסל דיל סניף 123")).toBe("supermarket");
+    expect(categorize("רמי לוי")).toBe("supermarket");
+    expect(categorize("אמיר")).toBe("supermarket");
+    expect(categorize("יוחננוף")).toBe("supermarket");
   });
 
   it("matches coffee shops (Cofix, Aroma, café, etc.)", () => {

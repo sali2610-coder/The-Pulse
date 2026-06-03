@@ -259,6 +259,11 @@ export function IncomeBreakdownCard() {
       </section>
 
       <IncomeEditorSheet
+        // Phase 340 — keying on the active income + monthKey causes
+        // the sheet to remount with fresh state when either changes;
+        // the editor's local draftActual then reads from useState
+        // lazy-init and no effect-driven sync is needed.
+        key={`${editing?.id ?? "none"}|${monthKey}`}
         open={editing !== null}
         income={editing}
         monthKey={monthKey}
@@ -282,15 +287,12 @@ function IncomeEditorSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const setIncomeActual = useFinanceStore((s) => s.setIncomeActual);
-  const [draftActual, setDraftActual] = useState<string>("");
-
-  const reseed = (i: Income | null) => {
-    if (!i) return;
-    setDraftActual(String(Math.round(actualFor(i, monthKey))));
-  };
-
-  // Pure derived state — no setState in effect.
-  useMemo(() => reseed(income), [income, monthKey]);
+  // Phase 340 — lazy initial state. The parent remounts the sheet
+  // (key={income.id|monthKey}) so a fresh income / month boot reads
+  // the right baseline once; no setState-in-effect dance.
+  const [draftActual, setDraftActual] = useState<string>(() =>
+    income ? String(Math.round(actualFor(income, monthKey))) : "",
+  );
 
   if (!income) {
     return (
