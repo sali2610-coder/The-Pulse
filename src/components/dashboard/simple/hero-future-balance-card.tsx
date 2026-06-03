@@ -602,6 +602,13 @@ function DatePicker({
               type="button"
               role="radio"
               aria-checked={active}
+              aria-label={
+                p.key === "live"
+                  ? "בחר תחזית לעכשיו"
+                  : p.key === "custom"
+                    ? "בחר תחזית לתאריך מותאם"
+                    : `בחר תחזית ל-${p.label}`
+              }
               data-no-min-tap
               onClick={onClick}
               whileTap={{ scale: 0.94 }}
