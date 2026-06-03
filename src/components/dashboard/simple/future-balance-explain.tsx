@@ -270,28 +270,29 @@ function ItemsList({ items }: { items: ForecastItem[] }) {
               : meta.tone === "danger"
                 ? "#F87171"
                 : "#60A5FA";
+          // Phase 347 — for credit items the transaction day and the
+          // bank-impact day differ; surface both ("עסקה: DD.MM /
+          // יורד מהבנק: DD.MM"). For every other kind the two dates
+          // are equal so render a single line.
+          const tx = new Date(it.transactionDateISO);
+          const impact = new Date(it.bankImpactDateISO);
+          const datesDiffer =
+            it.transactionDateISO !== it.bankImpactDateISO;
           return (
             <li
-              key={`${it.dateISO}-${it.kind}-${i}`}
-              className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-[11.5px]"
+              key={`${it.bankImpactDateISO}-${it.kind}-${i}`}
+              className="flex flex-col gap-1 rounded-lg px-2 py-1.5"
             >
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <span
-                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-medium"
-                  style={{ background: `${color}22`, color }}
-                >
-                  {meta.label}
-                </span>
-                <span className="truncate text-foreground/90">{it.label}</span>
-              </div>
-              <div className="flex shrink-0 items-baseline gap-2">
-                <span
-                  className="text-[10px] text-muted-foreground/75"
-                  dir="ltr"
-                  data-mono="true"
-                >
-                  {ITEM_DATE_FMT.format(new Date(it.dateISO))}
-                </span>
+              <div className="flex items-center justify-between gap-2 text-[11.5px]">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-medium"
+                    style={{ background: `${color}22`, color }}
+                  >
+                    {meta.label}
+                  </span>
+                  <span className="truncate text-foreground/90">{it.label}</span>
+                </div>
                 <span
                   data-mono="true"
                   dir="ltr"
@@ -301,6 +302,25 @@ function ItemsList({ items }: { items: ForecastItem[] }) {
                   {meta.sign}
                   {ILS_FMT.format(Math.round(it.amount))}
                 </span>
+              </div>
+              <div
+                className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/75"
+                dir="ltr"
+                data-mono="true"
+              >
+                {datesDiffer ? (
+                  <>
+                    <span>עסקה: {ITEM_DATE_FMT.format(tx)}</span>
+                    <span>יורד מהבנק: {ITEM_DATE_FMT.format(impact)}</span>
+                  </>
+                ) : (
+                  <span>{ITEM_DATE_FMT.format(impact)}</span>
+                )}
+                {it.cardLabel ? (
+                  <span dir="rtl" className="text-muted-foreground/85">
+                    מקור: {it.cardLabel}
+                  </span>
+                ) : null}
               </div>
             </li>
           );

@@ -34,10 +34,20 @@ export type LiquidityEventKind =
   | "bank_debit";
 
 export type LiquidityEvent = {
+  /** ISO of when the cash actually moves in/out of the bank. */
   whenISO: string;
+  /** Phase 347 — ISO of the original transaction date. For card
+   *  purchases this is the buy date (chargeDate of the entry); for
+   *  income / bank-direct-debit / loan / cash it equals `whenISO`.
+   *  Optional so legacy test fixtures + callers that never produced
+   *  a separate transaction date still typecheck; consumers default
+   *  to `whenISO` when unset. */
+  transactionISO?: string;
   label: string;
   amount: number; // signed: income > 0, debit < 0
   kind: LiquidityEventKind;
+  /** Optional card label so the UI can surface "Visa ****1234". */
+  cardLabel?: string;
 };
 
 export type LiquidityPoint = {
@@ -103,6 +113,7 @@ export function liquidityCurve(args: {
     for (const ob of bucket.obligations) {
       events.push({
         whenISO: ob.effectiveCashAt,
+        transactionISO: ob.transactionAt ?? ob.effectiveCashAt,
         label: ob.label,
         amount: -ob.amount,
         kind: bucket.source === "card"
@@ -110,6 +121,7 @@ export function liquidityCurve(args: {
           : bucket.source === "loan"
             ? "loan"
             : "bank_debit",
+        cardLabel: bucket.source === "card" ? bucket.label : undefined,
       });
     }
   }
@@ -140,6 +152,7 @@ export function liquidityCurve(args: {
         const monthAmount = incomeForMonth(inc, monthKey);
         events.push({
           whenISO: date.toISOString(),
+          transactionISO: date.toISOString(),
           label: inc.label,
           amount: monthAmount,
           kind: "income",

@@ -49,9 +49,19 @@ export type ForecastItem = {
   label: string;
   /** Always positive — the kind decides the sign in the UI. */
   amount: number;
-  /** ISO of the event's effective cash impact. */
+  /** Phase 347 — ISO of when the underlying transaction happened.
+   *  For card purchases this is the purchase / chargeDate. */
+  transactionDateISO: string;
+  /** Phase 347 — ISO of when the cash actually leaves / enters the
+   *  bank. For credit purchases this is the next card-billing day;
+   *  for cash / bank / loan / income it equals transactionDateISO. */
+  bankImpactDateISO: string;
+  /** Legacy alias for bankImpactDateISO. Kept so existing readers
+   *  (CSV exports, older test snapshots) keep working. */
   dateISO: string;
   kind: ForecastItemKind;
+  /** Optional card display label ("Visa ****1234") when kind="credit". */
+  cardLabel?: string;
   /** True when the event has yet to land (always true today —
    *  past events don't enter `includedItems`). Kept as an explicit
    *  field so the UI can later toggle "show what already settled". */
@@ -131,13 +141,17 @@ export function buildFutureBalanceBreakdown(args: {
   for (let i = 1; i <= clamped; i++) {
     for (const e of curve.points[i].events) {
       const amount = Math.abs(e.amount);
+      const txIso = e.transactionISO ?? e.whenISO;
+      const impactIso = e.whenISO;
       switch (e.kind) {
         case "income":
           deltaIncome += e.amount; // positive
           items.push({
             label: e.label,
             amount,
-            dateISO: e.whenISO,
+            transactionDateISO: txIso,
+            bankImpactDateISO: impactIso,
+            dateISO: impactIso,
             kind: "income",
             expected: true,
           });
@@ -147,8 +161,11 @@ export function buildFutureBalanceBreakdown(args: {
           items.push({
             label: e.label,
             amount,
-            dateISO: e.whenISO,
+            transactionDateISO: txIso,
+            bankImpactDateISO: impactIso,
+            dateISO: impactIso,
             kind: "credit",
+            cardLabel: e.cardLabel,
             expected: true,
           });
           break;
@@ -157,7 +174,9 @@ export function buildFutureBalanceBreakdown(args: {
           items.push({
             label: e.label,
             amount,
-            dateISO: e.whenISO,
+            transactionDateISO: txIso,
+            bankImpactDateISO: impactIso,
+            dateISO: impactIso,
             kind: "bank_fixed",
             expected: true,
           });
@@ -167,7 +186,9 @@ export function buildFutureBalanceBreakdown(args: {
           items.push({
             label: e.label,
             amount,
-            dateISO: e.whenISO,
+            transactionDateISO: txIso,
+            bankImpactDateISO: impactIso,
+            dateISO: impactIso,
             kind: "loan",
             expected: true,
           });
@@ -199,13 +220,17 @@ export function buildFutureBalanceBreakdown(args: {
     items.push({
       label: entry.merchant || entry.note || "הוצאה ידנית",
       amount,
+      transactionDateISO: new Date(chargeIso).toISOString(),
+      bankImpactDateISO: new Date(chargeIso).toISOString(),
       dateISO: new Date(chargeIso).toISOString(),
       kind: "manual_expense",
       expected: true,
     });
   }
 
-  items.sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+  items.sort((a, b) =>
+    a.bankImpactDateISO.localeCompare(b.bankImpactDateISO),
+  );
 
   // Count entries the engine excluded from the projection so the
   // explain panel can warn the user transparently.

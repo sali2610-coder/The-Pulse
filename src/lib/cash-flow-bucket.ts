@@ -42,8 +42,15 @@ export type BucketSource = "card" | "loan" | "bank_debit";
 export type BucketObligation = {
   label: string;
   amount: number;
-  /** ISO of when this individual obligation hits. */
+  /** ISO of when this individual obligation hits the bank. */
   effectiveCashAt: string;
+  /** Phase 347 — ISO of when the underlying transaction actually
+   *  happened. For card purchases this is the buy date; for bank
+   *  debits / loans / cash entries it equals effectiveCashAt
+   *  (transaction date and bank-impact date are the same).
+   *  Optional so legacy fixtures still typecheck — consumers fall
+   *  back to effectiveCashAt when unset. */
+  transactionAt?: string;
   kind: "recurring" | "installment" | "loan" | "card_entry";
   refId: string;
 };
@@ -158,6 +165,7 @@ export function buildCashFlowBuckets(args: {
         label: rule.label,
         amount: impact.amount,
         effectiveCashAt: impact.effectiveCashDate.toISOString(),
+        transactionAt: impact.ruleDate.toISOString(),
         kind: rule.installmentTotal ? "installment" : "recurring",
         refId: rule.id,
       });
@@ -189,6 +197,7 @@ export function buildCashFlowBuckets(args: {
         label: loan.label,
         amount: loan.monthlyInstallment,
         effectiveCashAt: date.toISOString(),
+        transactionAt: date.toISOString(),
         kind: "loan",
         refId: loan.id,
       });
@@ -214,6 +223,7 @@ export function buildCashFlowBuckets(args: {
       label: pickEntryLabel(args.entries, impact),
       amount: impact.amount,
       effectiveCashAt: impact.effectiveCashDate.toISOString(),
+      transactionAt: impact.purchaseDate.toISOString(),
       kind: "card_entry",
       refId: `entry:${impact.viaCardId}:${ts}`,
     });
