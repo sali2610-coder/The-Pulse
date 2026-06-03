@@ -49,6 +49,15 @@ import {
 } from "@/lib/use-attention-center";
 import { tap as hapticTap } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { getCategory, type CategoryId } from "@/lib/categories";
+import type { Account, ExpenseEntry } from "@/types/finance";
+import {
+  ArrowDownToLine,
+  Banknote as CashIcon,
+  CreditCard as CreditIcon,
+  Landmark,
+  StickyNote,
+} from "lucide-react";
 
 import { formatCurrencyAmount } from "@/lib/money";
 const ILS = { format: (v: number) => formatCurrencyAmount(v) };
@@ -523,7 +532,19 @@ function PulseDaySheet({
   pulse: ReturnType<typeof todayPulse>;
   tone: { fg: string; glow: string; bg: string; label: string };
 }) {
+  // Phase 351 — pull entries + accounts so driver rows can render
+  // merchant / card / category / time / installments / withdrawal
+  // tag from the real transaction objects instead of the timeline's
+  // hour-only struct.
+  const entries = useFinanceStore((s) => s.entries);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const richDrivers = useMemo(
+    () => buildRichDrivers({ entries, accounts, incomes }),
+    [entries, accounts, incomes],
+  );
   const driverEvents = [...pulse.timeline].sort((a, b) => b.amount - a.amount);
+  void driverEvents;
   const action =
     pulse.state === "stress"
       ? "פעל עכשיו: דחה רכישה לא דחופה, או חכה למשכורת לפני חיוב גדול."
@@ -599,51 +620,15 @@ function PulseDaySheet({
         />
       </div>
 
-      {driverEvents.length > 0 ? (
+      {richDrivers.length > 0 ? (
         <section className="flex flex-col gap-1.5">
           <span className="text-caption font-medium text-foreground">
             פעולות שהשפיעו על Pulse
           </span>
-          <ul className="flex flex-col gap-1">
-            {driverEvents.slice(0, 5).map((ev, i) => {
-              const isIn = ev.kind === "income" || ev.kind === "refund";
-              const color = isIn
-                ? ev.kind === "income"
-                  ? "#34D399"
-                  : "#A78BFA"
-                : ev.kind === "pending"
-                  ? "#FBBF24"
-                  : "#F87171";
-              const label =
-                ev.kind === "income"
-                  ? "הכנסה"
-                  : ev.kind === "refund"
-                    ? "זיכוי"
-                    : ev.kind === "pending"
-                      ? "ממתין"
-                      : "חיוב";
-              return (
-                <li
-                  key={i}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-black/25 p-2.5 text-[12px] text-foreground"
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="size-2 rounded-full"
-                      style={{
-                        background: color,
-                        boxShadow: `0 0 8px ${color}aa`,
-                      }}
-                    />
-                    {label} · {String(ev.hour).padStart(2, "0")}:00
-                  </span>
-                  <span data-mono="true" dir="ltr" style={{ color }}>
-                    {isIn ? "+" : "−"}
-                    {ILS.format(ev.amount)}
-                  </span>
-                </li>
-              );
-            })}
+          <ul className="flex flex-col gap-1.5">
+            {richDrivers.map((d, i) => (
+              <RichDriverRow key={`${d.id}-${i}`} item={d} />
+            ))}
           </ul>
         </section>
       ) : null}
@@ -698,5 +683,249 @@ function SheetTile({
         {value}
       </span>
     </div>
+  );
+}
+
+// Phase 351 — rich driver row data + render.
+//
+// A row tells the user, at a glance:
+//   - who they paid (merchant / income source / withdrawal target)
+//   - which card / account
+//   - category + time of day
+//   - installments tag if it's a multi-pay plan
+//   - free-form note in a smaller line beneath
+//   - amount in a color matched to expense / withdrawal / income /
+//     refund / pending
+//
+// Pure-presentation; the data layer reads straight from the
+// Zustand store.
+
+type RichDriverKind =
+  | "expense"
+  | "withdrawal"
+  | "income"
+  | "refund"
+  | "pending";
+
+type RichDriver = {
+  id: string;
+  title: string;
+  /** Sub-line "MAX Gold • אשראי" / "Bank Hapoalim • משיכה" / etc. */
+  sourceLabel: string;
+  /** Category Hebrew label + icon-color combo. */
+  category?: { id: CategoryId; label: string; icon: string; accent: string };
+  /** Local time string "HH:mm". Empty when the event has no real
+   *  time-of-day (income projections from dayOfMonth). */
+  timeLabel: string;
+  amount: number;
+  kind: RichDriverKind;
+  installments?: number;
+  note?: string;
+  /** Phase 348 — when withdrawal, surface withdrawal kind hint. */
+  withdrawalKind?: string;
+};
+
+function isSameLocalDay(iso: string | undefined, now: Date): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+function cardOrAccountLabel(
+  entry: ExpenseEntry,
+  accounts: Account[],
+): string {
+  if (entry.accountId) {
+    const acc = accounts.find((a) => a.id === entry.accountId);
+    if (acc) {
+      if (acc.kind === "card") {
+        const tail = acc.cardLast4 ?? entry.cardLast4;
+        return tail ? `${acc.label} ****${tail}` : acc.label;
+      }
+      return acc.label;
+    }
+  }
+  if (entry.cardLast4) return `****${entry.cardLast4}`;
+  if (entry.paymentMethod === "credit") return "אשראי";
+  if (entry.paymentMethod === "cash") return "מזומן";
+  return "לא ידוע";
+}
+
+function paymentMethodLabel(entry: ExpenseEntry): string {
+  if (entry.transactionType === "withdrawal") return "משיכה";
+  if (entry.paymentMethod === "credit") return "אשראי";
+  return "מזומן";
+}
+
+const WITHDRAWAL_KIND_LABEL: Record<string, string> = {
+  cash: "מזומן",
+  atm: "כספומט",
+  transfer: "העברה לחשבון",
+  bit: "ביט",
+  paybox: "פייבוקס",
+  business: "עסקית",
+  owner: "משיכת בעלים",
+  investment: "השקעה",
+  savings: "חיסכון",
+  other: "אחר",
+};
+
+function buildRichDrivers(args: {
+  entries: ExpenseEntry[];
+  accounts: Account[];
+  incomes: ReturnType<typeof useFinanceStore.getState>["incomes"];
+}): RichDriver[] {
+  const now = new Date();
+  const today = now.getDate();
+  const out: RichDriver[] = [];
+
+  for (const e of args.entries) {
+    if (e.excludeFromBudget) continue;
+    if (e.currency && e.currency !== "ILS") continue;
+    const iso = e.chargeDate ?? e.createdAt;
+    if (!isSameLocalDay(iso, now) && !isSameLocalDay(e.createdAt, now)) {
+      continue;
+    }
+    const d = new Date(iso ?? e.createdAt);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const timeLabel = `${hh}:${mm}`;
+    const isPending =
+      (e.needsConfirmation && !e.confirmedAt) || !!e.bankPending;
+    const isWithdrawal = e.transactionType === "withdrawal";
+    let kind: RichDriverKind;
+    if (e.isRefund) kind = "refund";
+    else if (isPending) kind = "pending";
+    else if (isWithdrawal) kind = "withdrawal";
+    else kind = "expense";
+
+    const catMeta = e.category ? getCategory(e.category as CategoryId) : null;
+    const merchantTitle =
+      e.merchant ||
+      e.note ||
+      (catMeta ? catMeta.label : "פעולה");
+    const sourceLine = `${cardOrAccountLabel(e, args.accounts)} • ${
+      isWithdrawal
+        ? WITHDRAWAL_KIND_LABEL[e.withdrawalKind ?? "other"] ?? "משיכה"
+        : paymentMethodLabel(e)
+    }`;
+    const value = Math.abs(e.amount) / Math.max(1, e.installments);
+    out.push({
+      id: e.id,
+      title: merchantTitle,
+      sourceLabel: sourceLine,
+      category: catMeta
+        ? {
+            id: catMeta.id,
+            label: catMeta.label,
+            icon: "🔘",
+            accent: catMeta.accent,
+          }
+        : undefined,
+      timeLabel,
+      amount: value,
+      kind,
+      installments: e.installments > 1 ? e.installments : undefined,
+      note: e.note && e.note !== merchantTitle ? e.note : undefined,
+      withdrawalKind: e.withdrawalKind,
+    });
+  }
+
+  // Incomes landing today (no time-of-day → empty timeLabel).
+  for (const inc of args.incomes ?? []) {
+    if (!inc.active) continue;
+    if (inc.dayOfMonth !== today) continue;
+    out.push({
+      id: `income:${inc.id}`,
+      title: inc.label || "הכנסה",
+      sourceLabel: "הכנסה קבועה",
+      category: undefined,
+      timeLabel: "",
+      amount: inc.amount,
+      kind: "income",
+    });
+  }
+
+  out.sort((a, b) => b.amount - a.amount);
+  return out.slice(0, 8);
+}
+
+function richKindColor(kind: RichDriverKind): string {
+  if (kind === "income") return "#34D399";
+  if (kind === "refund") return "#A78BFA";
+  if (kind === "pending") return "#FBBF24";
+  if (kind === "withdrawal") return "#D4AF37";
+  return "#F87171";
+}
+
+function RichDriverRow({ item }: { item: RichDriver }) {
+  const color = richKindColor(item.kind);
+  const Icon =
+    item.kind === "income" || item.kind === "refund"
+      ? ArrowDownToLine
+      : item.kind === "withdrawal"
+        ? CashIcon
+        : item.kind === "pending"
+          ? Landmark
+          : CreditIcon;
+  const sign = item.kind === "income" || item.kind === "refund" ? "+" : "−";
+  return (
+    <li className="flex items-start gap-2.5 rounded-2xl border border-white/8 bg-black/25 p-2.5">
+      <span
+        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl"
+        style={{ background: `${color}1f`, color }}
+      >
+        <Icon className="size-4" strokeWidth={1.8} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="truncate text-[12.5px] font-medium text-foreground">
+          {item.title}
+        </span>
+        <span className="truncate text-[10.5px] text-muted-foreground/85">
+          {item.sourceLabel}
+          {item.installments
+            ? ` • ${item.installments} תשלומים`
+            : ""}
+        </span>
+        <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+          {item.category ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md px-1 py-0.5"
+              style={{
+                background: `${item.category.accent}22`,
+                color: item.category.accent,
+              }}
+            >
+              {item.category.label}
+            </span>
+          ) : null}
+          {item.timeLabel ? (
+            <span dir="ltr" data-mono="true">
+              {item.timeLabel}
+            </span>
+          ) : null}
+        </span>
+        {item.note ? (
+          <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground/75">
+            <StickyNote className="size-2.5" />
+            &quot;{item.note}&quot;
+          </span>
+        ) : null}
+      </div>
+      <span
+        data-mono="true"
+        dir="ltr"
+        className="shrink-0 text-[13px] font-semibold"
+        style={{ color }}
+      >
+        {sign}
+        {ILS.format(Math.round(item.amount))}
+      </span>
+    </li>
   );
 }
