@@ -1,22 +1,29 @@
 // Phase 239+240 — transparent breakdown of the future-balance math.
+// Phase 345 — Δ-only semantics + itemized event list.
 //
-// Walks the same liquidityCurve the HeroFutureBalanceCard already
-// uses, then splits the events that fall between today (idx 0) and
-// the chosen snapshot date into the user-facing categories
-// requested in the brief:
+// The breakdown answers a single question: between today's bank
+// position and the date the user picked, WHAT changed, line-item
+// by line-item?
 //
-//   starting bank balance
-//   + income expected
-//   - credit card settlements
-//   - bank fixed expenses
-//   - loans
-//   - pending confirmed expenses (currently 0 — see note below)
-//   = projected balance on date X
+//   startingBalance      bank anchor at "today"
+//   + deltaIncome        Σ income events in (today, target]
+//   − deltaCreditCards   Σ card-settlement events in (today, target]
+//   − deltaBankFixed     Σ bank-direct-debit events in (today, target]
+//   − deltaLoans         Σ loan events in (today, target]
+//   − deltaManualExpenses Σ forward-dated manual cash entries in
+//                         (today, target]
+//   = projectedBalance
 //
-// `excludedPending` reports how many entries were skipped by the
-// engine because they carried `needsConfirmation` or `bankPending`
-// without `confirmedAt`. The UI surfaces that as a transparency
-// line so the user knows WHY their pending charge isn't reflected.
+// Events that already settled (chargeDate ≤ now) are NOT in the Δ —
+// they're already baked into startingBalance via the bank anchor.
+//
+// `includedItems` lists every event that contributed to a delta so
+// the UI can render a per-event timeline ("car loan ₪870 on June 5",
+// not just "loans ₪4,970").
+//
+// `excludedPending` reports entries the engine deliberately skipped
+// (bankPending / needsConfirmation without confirmedAt) so the user
+// understands why an "תלוי ועומד" SMS isn't in the projection yet.
 //
 // Pure compute. No store / React.
 
@@ -29,20 +36,52 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { liquidityCurve } from "@/lib/liquidity-curve";
-import { activeMonthlyLoansTotal } from "@/lib/loans-active";
-import { monthKeyOf } from "@/lib/dates";
+
+export type ForecastItemKind =
+  | "income"
+  | "credit"
+  | "bank_fixed"
+  | "loan"
+  | "manual_expense";
+
+export type ForecastItem = {
+  /** Display label — merchant / income source / loan name. */
+  label: string;
+  /** Always positive — the kind decides the sign in the UI. */
+  amount: number;
+  /** ISO of the event's effective cash impact. */
+  dateISO: string;
+  kind: ForecastItemKind;
+  /** True when the event has yet to land (always true today —
+   *  past events don't enter `includedItems`). Kept as an explicit
+   *  field so the UI can later toggle "show what already settled". */
+  expected: true;
+};
 
 export type FutureBalanceBreakdown = {
   whenISO: string;
   startingBalance: number;
+  /** Phase 345 — Δ between today and target. Renamed-by-spec aliases
+   *  preserved alongside the legacy field names so existing consumers
+   *  keep working through the rename. */
   income: number;
   cardSettlements: number;
   bankFixed: number;
   loans: number;
+  /** Forward-dated manual cash entries that the curve doesn't route
+   *  through the card stream. */
+  manualExpenses: number;
+  /** Aliases matching the spec's vocabulary. */
+  deltaIncome: number;
+  deltaCreditCards: number;
+  deltaBankFixedCharges: number;
+  deltaLoans: number;
+  deltaManualExpenses: number;
+  finalBalance: number;
   projectedBalance: number;
-  /** Pending entries the curve engine deliberately skipped. The UI
-   *  surfaces a transparency line so the user knows why their
-   *  "תלוי ועומד" SMS isn't in the projection yet. */
+  /** Per-event timeline. Sorted by dateISO ascending. */
+  includedItems: ForecastItem[];
+  /** Pending entries the curve engine deliberately skipped. */
   excludedPendingCount: number;
   excludedPendingTotal: number;
 };
@@ -77,52 +116,106 @@ export function buildFutureBalanceBreakdown(args: {
     curve.points.length - 1,
   );
   const target = curve.points[clamped];
+  const horizonTs = new Date(target.whenISO).getTime();
+  const nowTs = now.getTime();
 
-  let income = 0;
-  let cardSettlements = 0;
-  let bankFixed = 0;
-  // Phase 343 — loans is the canonical Σ monthlyInstallment of
-  // currently-active loans, matching the Loans Panel headline.
-  // Aggregating the per-event window sum (the previous behavior)
-  // double-counted any loan whose dayOfMonth landed in both calendar
-  // months when the forecast window spanned a rollover (e.g.
-  // "10 לחודש הבא" with today on the 3rd → 38-day window → loan with
-  // dayOfMonth=5 emits twice). The projected balance still uses the
-  // real per-event sum from the curve; the breakdown row mirrors
-  // the Loans Panel so the two surfaces never disagree.
-  const loans = activeMonthlyLoansTotal({
-    loans: args.loans,
-    monthKey: monthKeyOf(now),
-  });
+  // Δ sums + per-event timeline. Each event represents a real cash
+  // impact between (today, target]; nothing that already settled is
+  // included.
+  let deltaIncome = 0;
+  let deltaCreditCards = 0;
+  let deltaBankFixed = 0;
+  let deltaLoans = 0;
+  const items: ForecastItem[] = [];
+
   for (let i = 1; i <= clamped; i++) {
     for (const e of curve.points[i].events) {
+      const amount = Math.abs(e.amount);
       switch (e.kind) {
         case "income":
-          income += e.amount; // positive
+          deltaIncome += e.amount; // positive
+          items.push({
+            label: e.label,
+            amount,
+            dateISO: e.whenISO,
+            kind: "income",
+            expected: true,
+          });
           break;
         case "card":
-          cardSettlements += Math.abs(e.amount);
+          deltaCreditCards += amount;
+          items.push({
+            label: e.label,
+            amount,
+            dateISO: e.whenISO,
+            kind: "credit",
+            expected: true,
+          });
           break;
         case "bank_debit":
-          bankFixed += Math.abs(e.amount);
+          deltaBankFixed += amount;
+          items.push({
+            label: e.label,
+            amount,
+            dateISO: e.whenISO,
+            kind: "bank_fixed",
+            expected: true,
+          });
           break;
         case "loan":
-          // counted in `loans` via activeMonthlyLoansTotal above.
+          deltaLoans += amount;
+          items.push({
+            label: e.label,
+            amount,
+            dateISO: e.whenISO,
+            kind: "loan",
+            expected: true,
+          });
           break;
       }
     }
   }
 
+  // Forward-dated manual cash entries — Phase 336 paymentDate lets
+  // the user log a manual expense with chargeDate > now. The curve
+  // routes those via card-stream only when paymentMethod === "credit";
+  // a cash entry doesn't surface there, so we walk the entry list
+  // ourselves to expose it as a "manual expense" line.
+  let deltaManualExpenses = 0;
+  for (const entry of args.entries) {
+    if (entry.isRefund) continue;
+    if (entry.excludeFromBudget) continue;
+    if (entry.currency && entry.currency !== "ILS") continue;
+    if (entry.paymentMethod !== "cash") continue;
+    if (entry.bankPending || entry.needsConfirmation) continue;
+    const chargeIso = entry.chargeDate ?? entry.createdAt;
+    if (!chargeIso) continue;
+    const charge = new Date(chargeIso).getTime();
+    if (!Number.isFinite(charge)) continue;
+    if (charge <= nowTs) continue;
+    if (charge > horizonTs) continue;
+    const amount = Math.max(0, Math.abs(entry.amount));
+    deltaManualExpenses += amount;
+    items.push({
+      label: entry.merchant || entry.note || "הוצאה ידנית",
+      amount,
+      dateISO: new Date(chargeIso).toISOString(),
+      kind: "manual_expense",
+      expected: true,
+    });
+  }
+
+  items.sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+
   // Count entries the engine excluded from the projection so the
   // explain panel can warn the user transparently.
   let excludedPendingCount = 0;
   let excludedPendingTotal = 0;
-  const horizonTs = new Date(target.whenISO).getTime();
   for (const entry of args.entries) {
     if (!entry.bankPending && !entry.needsConfirmation) continue;
     if (entry.confirmedAt) continue; // already counted via the curve.
     const charge = new Date(entry.chargeDate).getTime();
-    if (charge < now.getTime()) continue;
+    if (charge < nowTs) continue;
     if (charge > horizonTs) continue;
     excludedPendingCount++;
     excludedPendingTotal += Math.max(0, entry.amount ?? 0);
@@ -131,11 +224,19 @@ export function buildFutureBalanceBreakdown(args: {
   return {
     whenISO: target.whenISO,
     startingBalance: round2(startingBalance),
-    income: round2(income),
-    cardSettlements: round2(cardSettlements),
-    bankFixed: round2(bankFixed),
-    loans: round2(loans),
+    income: round2(deltaIncome),
+    cardSettlements: round2(deltaCreditCards),
+    bankFixed: round2(deltaBankFixed),
+    loans: round2(deltaLoans),
+    manualExpenses: round2(deltaManualExpenses),
+    deltaIncome: round2(deltaIncome),
+    deltaCreditCards: round2(deltaCreditCards),
+    deltaBankFixedCharges: round2(deltaBankFixed),
+    deltaLoans: round2(deltaLoans),
+    deltaManualExpenses: round2(deltaManualExpenses),
+    finalBalance: round2(target.balance),
     projectedBalance: round2(target.balance),
+    includedItems: items,
     excludedPendingCount,
     excludedPendingTotal: round2(excludedPendingTotal),
   };

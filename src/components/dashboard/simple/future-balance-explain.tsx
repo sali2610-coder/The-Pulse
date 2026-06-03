@@ -19,12 +19,15 @@ import {
   CreditCard,
   HandCoins,
   Landmark,
+  Receipt,
   Wallet,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import {
   buildFutureBalanceBreakdown,
+  type ForecastItem,
+  type ForecastItemKind,
   type FutureBalanceBreakdown,
 } from "@/lib/future-balance-explain";
 import { tap } from "@/lib/haptics";
@@ -85,7 +88,7 @@ export function FutureBalanceExplain({ offset }: { offset: number }) {
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/3"
       >
-        <span className="text-section text-foreground">איך חישבנו?</span>
+        <span className="text-section text-foreground">מה השתנה עד התאריך</span>
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.2 }}
@@ -107,11 +110,11 @@ export function FutureBalanceExplain({ offset }: { offset: number }) {
           >
             <div className="flex flex-col gap-2 p-4">
               <p className="text-caption text-muted-foreground">
-                התחזית לתאריך{" "}
+                מה השתנה מהיום עד{" "}
                 <span dir="rtl">
                   {DAY_FMT.format(new Date(data.whenISO))}
-                </span>{" "}
-                מורכבת מהפעולות הבאות:
+                </span>
+                . רק פעולות שעדיין צפויות להיכנס או לרדת.
               </p>
 
               <Row
@@ -121,34 +124,61 @@ export function FutureBalanceExplain({ offset }: { offset: number }) {
                 value={data.startingBalance}
                 sign="="
               />
-              <Row
-                icon={<Wallet className="size-4" />}
-                tone="ok"
-                label="הכנסות צפויות"
-                value={data.income}
-                sign="+"
-              />
-              <Row
-                icon={<CreditCard className="size-4" />}
-                tone="danger"
-                label="חיובי כרטיסי אשראי"
-                value={data.cardSettlements}
-                sign="−"
-              />
-              <Row
-                icon={<Landmark className="size-4" />}
-                tone="danger"
-                label="חיובי בנק קבועים"
-                value={data.bankFixed}
-                sign="−"
-              />
-              <Row
-                icon={<HandCoins className="size-4" />}
-                tone="danger"
-                label="הלוואות"
-                value={data.loans}
-                sign="−"
-              />
+              {/* Phase 345 — only show non-zero Δ rows so the
+                 breakdown reflects what actually happens in the
+                 selected window. A 0₪ row would read as "loans don't
+                 exist" when really they just don't fire in this Δ. */}
+              {data.deltaIncome > 0 ? (
+                <Row
+                  icon={<Wallet className="size-4" />}
+                  tone="ok"
+                  label="הכנסות שייכנסו עד התאריך"
+                  value={data.deltaIncome}
+                  sign="+"
+                />
+              ) : null}
+              {data.deltaCreditCards > 0 ? (
+                <Row
+                  icon={<CreditCard className="size-4" />}
+                  tone="danger"
+                  label="חיובי אשראי שירדו עד התאריך"
+                  value={data.deltaCreditCards}
+                  sign="−"
+                />
+              ) : null}
+              {data.deltaBankFixedCharges > 0 ? (
+                <Row
+                  icon={<Landmark className="size-4" />}
+                  tone="danger"
+                  label="חיובי בנק קבועים עד התאריך"
+                  value={data.deltaBankFixedCharges}
+                  sign="−"
+                />
+              ) : null}
+              {data.deltaLoans > 0 ? (
+                <Row
+                  icon={<HandCoins className="size-4" />}
+                  tone="danger"
+                  label="הלוואות שירדו עד התאריך"
+                  value={data.deltaLoans}
+                  sign="−"
+                />
+              ) : null}
+              {data.deltaManualExpenses > 0 ? (
+                <Row
+                  icon={<Receipt className="size-4" />}
+                  tone="danger"
+                  label="הוצאות ידניות מתוזמנות"
+                  value={data.deltaManualExpenses}
+                  sign="−"
+                />
+              ) : null}
+
+              {data.includedItems.length === 0 ? (
+                <p className="rounded-xl border border-white/8 bg-black/25 px-3 py-2 text-caption text-muted-foreground">
+                  אין פעולות צפויות בטווח הזה. היתרה נשארת זהה.
+                </p>
+              ) : null}
 
               <div className="mt-2 flex items-baseline justify-between gap-2 rounded-xl border border-white/12 bg-black/40 px-3 py-2.5">
                 <span className="text-section text-foreground">צפי סופי</span>
@@ -158,17 +188,23 @@ export function FutureBalanceExplain({ offset }: { offset: number }) {
                   className="text-section"
                   style={{
                     color:
-                      data.projectedBalance < 0
+                      data.finalBalance < 0
                         ? "#F87171"
-                        : data.projectedBalance < 500
+                        : data.finalBalance < 500
                           ? "#F59E0B"
                           : "#34D399",
                   }}
                 >
-                  {data.projectedBalance < 0 ? "−" : ""}
-                  {ILS.format(Math.abs(Math.round(data.projectedBalance)))}
+                  {data.finalBalance < 0 ? "−" : ""}
+                  {ILS.format(Math.abs(Math.round(data.finalBalance)))}
                 </span>
               </div>
+
+              {/* Per-event timeline. Sorted by event date so the user
+                 reads exactly what happens, in order. */}
+              {data.includedItems.length > 0 ? (
+                <ItemsList items={data.includedItems} />
+              ) : null}
 
               {data.excludedPendingCount > 0 ? (
                 <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
@@ -194,6 +230,82 @@ export function FutureBalanceExplain({ offset }: { offset: number }) {
           </motion.div>
         ) : null}
       </AnimatePresence>
+    </section>
+  );
+}
+
+const ITEM_KIND_META: Record<
+  ForecastItemKind,
+  { label: string; tone: "ok" | "danger" | "info"; sign: "+" | "−" }
+> = {
+  income: { label: "הכנסה", tone: "ok", sign: "+" },
+  credit: { label: "אשראי", tone: "danger", sign: "−" },
+  bank_fixed: { label: "חיוב בנק", tone: "danger", sign: "−" },
+  loan: { label: "הלוואה", tone: "danger", sign: "−" },
+  manual_expense: { label: "ידנית", tone: "danger", sign: "−" },
+};
+
+const ITEM_DATE_FMT = new Intl.DateTimeFormat("he-IL", {
+  day: "2-digit",
+  month: "2-digit",
+});
+
+function ItemsList({ items }: { items: ForecastItem[] }) {
+  const ILS_FMT = new Intl.NumberFormat("he-IL", {
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: 0,
+  });
+  return (
+    <section className="mt-1 flex flex-col gap-1.5 rounded-xl border border-white/8 bg-black/20 p-2">
+      <span className="px-2 pt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+        פעולות בטווח · {items.length}
+      </span>
+      <ul className="flex flex-col gap-0.5">
+        {items.map((it, i) => {
+          const meta = ITEM_KIND_META[it.kind];
+          const color =
+            meta.tone === "ok"
+              ? "#34D399"
+              : meta.tone === "danger"
+                ? "#F87171"
+                : "#60A5FA";
+          return (
+            <li
+              key={`${it.dateISO}-${it.kind}-${i}`}
+              className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-[11.5px]"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-medium"
+                  style={{ background: `${color}22`, color }}
+                >
+                  {meta.label}
+                </span>
+                <span className="truncate text-foreground/90">{it.label}</span>
+              </div>
+              <div className="flex shrink-0 items-baseline gap-2">
+                <span
+                  className="text-[10px] text-muted-foreground/75"
+                  dir="ltr"
+                  data-mono="true"
+                >
+                  {ITEM_DATE_FMT.format(new Date(it.dateISO))}
+                </span>
+                <span
+                  data-mono="true"
+                  dir="ltr"
+                  className="font-medium"
+                  style={{ color }}
+                >
+                  {meta.sign}
+                  {ILS_FMT.format(Math.round(it.amount))}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
