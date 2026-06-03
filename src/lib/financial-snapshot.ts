@@ -177,7 +177,15 @@ export function buildFinancialSnapshot(args: {
     .filter((i) => i.active && (!isCurrentMonth || i.dayOfMonth >= today))
     .reduce((sum, i) => sum + incomeForMonth(i, monthKey), 0);
 
-  // Pending recurring rules — split into "fixed monthly" vs "installment".
+  // Pending recurring rules — split into "fixed monthly" vs
+  // "installment" vs "credit-routed".
+  //
+  // Phase 352 — recurring rules with paymentSource === "card" no
+  // longer count as bank-fixed expenses. They route through the
+  // card's billing day and land in `recurringCommitmentsUntilNextMonth`
+  // alongside other future card charges. The "הוצאות קבועות" row
+  // now reflects ONLY rules the bank actually debits on
+  // dayOfMonth — direct debits / standing orders / cash bills.
   const paidThisMonth = new Set(
     args.statuses
       .filter((s) => s.monthKey === monthKey && s.status === "paid")
@@ -185,11 +193,18 @@ export function buildFinancialSnapshot(args: {
   );
   let fixedExpensesUntilNextMonth = 0;
   let installmentPaymentsUntilNextMonth = 0;
+  let creditRoutedRulesUntilNextMonth = 0;
   for (const rule of args.rules) {
     if (!rule.active) continue;
     if (paidThisMonth.has(rule.id)) continue;
     if (!ruleSchedule(rule, monthKey).active) continue;
     if (isCurrentMonth && rule.dayOfMonth < today) continue;
+    if (rule.paymentSource === "card") {
+      // Will hit the bank via the card's billing day. Collected
+      // separately so it adds onto recurringCommitments below.
+      creditRoutedRulesUntilNextMonth += rule.estimatedAmount;
+      continue;
+    }
     if (rule.installmentTotal) {
       installmentPaymentsUntilNextMonth += rule.estimatedAmount;
     } else {
@@ -205,8 +220,11 @@ export function buildFinancialSnapshot(args: {
     activeLoansPaymentsUntilNextMonth += loan.monthlyInstallment;
   }
 
-  // Future credit-card slices already locked in (BNPL plans on the card).
-  let recurringCommitmentsUntilNextMonth = 0;
+  // Future credit-card slices already locked in (BNPL plans on the
+  // card). Phase 352 — also includes credit-routed recurring rules
+  // so the projection sees the bank impact at billing day, not on
+  // each rule's dayOfMonth.
+  let recurringCommitmentsUntilNextMonth = creditRoutedRulesUntilNextMonth;
   let actualSpentThisMonth = 0;
   for (const entry of args.entries) {
     if (entry.needsConfirmation) continue;

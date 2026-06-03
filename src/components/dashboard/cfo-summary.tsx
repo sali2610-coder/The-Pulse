@@ -159,6 +159,10 @@ export function CfoSummary() {
   const fixedContext: ContextItem[] = [];
   const installmentRuleItems: ContextItem[] = [];
   const installmentRuleContext: ContextItem[] = [];
+  // Hoisted so credit-routed rules (Phase 352) can push into this
+  // group before the entry-slice walk fills it later.
+  const futureSliceItems: ContextItem[] = [];
+  const futureSliceContext: ContextItem[] = [];
   for (const r of rules) {
     if (!r.active) continue;
     const sched = ruleSchedule(r, monthKey);
@@ -188,6 +192,19 @@ export function CfoSummary() {
         note: paidThisMonth.has(r.id)
           ? "שולם"
           : `ירד ב-${pad(r.dayOfMonth)}`,
+      });
+      continue;
+    }
+    // Phase 352 — credit-routed rules are NOT bank-fixed. They
+    // belong in the "חיובי כרטיס עתידיים" group with a billing-day
+    // note so the user reads "ירד ב-02 דרך אשראי" instead of
+    // "ירד ב-DD" (their own dayOfMonth) under bank fixed.
+    if (r.paymentSource === "card") {
+      futureSliceItems.push({
+        id: `rule-card:${r.id}`,
+        label: r.label,
+        value: r.estimatedAmount,
+        note: `אשראי · יום החיוב`,
       });
       continue;
     }
@@ -231,8 +248,7 @@ export function CfoSummary() {
     });
   }
 
-  const futureSliceItems: ContextItem[] = [];
-  const futureSliceContext: ContextItem[] = [];
+  // futureSliceItems + futureSliceContext hoisted above for Phase 352.
   for (const e of entries) {
     if (e.needsConfirmation || e.bankPending || e.isRefund) continue;
     if (e.excludeFromBudget) continue;
