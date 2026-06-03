@@ -31,11 +31,8 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { tap as hapticTap } from "@/lib/haptics";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+const ILS = { format: (v: number) => formatCurrencyAmount(v) };
 
 type StripState = "calm" | "watch" | "stress" | "gray";
 
@@ -218,7 +215,7 @@ export function HeroSpendableCard() {
       ? "חסר מידע לחישוב מדויק"
       : state === "stress"
         ? "היום עדיף לא להוציא מעבר להכרחי"
-        : `מתוך ${ILS.format(Math.round(data.perDay))} ליום`;
+        : `מתוך ${ILS.format(data.perDay)} ליום`;
 
   return (
     <>
@@ -231,7 +228,7 @@ export function HeroSpendableCard() {
         style={{
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 40px -32px ${tone.glow}99`,
         }}
-        aria-label={`אפשר להוציא היום ${ILS.format(Math.round(data.remainingToday))}`}
+        aria-label={`אפשר להוציא היום ${ILS.format(data.remainingToday)}`}
       >
         <button
           type="button"
@@ -256,7 +253,7 @@ export function HeroSpendableCard() {
             >
               <AnimatedCounter
                 value={data.remainingToday}
-                format={(v) => ILS.format(Math.round(v))}
+                format={(v) => ILS.format(v)}
               />
             </span>
             <span className="line-clamp-1 text-[10.5px] text-muted-foreground/85">
@@ -278,7 +275,7 @@ export function HeroSpendableCard() {
               dir="ltr"
               className="text-[10.5px] text-muted-foreground/85"
             >
-              {ILS.format(Math.round(data.spentToday))} היום
+              {ILS.format(data.spentToday)} היום
             </span>
             <div
               className="h-1.5 w-full overflow-hidden rounded-full"
@@ -350,7 +347,7 @@ function ExplainSheet({
           className="text-[18px] font-semibold"
           style={{ color: tone.fg }}
         >
-          {ILS.format(Math.round(data.remainingToday))}
+          {ILS.format(data.remainingToday)}
         </span>
       </header>
 
@@ -364,7 +361,7 @@ function ExplainSheet({
       <ul className="flex flex-col gap-1.5 rounded-2xl border border-white/8 bg-black/20 p-3 text-[12px]">
         <Row
           label="תקציב פנוי עד המשכורת"
-          value={ILS.format(Math.round(data.cycleAvailable))}
+          value={ILS.format(data.cycleAvailable)}
           tone="info"
         />
         <Row
@@ -374,12 +371,12 @@ function ExplainSheet({
         />
         <Row
           label="תקציב יומי ממוצע"
-          value={ILS.format(Math.round(data.perDay))}
+          value={ILS.format(data.perDay)}
           tone="info"
         />
         <Row
           label="הוצאות שכבר יצאו היום"
-          value={`−${ILS.format(Math.round(data.spentToday))}`}
+          value={`−${ILS.format(data.spentToday)}`}
           tone="negative"
         />
         <li
@@ -388,7 +385,7 @@ function ExplainSheet({
         >
           <span>כמה נשאר להיום</span>
           <span data-mono="true" dir="ltr">
-            {ILS.format(Math.round(data.remainingToday))}
+            {ILS.format(data.remainingToday)}
           </span>
         </li>
       </ul>

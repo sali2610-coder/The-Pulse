@@ -47,11 +47,8 @@ import { useLiquidityAlert } from "@/lib/use-liquidity-alert";
 import { tap } from "@/lib/haptics";
 import { SPRING_SOFT } from "@/lib/motion-tokens";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+const ILS = { format: (v: number) => formatCurrencyAmount(v) };
 
 const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   day: "numeric",

@@ -29,11 +29,8 @@ import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { currentMonthKey } from "@/lib/dates";
 import { flushBudgetSettings } from "@/lib/budget-settings-flush";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+const ILS = { format: (v: number) => formatCurrencyAmount(v) };
 
 export function BudgetInput() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
@@ -85,7 +82,7 @@ export function BudgetInput() {
   const sign = breakdown.available > 0 ? "+" : breakdown.available < 0 ? "−" : "";
   const headline = missing
     ? "—"
-    : `${sign}${ILS.format(Math.round(Math.abs(breakdown.available)))}`;
+    : `${sign}${ILS.format(Math.abs(breakdown.available))}`;
 
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/50 p-5 backdrop-blur-md">

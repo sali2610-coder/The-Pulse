@@ -9,11 +9,8 @@
 
 import type { BudgetControlBreakdown } from "@/lib/budget-control";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+const ILS = { format: (v: number) => formatCurrencyAmount(v) };
 
 const fmt = (n: number) => {
   const r = Math.round(n);

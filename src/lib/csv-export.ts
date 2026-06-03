@@ -45,11 +45,23 @@ export function escapeField(value: unknown): string {
   return s;
 }
 
+function csvAmount(n: number): string {
+  // Phase 341 — preserve agorot in exports. Integer amounts stay
+  // plain ("350"); fractional amounts show two decimals ("59.90")
+  // even when the second decimal is zero, so downstream tools never
+  // lose precision.
+  if (!Number.isFinite(n)) return "0";
+  const rounded = Math.round(n * 100) / 100;
+  return Math.round(rounded * 100) % 100 === 0
+    ? String(rounded)
+    : rounded.toFixed(2);
+}
+
 function rowFor(entry: ExpenseEntry): string[] {
   return [
     entry.id,
     entry.chargeDate,
-    entry.amount,
+    csvAmount(entry.amount),
     entry.category,
     entry.paymentMethod,
     entry.installments,

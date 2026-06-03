@@ -34,11 +34,15 @@ import { ExpenseEditSheet } from "@/components/dashboard/expense-edit-sheet";
 import { tap } from "@/lib/haptics";
 import type { ExpenseEntry } from "@/types/finance";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+
+const ILS = {
+  // Phase 341 — preserve agorot. The wrapped format() returns
+  // "350 ₪" for integer amounts and "59.90 ₪" when there's a
+  // fractional part, so the activity log never silently rounds a
+  // small purchase up.
+  format: (v: number) => formatCurrencyAmount(v),
+};
 
 const TIME_FMT = new Intl.RelativeTimeFormat("he-IL", { numeric: "auto" });
 const DAY_HEADER_FMT = new Intl.DateTimeFormat("he-IL", {
@@ -692,7 +696,7 @@ function SummaryTile({
         style={{ color: accent }}
       >
         {sign}
-        {ILS.format(Math.round(item.amount))}
+        {ILS.format(item.amount)}
       </span>
       <span className="truncate text-[10px] text-foreground/85">
         {item.title}

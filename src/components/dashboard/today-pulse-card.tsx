@@ -50,11 +50,8 @@ import {
 import { tap as hapticTap } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+const ILS = { format: (v: number) => formatCurrencyAmount(v) };
 
 const STATE_TONE: Record<
   PulseState,
@@ -571,20 +568,20 @@ function PulseDaySheet({
           }}
         >
           {pulse.impact > 0 ? "+" : pulse.impact < 0 ? "−" : ""}
-          {ILS.format(Math.round(Math.abs(pulse.impact)))}
+          {ILS.format(Math.abs(pulse.impact))}
         </span>
       </header>
 
       <div className="grid grid-cols-3 gap-2">
         <SheetTile
           label="הוצא היום"
-          value={ILS.format(Math.round(pulse.spentToday))}
+          value={ILS.format(pulse.spentToday)}
           tone="#F87171"
         />
         <SheetTile
           label="מותר ליום"
           value={
-            pulse.allowance > 0 ? ILS.format(Math.round(pulse.allowance)) : "—"
+            pulse.allowance > 0 ? ILS.format(pulse.allowance) : "—"
           }
           tone="#60A5FA"
         />
@@ -642,7 +639,7 @@ function PulseDaySheet({
                   </span>
                   <span data-mono="true" dir="ltr" style={{ color }}>
                     {isIn ? "+" : "−"}
-                    {ILS.format(Math.round(ev.amount))}
+                    {ILS.format(ev.amount)}
                   </span>
                 </li>
               );

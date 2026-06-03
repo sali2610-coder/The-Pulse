@@ -34,11 +34,8 @@ import { tap as hapticTap, success as hapticSuccess } from "@/lib/haptics";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
 import type { Income } from "@/types/finance";
 
-const ILS = new Intl.NumberFormat("he-IL", {
-  style: "currency",
-  currency: "ILS",
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyAmount } from "@/lib/money";
+const ILS = { format: (v: number) => formatCurrencyAmount(v) };
 
 const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   day: "2-digit",
@@ -356,12 +353,12 @@ function IncomeEditorSheet({
       <div className="grid grid-cols-3 gap-2">
         <Stat
           label="צפוי"
-          value={`+${ILS.format(Math.round(expected))}`}
+          value={`+${ILS.format(expected)}`}
           tone="#60A5FA"
         />
         <Stat
           label="בפועל"
-          value={`+${ILS.format(Math.round(actual))}`}
+          value={`+${ILS.format(actual)}`}
           tone={tone}
         />
         <Stat
@@ -370,8 +367,8 @@ function IncomeEditorSheet({
             diff === 0
               ? "0"
               : diff > 0
-                ? `+${ILS.format(Math.round(diff))}`
-                : ILS.format(Math.round(diff))
+                ? `+${ILS.format(diff)}`
+                : ILS.format(diff)
           }
           tone={tone}
         />
