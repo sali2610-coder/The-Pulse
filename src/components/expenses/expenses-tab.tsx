@@ -14,6 +14,7 @@ import { useMemo, type ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
+import { ObligationsCockpit } from "@/components/expenses/obligations-cockpit";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildRecurringSectionSummary } from "@/lib/recurring-section-summary";
@@ -129,6 +130,16 @@ export function ExpensesTab() {
       <div className="sm:col-span-6 empty:hidden">
         <Safe name="PendingTray">
           <PendingTray />
+        </Safe>
+      </div>
+
+      {/* Phase 370 — Monthly Obligations Cockpit. Top of Expenses.
+         One canonical breakdown (getMonthlyObligationBreakdown)
+         drives the hero total + four tappable lane blocks. Each
+         shekel is counted exactly once. */}
+      <div className="sm:col-span-6">
+        <Safe name="ObligationsCockpit">
+          <ObligationsCockpit />
         </Safe>
       </div>
 
