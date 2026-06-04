@@ -56,14 +56,9 @@ const PendingTray = lazy(() =>
   })),
 );
 // Phase 365 — CfoSummary + HealthScoreCard slots removed from the
-// Expenses tab to stop duplicating the זמן story. Liquidity timeline
-// stays behind a default-collapsed accordion.
-const LiquidityTimelineCard = lazy(() =>
-  import("@/components/dashboard/liquidity-timeline-card").then((m) => ({
-    default:
-      m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Expenses tab to stop duplicating the זמן story.
+// Phase 366 — LiquidityTimelineCard slot removed for the same
+// reason. The Time tab is the canonical liquidity surface.
 // Phase 304 — interactive analytics widgets.
 const CategoryDonut = lazy(() =>
   import("@/components/dashboard/category-donut").then((m) => ({
@@ -209,18 +204,12 @@ export function ExpensesTab() {
         </div>
       </DashboardSection>
 
-      <DashboardSection
-        storageKey="expenses.liquidity-timeline"
-        title="ציר נזילות 35 ימים"
-        subtitle="תזרים יומי מצטבר עם הכנסות וחיובים"
-        defaultCollapsed
-      >
-        <div className="sm:col-span-6">
-          <Safe name="LiquidityTimelineCard">
-            <LiquidityTimelineCard />
-          </Safe>
-        </div>
-      </DashboardSection>
+      {/* Phase 366 — "ציר נזילות 35 ימים" folder removed from
+         Expenses. Liquidity forecast is the זמן tab's job; keeping
+         a second timeline here was visual load without new
+         information. The LiquidityTimelineCard component still
+         exists on disk for other consumers; only the UI slot is
+         dropped from this tab. */}
     </div>
   );
 }
