@@ -2,15 +2,15 @@
 
 // Phase 254 — "עתידי" tab.
 // Phase 272 — duplicated hero ("איפה אהיה בתאריך") removed.
+// Phase 358 — tab promoted to flagship "זמן" experience. TimeScreen
+// owns the hero; the legacy 35-day forecast + monthly folder cluster
+// lives below it as supporting detail (still accessible, no longer
+// the headline).
 //
-// That hero is the Home tab's primary identity. Repeating it here
-// blurred the screen's purpose. Future tab now leads straight into
-// forward-looking surfaces — monthly folders, liquidity curve,
-// upcoming obligations, cash-flow buckets, forecast timeline, anchor
-// trajectory. Each tab owns one mental model:
+// Each tab owns one mental model:
 //   Home    → immediate financial pulse
 //   Expenses→ where money goes
-//   Future  → timeline + cashflow projections   ← we're here
+//   זמן     → financial time machine                 ← flagship
 //   Insights→ behavioral understanding
 //   Settings→ control / configuration
 //
@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ObligationsAndWeek } from "@/components/future/obligations-and-week";
+import { TimeScreen } from "@/components/time/time-screen";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -56,34 +57,46 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function FutureTab() {
   return (
-    <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
-      {/* Phase 268 — month-first cashflow folders. Replaces the
-         merged "bucket source" list with one folder per month. */}
-      <div className="sm:col-span-6">
-        <Safe name="MonthlyCashflowCard">
-          <MonthlyCashflowCard />
-        </Safe>
-      </div>
-      {/* Phase 313 — single unified 35-day forecast container.
-         Replaces LiquidityCurveCard + AnchorTrajectoryCard. */}
-      <div className="sm:col-span-6">
-        <Safe name="CashflowForecast35">
-          <CashflowForecast35 />
-        </Safe>
-      </div>
-      {/* Phase 287 — "התחייבויות לפי מקור" + "השבוע הבא" merged into
-         one button-driven container. Default closed; user picks the
-         lens. Only one open at a time. */}
-      <div className="sm:col-span-6">
-        <Safe name="ObligationsAndWeek">
-          <ObligationsAndWeek />
-        </Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="ForecastTimelineCard">
-          <ForecastTimelineCard />
-        </Safe>
-      </div>
+    <div className="flex flex-col gap-6 pb-28 sm:pb-32">
+      {/* Phase 358 — flagship TimeScreen. Hero ring + horizon scrub
+         + river + drawer. */}
+      <Safe name="TimeScreen">
+        <TimeScreen />
+      </Safe>
+
+      {/* Supporting forecast detail. Sits below the hero so users who
+         want raw forecast cards still find them, without competing
+         with the hero. */}
+      <details className="group rounded-2xl border border-white/8 bg-white/[0.02]" dir="rtl">
+        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-[12.5px] text-foreground/85">
+          <span>פירוט תחזית — 35 ימים קדימה</span>
+          <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground transition-transform group-open:rotate-180">
+            פתח
+          </span>
+        </summary>
+        <div className="grid grid-cols-1 gap-4 px-3 pb-4 sm:grid-cols-6">
+          <div className="sm:col-span-6">
+            <Safe name="MonthlyCashflowCard">
+              <MonthlyCashflowCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="CashflowForecast35">
+              <CashflowForecast35 />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="ObligationsAndWeek">
+              <ObligationsAndWeek />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="ForecastTimelineCard">
+              <ForecastTimelineCard />
+            </Safe>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

@@ -35,6 +35,7 @@ import { tap as hapticTap } from "@/lib/haptics";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
 import { HeroFutureBalanceCard } from "@/components/dashboard/simple/hero-future-balance-card";
+import { TimeRecapCard } from "@/components/time/time-recap-card";
 
 const lazy = (
   loader: () => Promise<{
@@ -289,13 +290,18 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* Phase 350 — "איפה אני אהיה" promoted above the health
-           gauge. It IS the hero: live snapshot by default, reactive
-           gauge, risk band, per-event timeline. Health gauge is now
-           a support widget that sits underneath. */}
+        {/* Phase 350 — "איפה אני אהיה" live snapshot. */}
         <div className="sm:col-span-6">
           <Safe name="HeroFutureBalanceCard">
             <HeroFutureBalanceCard />
+          </Safe>
+        </div>
+
+        {/* Phase 358 — recap link to flagship TimeScreen ("זמן" tab).
+           Single tap drops the user into the immersive time machine. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="TimeRecapCard">
+            <TimeRecapCard />
           </Safe>
         </div>
 

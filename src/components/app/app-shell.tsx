@@ -289,7 +289,7 @@ function AppShellContent() {
               </span>
             </TabsTrigger>
             <TabsTrigger value="analytics">הוצאות</TabsTrigger>
-            <TabsTrigger value="history">עתידי</TabsTrigger>
+            <TabsTrigger value="history">זמן</TabsTrigger>
             <TabsTrigger value="setup">
               <span className="relative inline-flex items-center gap-1">
                 תובנות
