@@ -158,33 +158,52 @@ export function HorizonRail({
                 }}
               >
                 {active ? (
-                  <motion.span
-                    layoutId="rail-active-pill"
-                    aria-hidden
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      background:
-                        "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
-                      boxShadow:
-                        "0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 22px -6px rgba(212,175,55,0.55)",
-                    }}
-                    transition={{ type: "spring", stiffness: 360, damping: 30 }}
-                  >
+                  <>
+                    {/* Phase 364 — outer breathing halo around the
+                        active chip for premium presence. */}
                     <motion.span
                       aria-hidden
-                      className="absolute inset-0 rounded-full"
-                      animate={{ opacity: [0.0, 0.25, 0.0] }}
+                      className="pointer-events-none absolute rounded-full"
+                      style={{
+                        inset: -3,
+                        boxShadow:
+                          "0 0 18px 2px rgba(212,175,55,0.45)",
+                      }}
+                      animate={{ opacity: [0.4, 0.85, 0.4] }}
                       transition={{
-                        duration: 3,
+                        duration: 2.6,
                         repeat: Infinity,
                         ease: "easeInOut",
                       }}
+                    />
+                    <motion.span
+                      layoutId="rail-active-pill"
+                      aria-hidden
+                      className="absolute inset-0 rounded-full"
                       style={{
                         background:
-                          "linear-gradient(180deg, rgba(255,255,255,0.3) 0%, transparent 100%)",
+                          "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
+                        boxShadow:
+                          "0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 22px -6px rgba(212,175,55,0.55)",
                       }}
-                    />
-                  </motion.span>
+                      transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                    >
+                      <motion.span
+                        aria-hidden
+                        className="absolute inset-0 rounded-full"
+                        animate={{ opacity: [0.0, 0.25, 0.0] }}
+                        transition={{
+                          duration: 3,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        }}
+                        style={{
+                          background:
+                            "linear-gradient(180deg, rgba(255,255,255,0.3) 0%, transparent 100%)",
+                        }}
+                      />
+                    </motion.span>
+                  </>
                 ) : null}
                 <span className="relative z-10 whitespace-nowrap">
                   {c.label}

@@ -35,7 +35,7 @@ import {
   Receipt,
   Target,
 } from "lucide-react";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 
 import type { TimeFrame } from "./use-time-engine";
 import { VIBE_TONE, vibeFromBalance } from "./state-tone";
@@ -130,7 +130,11 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
       dir="rtl"
     >
       <RiverHeader cursorOffset={frame.cursorOffset} />
-      <RiverList nodes={nodes} tone={tone.glow} />
+      <RiverList
+        nodes={nodes}
+        tone={tone.glow}
+        cursorOffset={frame.cursorOffset}
+      />
     </section>
   );
 }
@@ -154,8 +158,24 @@ const ROW_H = 64; // px between successive node centers
 const NODE_DIAM = 44;
 const RAIL_LEFT_FROM_RIGHT = 22; // distance of node center from rail right edge
 
-function RiverList({ nodes, tone }: { nodes: Node[]; tone: string }) {
+function RiverList({
+  nodes,
+  tone,
+  cursorOffset,
+}: {
+  nodes: Node[];
+  tone: string;
+  cursorOffset: number;
+}) {
   const [openKey, setOpenKey] = useState<NodeKey | null>(null);
+  const [waveKey, setWaveKey] = useState(0);
+  const prevCursorRef = useRef(cursorOffset);
+  useEffect(() => {
+    if (prevCursorRef.current !== cursorOffset) {
+      prevCursorRef.current = cursorOffset;
+      setWaveKey((k) => k + 1);
+    }
+  }, [cursorOffset]);
 
   // Path height = #nodes × ROW_H. Path runs through node centers.
   const height = Math.max(nodes.length * ROW_H, ROW_H);
@@ -227,6 +247,25 @@ function RiverList({ nodes, tone }: { nodes: Node[]; tone: string }) {
             }}
           />
         ))}
+
+        {/* Phase 364 — pulse wave: on every cursor change a bright
+            particle runs once down the path, visually connecting
+            the checkpoint choice to the destination. */}
+        <motion.circle
+          key={`wave-${waveKey}`}
+          r={3.4}
+          fill="#FFFFFF"
+          initial={{ offsetDistance: "0%", opacity: 0 }}
+          animate={{
+            offsetDistance: ["0%", "100%"],
+            opacity: [0, 1, 1, 0],
+          }}
+          transition={{ duration: 0.95, ease: "easeOut", times: [0, 0.1, 0.85, 1] }}
+          style={{
+            offsetPath: `path("${d}")`,
+            filter: `drop-shadow(0 0 10px ${tone})`,
+          }}
+        />
       </svg>
 
       {nodes.map((n, i) => {
@@ -240,6 +279,7 @@ function RiverList({ nodes, tone }: { nodes: Node[]; tone: string }) {
             tone={tone}
             isDest={isDest}
             open={open}
+            arrivalKey={isDest ? waveKey : 0}
             onToggle={() => {
               hapticTap();
               setOpenKey((prev) => (prev === n.key ? null : n.key));
@@ -257,6 +297,7 @@ function RiverRow({
   tone,
   isDest,
   open,
+  arrivalKey,
   onToggle,
 }: {
   node: Node;
@@ -264,6 +305,7 @@ function RiverRow({
   tone: string;
   isDest: boolean;
   open: boolean;
+  arrivalKey: number;
   onToggle: () => void;
 }) {
   const delay = 0.18 + index * 0.12;
@@ -337,16 +379,17 @@ function RiverRow({
               <node.Icon className="size-[18px]" />
             </motion.span>
 
-            {/* Destination arrival ping — single soft pulse on entrance */}
+            {/* Destination arrival ping — re-fires every time the
+                cursor changes (waveKey re-keys the element). */}
             {isDest ? (
               <motion.span
+                key={`arr-${arrivalKey}`}
                 aria-hidden
                 className="absolute inset-0 rounded-full"
                 initial={{ opacity: 0.0, scale: 1 }}
                 animate={{ opacity: [0, 0.55, 0], scale: [1, 1.6, 1.9] }}
                 transition={{
-                  duration: 1.8,
-                  delay: delay + 0.25,
+                  duration: 1.6,
                   ease: "easeOut",
                 }}
                 style={{ border: `1px solid ${tone}` }}

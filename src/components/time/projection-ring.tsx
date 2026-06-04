@@ -406,21 +406,65 @@ export function ProjectionRing({
           strokeWidth={11}
         />
 
-        <motion.circle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={R}
-          fill="none"
-          stroke="url(#ringGrad)"
-          strokeWidth={11}
-          strokeLinecap="round"
-          strokeDasharray={C}
-          initial={false}
-          animate={{ strokeDashoffset: dashOffset }}
-          transition={{ type: "spring", stiffness: 80, damping: 22, mass: 0.8 }}
-          transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
-          filter="url(#ringGlow)"
-        />
+        {/* Phase 364 — stroke language per vibe:
+            • healthy: solid stroke + thin inner highlight (Apple
+              Watch confidence)
+            • caution: solid stroke
+            • risk:    slowly shifting dashes that read as
+              energy draining out of the ring */}
+        {vibe === "risk" ? (
+          <motion.circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            fill="none"
+            stroke="url(#ringGrad)"
+            strokeWidth={11}
+            strokeLinecap="round"
+            strokeDasharray="14 10"
+            initial={{ strokeDashoffset: 0 }}
+            animate={{ strokeDashoffset: -48 }}
+            transition={{ duration: 5.2, repeat: Infinity, ease: "linear" }}
+            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            filter="url(#ringGlow)"
+            style={{ opacity: sweep }}
+          />
+        ) : (
+          <motion.circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            fill="none"
+            stroke="url(#ringGrad)"
+            strokeWidth={11}
+            strokeLinecap="round"
+            strokeDasharray={C}
+            initial={false}
+            animate={{ strokeDashoffset: dashOffset }}
+            transition={{ type: "spring", stiffness: 80, damping: 22, mass: 0.8 }}
+            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            filter="url(#ringGlow)"
+          />
+        )}
+        {/* Healthy-only inner highlight rail — thin white core
+            running through the colored sweep, Apple Watch style. */}
+        {vibe === "healthy" ? (
+          <motion.circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={R}
+            fill="none"
+            stroke="rgba(255,255,255,0.65)"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeDasharray={C}
+            initial={false}
+            animate={{ strokeDashoffset: dashOffset }}
+            transition={{ type: "spring", stiffness: 80, damping: 22, mass: 0.8 }}
+            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            opacity={0.55}
+          />
+        ) : null}
       </svg>
 
       {/* Checkpoint nodes — custom kind not rendered (rail-only). */}
@@ -493,8 +537,33 @@ export function ProjectionRing({
           style={{
             fontVariantNumeric: "tabular-nums",
             color: tone.numberTint,
-            textShadow: tone.textShadow,
-            transition: "color 640ms ease, text-shadow 640ms ease",
+            transition: "color 640ms ease",
+          }}
+          animate={{
+            textShadow:
+              vibe === "healthy"
+                ? [
+                    `0 0 22px ${from}33`,
+                    `0 0 32px ${from}55`,
+                    `0 0 22px ${from}33`,
+                  ]
+                : vibe === "caution"
+                  ? [
+                      `0 0 24px ${from}44`,
+                      `0 0 30px ${from}55`,
+                      `0 0 24px ${from}44`,
+                    ]
+                  : [
+                      `0 0 30px ${from}55`,
+                      `0 0 24px ${from}44`,
+                      `0 0 30px ${from}55`,
+                    ],
+          }}
+          transition={{
+            duration:
+              vibe === "healthy" ? 4.2 : vibe === "caution" ? 2.6 : 5.6,
+            repeat: Infinity,
+            ease: "easeInOut",
           }}
         >
           <motion.span>{display}</motion.span>
