@@ -199,7 +199,12 @@ export function buildFinancialSnapshot(args: {
     if (!rule.active) continue;
     if (paidThisMonth.has(rule.id)) continue;
     if (!ruleSchedule(rule, monthKey).active) continue;
-    if (isCurrentMonth && rule.dayOfMonth < today) continue;
+    // Phase 371 — card-settled rules use the card's billing day, NOT
+    // the rule's nominal dayOfMonth. The pre-today gate that filters
+    // out bank-debit rules whose day has already passed is INTENTIONALLY
+    // skipped for card-settled rules — otherwise a card rule with
+    // dayOfMonth=5 on month-day-6 silently disappears from the
+    // projection (it should still land on the card's later billing day).
     if (isRuleCardSettled(rule)) {
       // Will hit the bank via the card's billing day. Collected
       // separately so it adds onto recurringCommitments below.
@@ -208,6 +213,7 @@ export function buildFinancialSnapshot(args: {
       creditRoutedRulesUntilNextMonth += rule.estimatedAmount;
       continue;
     }
+    if (isCurrentMonth && rule.dayOfMonth < today) continue;
     if (rule.installmentTotal) {
       installmentPaymentsUntilNextMonth += rule.estimatedAmount;
     } else {

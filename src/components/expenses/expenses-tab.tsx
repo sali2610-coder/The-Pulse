@@ -15,6 +15,7 @@ import { useMemo, type ReactNode } from "react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { ObligationsCockpit } from "@/components/expenses/obligations-cockpit";
+import { FinancialDebugPanel } from "@/components/dev/financial-debug-panel";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildRecurringSectionSummary } from "@/lib/recurring-section-summary";
@@ -221,6 +222,15 @@ export function ExpensesTab() {
          information. The LiquidityTimelineCard component still
          exists on disk for other consumers; only the UI slot is
          dropped from this tab. */}
+
+      {/* Phase 371 — dev-only Financial Debug Panel. Renders only
+         when NODE_ENV !== "production" so the audit pass can verify
+         every surface still agrees with the canonical engine. */}
+      {process.env.NODE_ENV !== "production" ? (
+        <div className="sm:col-span-6">
+          <FinancialDebugPanel />
+        </div>
+      ) : null}
     </div>
   );
 }

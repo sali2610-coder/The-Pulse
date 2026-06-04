@@ -36,6 +36,10 @@ import {
   type MonthlyObligationBreakdown,
   type ObligationLane,
 } from "@/lib/monthly-obligation-breakdown";
+import {
+  getCreditCardExposure,
+  type CreditCardExposure,
+} from "@/lib/credit-card-exposure";
 import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -83,6 +87,7 @@ export function ObligationsCockpit() {
   const rules = useFinanceStore((s) => s.rules);
   const loans = useFinanceStore((s) => s.loans);
   const entries = useFinanceStore((s) => s.entries);
+  const statuses = useFinanceStore((s) => s.statuses);
 
   const breakdown = useMemo<MonthlyObligationBreakdown | null>(() => {
     if (!hydrated) return null;
@@ -93,6 +98,18 @@ export function ObligationsCockpit() {
       monthKey: currentMonthKey(),
     });
   }, [hydrated, rules, loans, entries]);
+
+  // Phase 371 — canonical credit-card exposure. Drives the rich
+  // breakdown shown when the user taps the אשראי lane.
+  const exposure = useMemo<CreditCardExposure | null>(() => {
+    if (!hydrated) return null;
+    return getCreditCardExposure({
+      rules,
+      entries,
+      statuses,
+      monthKey: currentMonthKey(),
+    });
+  }, [hydrated, rules, entries, statuses]);
 
   const [openLane, setOpenLane] = useState<ObligationLane | "total" | null>(
     null,
@@ -197,6 +214,7 @@ export function ObligationsCockpit() {
         open={openLane !== null}
         lane={openLane}
         breakdown={breakdown}
+        exposure={exposure}
         onOpenChange={(v) => {
           if (!v) setOpenLane(null);
         }}
@@ -293,11 +311,13 @@ function ObligationDetailSheet({
   open,
   lane,
   breakdown,
+  exposure,
   onOpenChange,
 }: {
   open: boolean;
   lane: ObligationLane | "total" | null;
   breakdown: MonthlyObligationBreakdown;
+  exposure: CreditCardExposure | null;
   onOpenChange: (v: boolean) => void;
 }) {
   // Compose what the sheet renders. "total" → all rows + meta-explain.
@@ -361,6 +381,13 @@ function ObligationDetailSheet({
           {explain}
         </p>
 
+        {/* Phase 371 — when the user opens אשראי, show the canonical
+           getCreditCardExposure breakdown so the answer is fully
+           explainable. */}
+        {lane === "creditCards" && exposure ? (
+          <CreditExposureGrid exposure={exposure} />
+        ) : null}
+
         {rows.length > 0 ? (
           <ul className="flex flex-col gap-1.5">
             <AnimatePresence initial={false}>
@@ -410,6 +437,64 @@ function ObligationDetailSheet({
         ) : null}
       </div>
     </BottomSheet>
+  );
+}
+
+const EXPOSURE_LABEL: Record<string, string> = {
+  futureCardCharges: "חיובים קבועים על הכרטיס",
+  existingInstallments: "תשלומים פתוחים",
+  walletTransactions: "עסקאות Wallet",
+  importedTransactions: "ייבוא / SMS",
+  manualCardTransactions: "תיעוד ידני",
+  pendingTransactions: "ממתינים לאישור",
+};
+
+function CreditExposureGrid({ exposure }: { exposure: CreditCardExposure }) {
+  const cells: Array<{ key: keyof CreditCardExposure & string; value: number }> = [
+    { key: "futureCardCharges", value: exposure.futureCardCharges },
+    { key: "existingInstallments", value: exposure.existingInstallments },
+    { key: "walletTransactions", value: exposure.walletTransactions },
+    { key: "importedTransactions", value: exposure.importedTransactions },
+    { key: "manualCardTransactions", value: exposure.manualCardTransactions },
+    { key: "pendingTransactions", value: exposure.pendingTransactions },
+  ];
+  return (
+    <ul className="grid grid-cols-2 gap-1.5" dir="rtl">
+      {cells.map((c) => (
+        <li
+          key={c.key}
+          className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-2"
+        >
+          <span className="text-[11px] text-muted-foreground">
+            {EXPOSURE_LABEL[c.key]}
+          </span>
+          <span
+            data-mono="true"
+            dir="ltr"
+            className="text-[12px] font-medium text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {ILS.format(c.value)}
+          </span>
+        </li>
+      ))}
+      <li className="col-span-2 flex items-center justify-between rounded-xl border border-[#75F5FF]/30 bg-[#75F5FF]/10 px-2.5 py-2">
+        <span className="text-[11.5px] font-medium text-foreground">
+          סה״כ צפי לכרטיסים
+        </span>
+        <span
+          data-mono="true"
+          dir="ltr"
+          className="text-[13.5px] font-semibold"
+          style={{
+            color: "#75F5FF",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {ILS.format(exposure.totalExpectedCharge)}
+        </span>
+      </li>
+    </ul>
   );
 }
 
