@@ -22,9 +22,11 @@ const ILS = new Intl.NumberFormat("he-IL", {
 import { VIBE_TONE, VIBE_LABEL, vibeFromBalance } from "./state-tone";
 
 export function TimeRecapCard() {
-  // Default offset (null) lands on the next salary / +14 — same as
-  // the TimeScreen on first open. Consistent feel.
-  const frame = useTimeEngine(null);
+  // Phase 378 — recap card always opens on LIVE (offset 0). The
+  // user wants a live snapshot here; the future-cursor lens lives
+  // on the Time screen itself, not on this slim CTA. Passing 0
+  // (not null) keeps the Time screen's own default untouched.
+  const frame = useTimeEngine(0);
 
   if (!frame.ready || frame.noAnchors) return null;
   const vibe = vibeFromBalance(frame.balance);
@@ -66,7 +68,9 @@ export function TimeRecapCard() {
             {ILS.format(Math.abs(frame.balance))}
           </span>
           <span className="text-[11.5px] text-muted-foreground">
-            ב-+{frame.cursorOffset} ימים
+            {frame.cursorOffset === 0
+              ? "עכשיו · LIVE"
+              : `ב-+${frame.cursorOffset} ימים`}
           </span>
         </span>
         <span
