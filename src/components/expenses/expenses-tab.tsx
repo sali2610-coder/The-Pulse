@@ -2,10 +2,12 @@
 
 // Phase 254 — "הוצאות" tab.
 // Phase 270 — default-collapsed recurring section + anomaly-gated
-// summary chip. The recurring obligations live in many other views
-// (categories, card breakdown, future cashflow, settings). Showing
-// the panel expanded by default was duplication and noise. Now the
-// header is a quiet one-liner unless an insight needs attention.
+// summary chip.
+// Phase 365 — CFO forecast container removed from the top. That
+// story now belongs entirely to the זמן tab (TimeScreen). Expenses
+// opens straight on "where is the money going?" — categories +
+// cards + recurring. A single quiet header line points to זמן for
+// users who want the forecast.
 
 import dynamic from "next/dynamic";
 import { useMemo, type ReactNode } from "react";
@@ -15,6 +17,9 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { buildRecurringSectionSummary } from "@/lib/recurring-section-summary";
+import { navigateToTab } from "@/lib/tab-nav";
+import { tap as hapticTap } from "@/lib/haptics";
+import { ChevronLeft, Sparkles } from "lucide-react";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -50,23 +55,9 @@ const PendingTray = lazy(() =>
       m.PendingTray as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-// Phase 275 — financial-control-center cards relocated from the
-// Home advanced section. CfoSummary is the "Delta Plus" premium
-// opening analysis. HealthScoreCard sits next to it. Liquidity
-// timeline lives behind a default-collapsed accordion so the page
-// stays scannable but the data is still reachable.
-const CfoSummary = lazy(() =>
-  import("@/components/dashboard/cfo-summary").then((m) => ({
-    default:
-      m.CfoSummary as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const HealthScoreCard = lazy(() =>
-  import("@/components/dashboard/health-score-card").then((m) => ({
-    default:
-      m.HealthScoreCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase 365 — CfoSummary + HealthScoreCard slots removed from the
+// Expenses tab to stop duplicating the זמן story. Liquidity timeline
+// stays behind a default-collapsed accordion.
 const LiquidityTimelineCard = lazy(() =>
   import("@/components/dashboard/liquidity-timeline-card").then((m) => ({
     default:
@@ -146,34 +137,24 @@ export function ExpensesTab() {
         </Safe>
       </div>
 
-      {/* Phase 275 — premium opening analysis. CFO forecast + health
-         score sit at the very top so the user lands on real numbers,
-         not yet another list. */}
+      {/* Phase 365 — quiet header. Forecast lives in the זמן tab; a
+         single tap takes the user there without crowding this view
+         with a duplicate summary. */}
       <div className="sm:col-span-6">
-        <Safe name="CfoSummary">
-          <CfoSummary />
-        </Safe>
-      </div>
-      <div className="sm:col-span-6">
-        <Safe name="HealthScoreCard">
-          <HealthScoreCard />
-        </Safe>
+        <ForecastHeader />
       </div>
 
-      {/* Phase 357 — "סיכוני תזרים" removed from Expenses tab. Info
-         already lives in Insights / Health / Forecast surfaces; no
-         direct action attached here. Keeps the tab as: CFO Brain →
-         Cards by month → category/card breakdown. */}
-
-      <div className="sm:col-span-6">
-        <Safe name="CardsHierarchyCard">
-          <CardsHierarchyCard />
-        </Safe>
-      </div>
-
+      {/* Categories lead — "where is my money going?" answered first. */}
       <div className="sm:col-span-6">
         <Safe name="CategorySpendCard">
           <CategorySpendCard />
+        </Safe>
+      </div>
+
+      {/* Cards breakdown follows — same question, card-aware lens. */}
+      <div className="sm:col-span-6">
+        <Safe name="CardsHierarchyCard">
+          <CardsHierarchyCard />
         </Safe>
       </div>
 
@@ -241,6 +222,30 @@ export function ExpensesTab() {
         </div>
       </DashboardSection>
     </div>
+  );
+}
+
+function ForecastHeader() {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        hapticTap();
+        navigateToTab("history");
+      }}
+      className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-right transition-colors hover:border-white/16"
+      dir="rtl"
+      aria-label="פתח את זמן — תחזית מלאה"
+    >
+      <ChevronLeft className="size-4 text-muted-foreground" aria-hidden />
+      <span className="flex flex-1 items-center gap-2 text-right">
+        <Sparkles className="size-3.5 text-gold/80" aria-hidden />
+        <span className="text-[12.5px] text-foreground/80">
+          תחזית סוף החודש חיה בלשונית{" "}
+          <span className="font-semibold text-foreground">זמן</span>
+        </span>
+      </span>
+    </button>
   );
 }
 
