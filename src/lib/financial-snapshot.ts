@@ -39,6 +39,7 @@ import { sliceForMonth } from "@/lib/projections";
 import { monthKeyOf, addMonths } from "@/lib/dates";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
 import { incomeForMonth } from "@/lib/income-month";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 
 export type RiskLevel = "safe" | "watch" | "tight" | "overdraft";
 
@@ -199,9 +200,11 @@ export function buildFinancialSnapshot(args: {
     if (paidThisMonth.has(rule.id)) continue;
     if (!ruleSchedule(rule, monthKey).active) continue;
     if (isCurrentMonth && rule.dayOfMonth < today) continue;
-    if (rule.paymentSource === "card") {
+    if (isRuleCardSettled(rule)) {
       // Will hit the bank via the card's billing day. Collected
       // separately so it adds onto recurringCommitments below.
+      // Phase 354 — recognises both explicit paymentSource="card"
+      // AND legacy linkedCardId-only rules.
       creditRoutedRulesUntilNextMonth += rule.estimatedAmount;
       continue;
     }

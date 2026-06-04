@@ -100,6 +100,25 @@ describe("snapshot routes credit-paymentSource rules to card bucket", () => {
     expect(snap.recurringCommitmentsUntilNextMonth).toBe(0);
   });
 
+  it("legacy linkedCardId-only rule also routes via card lane", () => {
+    const snap = buildFinancialSnapshot({
+      ...BASE,
+      rules: [
+        rule({
+          label: "ארנונה",
+          estimatedAmount: 320,
+          // paymentSource intentionally NOT set ("unknown" default).
+          // linkedCardId alone signals card settlement (Phase 354).
+          linkedCardId: "card-1",
+          dayOfMonth: 12,
+        }),
+      ],
+      now: NOW,
+    });
+    expect(snap.fixedExpensesUntilNextMonth).toBe(0);
+    expect(snap.recurringCommitmentsUntilNextMonth).toBe(320);
+  });
+
   it("undefined paymentSource defaults to bank-fixed (backward compat)", () => {
     const snap = buildFinancialSnapshot({
       ...BASE,

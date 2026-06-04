@@ -16,6 +16,7 @@ import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey, monthKeyOf } from "@/lib/dates";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { ruleSchedule, loanSchedule } from "@/lib/installment-schedule";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 import { sliceForMonth } from "@/lib/projections";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { tap as hapticTap } from "@/lib/haptics";
@@ -199,7 +200,7 @@ export function CfoSummary() {
     // belong in the "חיובי כרטיס עתידיים" group with a billing-day
     // note so the user reads "ירד ב-02 דרך אשראי" instead of
     // "ירד ב-DD" (their own dayOfMonth) under bank fixed.
-    if (r.paymentSource === "card") {
+    if (isRuleCardSettled(r)) {
       futureSliceItems.push({
         id: `rule-card:${r.id}`,
         label: r.label,

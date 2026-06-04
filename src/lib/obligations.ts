@@ -22,6 +22,7 @@ import type {
 import { addMonths, monthKeyOf } from "@/lib/dates";
 import { daysInMonth, sliceForMonth } from "@/lib/projections";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 
 export type ObligationKind =
   | "recurring"
@@ -86,8 +87,7 @@ export function monthObligations(args: MonthObligationsArgs): ObligationItem[] {
       kind: isInstallment ? "installment-plan" : "recurring",
       label: rule.label,
       amount: rule.estimatedAmount,
-      accountId:
-        rule.paymentSource === "card" ? rule.linkedCardId : undefined,
+      accountId: isRuleCardSettled(rule) ? rule.linkedCardId : undefined,
       sourceId: rule.id,
       status: paidIds.has(rule.id) ? "paid" : "pending",
     });

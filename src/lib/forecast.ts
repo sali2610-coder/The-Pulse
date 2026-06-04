@@ -10,6 +10,7 @@ import type { MonthKey } from "@/types/finance";
 import { daysInMonth, projectMonth, sliceForMonth } from "@/lib/projections";
 import { addMonths, dayWithinMonth, monthKeyOf } from "@/lib/dates";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 import {
   effectiveCashImpactForRule,
   effectiveCashImpacts,
@@ -409,7 +410,7 @@ export function forecastEndOfMonth(args: {
       if (!impact) continue;
       if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;
       pendingFixed += impact.amount;
-    } else if (r.paymentSource === "card") {
+    } else if (isRuleCardSettled(r)) {
       // Default lens — route credit-source rules through the card's
       // billing day instead of bank-fixed. Mirrors the snapshot's
       // Phase 352 behavior so every surface stays in sync.

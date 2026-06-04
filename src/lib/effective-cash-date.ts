@@ -271,7 +271,13 @@ export function effectiveCashImpactForRule(args: {
   const day = Math.min(Math.max(1, args.rule.dayOfMonth), lastDay);
   const ruleDate = new Date(year, month0, day, 12, 0, 0);
 
-  const isCard = args.rule.paymentSource === "card";
+  // Phase 354 — recognise both explicit paymentSource="card" AND
+  // legacy linkedCardId-only rules.
+  const isCard =
+    args.rule.paymentSource === "card" ||
+    (!!args.rule.linkedCardId &&
+      args.rule.paymentSource !== "bank" &&
+      args.rule.paymentSource !== "cash");
   if (!isCard) {
     return {
       ruleId: args.rule.id,

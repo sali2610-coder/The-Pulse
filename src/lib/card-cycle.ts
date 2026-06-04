@@ -22,6 +22,7 @@ import type {
 import { sliceForMonth, daysInMonth as daysInMonthKey } from "@/lib/projections";
 import { monthKeyOf, addMonths } from "@/lib/dates";
 import { ruleSchedule } from "@/lib/installment-schedule";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 
 export type CardCycleProjection = {
   accountId: string;
@@ -147,7 +148,9 @@ export function projectCardCycle(args: {
   const statuses = args.statuses ?? [];
   for (const rule of rules) {
     if (!rule.active) continue;
-    if (rule.paymentSource !== "card") continue;
+    // Phase 354 — recognise both explicit paymentSource="card" AND
+    // legacy linkedCardId-only rules.
+    if (!isRuleCardSettled(rule)) continue;
     if (rule.linkedCardId !== args.account.id) continue;
     for (const mk of monthsToScan) {
       const sched = ruleSchedule(rule, mk);
