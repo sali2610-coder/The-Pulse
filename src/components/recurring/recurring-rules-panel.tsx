@@ -17,6 +17,7 @@ import { getCategory } from "@/lib/categories";
 import { currentMonthKey } from "@/lib/dates";
 import { buildStatusMap, isSkippedStatus } from "@/lib/projections";
 import { ruleSchedule } from "@/lib/installment-schedule";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 import { tap } from "@/lib/haptics";
 
 import { RuleForm } from "./rule-form";
@@ -113,7 +114,9 @@ export function RecurringRulesPanel() {
       // linked installment plan belongs with its card so card pressure
       // / utilization / net-worth math don't under-count committed
       // monthly debt.
-      if (r.paymentSource === "card") {
+      // Phase 356 — recognise both explicit paymentSource="card" AND
+      // legacy linkedCardId-only rules.
+      if (isRuleCardSettled(r)) {
         const linked = r.linkedCardId
           ? cardBuckets.get(r.linkedCardId)
           : undefined;

@@ -30,6 +30,7 @@ import {
   monthKeyOf,
 } from "@/lib/dates";
 import { loanSchedule } from "@/lib/installment-schedule";
+import { isRuleCardSettled } from "@/lib/rule-settlement";
 import {
   buildHousingBucket,
   type HousingSubcategory,
@@ -107,10 +108,15 @@ function ruleSourceLabel(
   rule: RecurringRule,
   accounts: Account[],
 ): { source: ObligationSource; label: string } {
-  const source = (rule.paymentSource ?? "unknown") as ObligationSource;
-  if (source === "card") {
-    return { source, label: resolveCardLabel(rule.linkedCardId, accounts) };
+  // Phase 356 — recognise both explicit paymentSource="card" AND
+  // legacy linkedCardId-only rules.
+  if (isRuleCardSettled(rule)) {
+    return {
+      source: "card",
+      label: resolveCardLabel(rule.linkedCardId, accounts),
+    };
   }
+  const source = (rule.paymentSource ?? "unknown") as ObligationSource;
   return { source, label: SOURCE_LABEL[source] };
 }
 
