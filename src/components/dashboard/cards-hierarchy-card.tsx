@@ -24,7 +24,7 @@ import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
-import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
+import { ExpenseEditFullScreen } from "@/components/expense-form/expense-edit-fullscreen";
 import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
 import { installmentMetaForRefId } from "@/lib/installment-meta";
 import {
@@ -63,7 +63,6 @@ export function CardsHierarchyCard() {
   const statuses = useFinanceStore((s) => s.statuses);
   const entries = useFinanceStore((s) => s.entries);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const editingEntry = entries.find((e) => e.id === editingId) ?? null;
   const deleteWithUndo = useDeleteWithUndo();
 
   const report = useMemo(() => {
@@ -122,8 +121,8 @@ export function CardsHierarchyCard() {
         ))}
       </ul>
 
-      <ExpenseEditSheet
-        entry={editingEntry}
+      <ExpenseEditFullScreen
+        entryId={editingId}
         open={editingId !== null}
         onOpenChange={(o) => {
           if (!o) setEditingId(null);

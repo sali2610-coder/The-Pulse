@@ -27,7 +27,7 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
-import { ExpenseEditSheet } from "@/components/expense-form/expense-edit-sheet";
+import { ExpenseEditFullScreen } from "@/components/expense-form/expense-edit-fullscreen";
 import { useDeleteWithUndo } from "@/lib/use-delete-with-undo";
 import { installmentMetaForSource } from "@/lib/installment-meta";
 import {
@@ -52,7 +52,6 @@ export function CategorySpendCard() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const editingEntry = entries.find((e) => e.id === editingId) ?? null;
   const deleteWithUndo = useDeleteWithUndo();
 
   // Phase 260 — period chips. Default to the current month; chips
@@ -215,8 +214,8 @@ export function CategorySpendCard() {
         ) : null}
       </AnimatePresence>
 
-      <ExpenseEditSheet
-        entry={editingEntry}
+      <ExpenseEditFullScreen
+        entryId={editingId}
         open={editingId !== null}
         onOpenChange={(o) => {
           if (!o) setEditingId(null);

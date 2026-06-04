@@ -30,7 +30,7 @@ import { currentMonthKey } from "@/lib/dates";
 import { sliceForMonth } from "@/lib/projections";
 import { Pill } from "@/components/ui/pill";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { ExpenseEditSheet } from "@/components/dashboard/expense-edit-sheet";
+import { ExpenseEditFullScreen } from "@/components/expense-form/expense-edit-fullscreen";
 import { tap } from "@/lib/haptics";
 import type { ExpenseEntry } from "@/types/finance";
 
@@ -531,13 +531,13 @@ export function RecentActivity() {
         )}
       </BottomSheet>
 
-      <ExpenseEditSheet
+      <ExpenseEditFullScreen
         key={editEntry?.id ?? "none"}
         open={editEntry !== null}
         onOpenChange={(o) => {
           if (!o) setEditEntry(null);
         }}
-        entry={editEntry}
+        entryId={editEntry?.id ?? null}
       />
     </>
   );

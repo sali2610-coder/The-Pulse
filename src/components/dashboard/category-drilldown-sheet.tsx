@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+import { ExpenseEditFullScreen } from "@/components/expense-form/expense-edit-fullscreen";
+import { tap as hapticTap } from "@/lib/haptics";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingDown, TrendingUp } from "lucide-react";
 
@@ -46,6 +49,10 @@ export function CategoryDrilldownSheet({
 }: Props) {
   const entries = useFinanceStore((s) => s.entries);
   const meta = getCategory(category);
+
+  // Phase 367 — missing edit handler. Tapping a transaction row now
+  // opens the full-screen edit experience.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const series = useMemo(
     () =>
@@ -241,36 +248,45 @@ export function CategoryDrilldownSheet({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ delay: idx * 0.015 }}
-              className="flex items-center gap-3 rounded-2xl border border-white/8 bg-surface/50 p-3"
             >
-              <div className="flex flex-1 flex-col gap-0.5">
-                <span className="line-clamp-1 text-sm font-medium text-foreground">
-                  {row.merchant}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span>{DATE_FMT.format(row.chargeDate)}</span>
-                  {row.installments > 1 && (
-                    <>
-                      <span className="text-muted-foreground/40">·</span>
-                      <span>
-                        תשלום {row.installments > 1 ? `1/${row.installments}` : ""}
-                      </span>
-                    </>
-                  )}
-                  {row.source === "wallet" && (
-                    <>
-                      <span className="text-muted-foreground/40">·</span>
-                      <span>Wallet</span>
-                    </>
-                  )}
-                </span>
-              </div>
-              <span
-                dir="ltr"
-                className="font-mono text-sm font-semibold text-foreground"
+              <button
+                type="button"
+                onClick={() => {
+                  hapticTap();
+                  setEditingId(row.id);
+                }}
+                aria-label={`עריכת חיוב ${row.merchant}`}
+                className="flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-surface/50 p-3 text-right transition-colors hover:border-white/16 active:scale-[0.995]"
               >
-                {ILS.format(row.sliceAmount)}
-              </span>
+                <div className="flex flex-1 flex-col gap-0.5">
+                  <span className="line-clamp-1 text-sm font-medium text-foreground">
+                    {row.merchant}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span>{DATE_FMT.format(row.chargeDate)}</span>
+                    {row.installments > 1 && (
+                      <>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span>
+                          תשלום {row.installments > 1 ? `1/${row.installments}` : ""}
+                        </span>
+                      </>
+                    )}
+                    {row.source === "wallet" && (
+                      <>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span>Wallet</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <span
+                  dir="ltr"
+                  className="font-mono text-sm font-semibold text-foreground"
+                >
+                  {ILS.format(row.sliceAmount)}
+                </span>
+              </button>
             </motion.li>
           ))}
         </AnimatePresence>
@@ -280,6 +296,14 @@ export function CategoryDrilldownSheet({
           </li>
         )}
       </ul>
+
+      <ExpenseEditFullScreen
+        entryId={editingId}
+        open={editingId !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingId(null);
+        }}
+      />
     </BottomSheet>
   );
 }
