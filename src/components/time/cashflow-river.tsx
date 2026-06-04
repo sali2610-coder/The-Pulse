@@ -35,7 +35,13 @@ import {
   Receipt,
   Target,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 
 import type { TimeFrame } from "./use-time-engine";
 import { VIBE_TONE, vibeFromBalance } from "./state-tone";
@@ -60,68 +66,119 @@ type Node = {
   explain: string;
 };
 
+type CurveTotals = {
+  income: number;
+  fixed: number;
+  loans: number;
+  cards: number;
+};
+
+const EMPTY: CurveTotals = { income: 0, fixed: 0, loans: 0, cards: 0 };
+
+/** Phase 368 — per-cursor aggregation. Walks the curve points
+ *  inclusive of the cursor offset and buckets every signed event by
+ *  its kind. Reads the same engine output the ring + voice line
+ *  already read; no new math, just a window over events. */
+function totalsUpToCursor(frame: TimeFrame): CurveTotals {
+  const curve = frame.curve;
+  if (!curve) return { ...EMPTY };
+  const cap = Math.max(0, Math.min(curve.points.length - 1, frame.cursorOffset));
+  let income = 0;
+  let fixed = 0;
+  let loans = 0;
+  let cards = 0;
+  for (let i = 1; i <= cap; i++) {
+    for (const ev of curve.points[i].events) {
+      if (ev.kind === "income") income += ev.amount;
+      else if (ev.kind === "loan") loans += Math.abs(ev.amount);
+      else if (ev.kind === "card") cards += Math.abs(ev.amount);
+      else if (ev.kind === "bank_debit") fixed += Math.abs(ev.amount);
+    }
+  }
+  return {
+    income: Math.round(income),
+    fixed: Math.round(fixed),
+    loans: Math.round(loans),
+    cards: Math.round(cards),
+  };
+}
+
 export function CashflowRiver({ frame }: { frame: TimeFrame }) {
-  const snap = frame.snapshotEom;
   const tone = VIBE_TONE[vibeFromBalance(frame.balance)];
 
-  const nodes: Node[] = [];
-  if (frame.windowInflow > 0 || (snap?.expectedIncomeUntilNextMonth ?? 0) > 0) {
-    nodes.push({
+  // Phase 368 — totals come from the curve windowed by cursor so
+  // every checkpoint tells a different story. Snapshot was a flat
+  // EOM total; new totals react to LIVE / 10 / EOM / 2 / +10
+  // exactly the way the balance does.
+  const totals = useMemo(() => totalsUpToCursor(frame), [frame]);
+
+  // Track previous totals so the change-summary strip can describe
+  // the diff between the last cursor and this one.
+  const prevTotalsRef = useRef<CurveTotals>(EMPTY);
+  const [diff, setDiff] = useState<CurveTotals>(EMPTY);
+  useEffect(() => {
+    const prev = prevTotalsRef.current;
+    setDiff({
+      income: totals.income - prev.income,
+      fixed: totals.fixed - prev.fixed,
+      loans: totals.loans - prev.loans,
+      cards: totals.cards - prev.cards,
+    });
+    prevTotalsRef.current = totals;
+  }, [totals]);
+
+  const nodes: Node[] = [
+    {
       key: "income",
       label: "משכורת + הכנסות",
-      amount:
-        frame.windowInflow > 0
-          ? frame.windowInflow
-          : Math.round(snap?.expectedIncomeUntilNextMonth ?? 0),
+      amount: totals.income,
       sign: 1,
       Icon: Briefcase,
-      explain: "סך ההכנסות הצפויות להיכנס לחשבון בחלון הזמן הזה.",
-    });
-  }
-  if (snap && snap.fixedExpensesUntilNextMonth > 0) {
-    nodes.push({
+      explain:
+        "סך ההכנסות שכבר נספרו בטווח התאריך הזה. עוברים לתאריך מאוחר יותר כדי לראות הכנסות שטרם הגיעו.",
+    },
+    {
       key: "fixed",
       label: "הוצאות קבועות",
-      amount: Math.round(snap.fixedExpensesUntilNextMonth),
+      amount: totals.fixed,
       sign: -1,
       Icon: Receipt,
-      explain: "הוראות קבע וחיובים חודשיים שכבר ידועים לתקציב.",
-    });
-  }
-  if (snap && snap.activeLoansPaymentsUntilNextMonth > 0) {
-    nodes.push({
+      explain:
+        "הוראות קבע וחיובים ישירים מהבנק שהצטברו עד התאריך שבחרת.",
+    },
+    {
       key: "loans",
       label: "הלוואות",
-      amount: Math.round(snap.activeLoansPaymentsUntilNextMonth),
+      amount: totals.loans,
       sign: -1,
       Icon: Landmark,
-      explain: "תשלומים חודשיים על הלוואות פעילות.",
-    });
-  }
-  if (snap && snap.recurringCommitmentsUntilNextMonth > 0) {
-    nodes.push({
+      explain:
+        "תשלומי הלוואה חודשיים שהשפיעו על הבנק עד התאריך שבחרת.",
+    },
+    {
       key: "cards",
       label: "כרטיסי אשראי",
-      amount: Math.round(snap.recurringCommitmentsUntilNextMonth),
+      amount: totals.cards,
       sign: -1,
       Icon: CreditCard,
-      explain: "סך החיובים הצפויים מכרטיסי אשראי עד תאריך היעד.",
-    });
-  }
-  nodes.push({
-    key: "you",
-    label:
-      frame.cursorOffset === 0
-        ? "המאזן כעת"
-        : `אתה כאן · +${frame.cursorOffset} ימים`,
-    amount: frame.balance,
-    sign: 0,
-    Icon: Target,
-    explain:
-      frame.cursorOffset === 0
-        ? "המצב כרגע — סך היתרות הפעילות בחשבונות הבנק."
-        : "המאזן הצפוי בתאריך שבחרת, אחרי כל ההכנסות והחיובים שלמעלה.",
-  });
+      explain:
+        "סך החיובים בכרטיסי אשראי שכבר הגיעו לבנק עד התאריך שבחרת.",
+    },
+    {
+      key: "you",
+      label:
+        frame.cursorOffset === 0
+          ? "המאזן כעת"
+          : `אתה כאן · +${frame.cursorOffset} ימים`,
+      amount: frame.balance,
+      sign: 0,
+      Icon: Target,
+      explain:
+        frame.cursorOffset === 0
+          ? "המצב כרגע — סך היתרות הפעילות בחשבונות הבנק."
+          : "המאזן הצפוי בתאריך שבחרת, אחרי ההכנסות והחיובים שלמעלה.",
+    },
+  ];
 
   return (
     <section
@@ -130,12 +187,95 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
       dir="rtl"
     >
       <RiverHeader cursorOffset={frame.cursorOffset} />
+      <ChangeSummary diff={diff} tone={tone.glow} />
       <RiverList
         nodes={nodes}
         tone={tone.glow}
         cursorOffset={frame.cursorOffset}
       />
     </section>
+  );
+}
+
+function ChangeSummary({
+  diff,
+  tone,
+}: {
+  diff: CurveTotals;
+  tone: string;
+}) {
+  type DiffLine = { sign: 1 | -1; amount: number; label: string };
+  const lines: DiffLine[] = [];
+  if (diff.income > 0) {
+    lines.push({ sign: 1, amount: diff.income, label: "התקבלו הכנסות" });
+  } else if (diff.income < 0) {
+    lines.push({ sign: -1, amount: Math.abs(diff.income), label: "הוסרה הכנסה" });
+  }
+  if (diff.fixed > 0) {
+    lines.push({ sign: -1, amount: diff.fixed, label: "הוצאות קבועות חויבו" });
+  }
+  if (diff.loans > 0) {
+    lines.push({ sign: -1, amount: diff.loans, label: "תשלומי הלוואות" });
+  }
+  if (diff.cards > 0) {
+    lines.push({ sign: -1, amount: diff.cards, label: "חיובי כרטיסי אשראי" });
+  }
+  return (
+    <div
+      aria-label="מה השתנה מאז התאריך הקודם"
+      className="mb-3 min-h-[44px]"
+      dir="rtl"
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        {lines.length === 0 ? (
+          <motion.div
+            key="quiet"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 0.65, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.24 }}
+            className="rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2 text-[11px] text-muted-foreground"
+            style={{ boxShadow: `inset 0 0 22px -10px ${tone}33` }}
+          >
+            עדיין לא חלו שינויים מאז התאריך הקודם
+          </motion.div>
+        ) : (
+          <motion.ul
+            key={lines.map((l) => `${l.sign}${l.amount}${l.label}`).join("|")}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.28 }}
+            className="flex flex-col gap-1 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2"
+            style={{ boxShadow: `inset 0 0 22px -10px ${tone}33` }}
+          >
+            <li className="text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
+              מה השתנה מאז התאריך הקודם
+            </li>
+            {lines.map((l, i) => (
+              <li
+                key={`${i}-${l.label}`}
+                className="flex items-center justify-between text-[12.5px]"
+              >
+                <span className="text-foreground/80">{l.label}</span>
+                <span
+                  data-mono="true"
+                  dir="ltr"
+                  className="font-medium"
+                  style={{
+                    color: l.sign === 1 ? "#34D399" : "#F87171",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {l.sign === 1 ? "+" : "−"}
+                  {ILS.format(l.amount)}
+                </span>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -328,11 +468,17 @@ function RiverRow({
           ? `${tone}66`
           : "transparent";
 
+  // Phase 368 — inactive rows (no events yet contributed to this
+  // category) read as dimmed + semi-transparent. Destination stays
+  // fully opaque regardless of zero, so the "you are here" anchor
+  // never disappears.
+  const inactive = !isDest && Math.abs(node.amount) < 1;
+
   return (
     <li className="relative" style={{ minHeight: ROW_H }}>
       <motion.div
         initial={{ opacity: 0, x: 6 }}
-        animate={{ opacity: 1, x: 0 }}
+        animate={{ opacity: inactive ? 0.42 : 1, x: 0 }}
         transition={{ duration: 0.36, delay, ease: "easeOut" }}
         className="flex items-center gap-3"
         style={{ minHeight: ROW_H }}
