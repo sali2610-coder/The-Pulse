@@ -26,7 +26,6 @@ import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { computeSummaries } from "@/lib/dashboard-section-summaries";
 
-import { FinancialHealthGauge } from "@/components/dashboard/financial-health-gauge";
 import { useAttentionCount } from "@/components/dashboard/attention-center";
 import { openAttentionCenter } from "@/lib/use-attention-center";
 import { motion as fmMotion } from "framer-motion";
@@ -299,14 +298,10 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* Phase 282 — financial-health gauge. Single needle, single
-           score. Reads from buildFinancialSnapshot. Phase 350 trim:
-           kept here as a support widget under the forecast hero. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="FinancialHealthGauge">
-            <FinancialHealthGauge />
-          </Safe>
-        </div>
+        {/* Phase 379 — "בריאות פיננסית" gauge removed from this tab.
+           Same story is told on the AI Insights tab; keeping it on
+           Home was duplicate visual load. Component file preserved
+           on disk for any future caller. */}
 
         {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
         <div className="sm:col-span-6 empty:hidden">
