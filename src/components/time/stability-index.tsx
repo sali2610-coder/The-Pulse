@@ -11,29 +11,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 
 import type { ForecastHealth } from "@/lib/forecast-health";
-
-const BAND_TONE: Record<ForecastHealth["band"], { fg: string; bg: string }> = {
-  safe: { fg: "#F6D970", bg: "rgba(212,175,55,0.16)" },
-  steady: { fg: "#75F5FF", bg: "rgba(0,229,255,0.14)" },
-  watch: { fg: "#F5C76A", bg: "rgba(245,199,106,0.16)" },
-  risk: { fg: "#FF8A65", bg: "rgba(255,138,101,0.16)" },
-  danger: { fg: "#F87171", bg: "rgba(248,113,113,0.18)" },
-};
-
-// Phase 359 — short, calm, Hebrew labels for the chip. Maps the
-// engine's 5 bands to the 4-state vocabulary the design calls for.
-const SHORT_LABEL: Record<ForecastHealth["band"], string> = {
-  safe: "יציב",
-  steady: "יציב",
-  watch: "תשומת לב",
-  risk: "מצומצם",
-  danger: "סיכון",
-};
+import { STATE_TONE, PUBLIC_STATE } from "./state-tone";
 
 export function StabilityIndex({ health }: { health: ForecastHealth | null }) {
   if (!health) return null;
-  const tone = BAND_TONE[health.band];
-  const label = SHORT_LABEL[health.band];
+  const stateTone = STATE_TONE[health.band];
+  const tone = {
+    fg: stateTone.to,
+    bg: `${stateTone.glow}26`,
+  };
+  const label = PUBLIC_STATE[health.band];
   return (
     <div className="flex flex-col items-center gap-1.5">
       <AnimatePresence mode="popLayout" initial={false}>

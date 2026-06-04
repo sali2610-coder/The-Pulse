@@ -21,6 +21,7 @@ import type { Checkpoint } from "./use-time-engine";
 import { tap as hapticTap, success as hapticSuccess } from "@/lib/haptics";
 import { playCheckpointTone } from "@/lib/time-chime";
 import { useFinanceStore } from "@/lib/store";
+import { STATE_TONE } from "./state-tone";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -33,14 +34,6 @@ const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   day: "numeric",
   month: "long",
 });
-
-const BAND_STROKE: Record<ForecastHealth["band"], [string, string]> = {
-  safe: ["#D4AF37", "#F6D970"],
-  steady: ["#00E5FF", "#75F5FF"],
-  watch: ["#F5C76A", "#D4AF37"],
-  risk: ["#FF8A65", "#F87171"],
-  danger: ["#F87171", "#B91C1C"],
-};
 
 const SIZE = 320;
 const R = 138;
@@ -78,13 +71,21 @@ export function ProjectionRing({
   }, [balance, value]);
 
   const band = health?.band ?? "steady";
-  const [from, to] = BAND_STROKE[band];
+  const tone = STATE_TONE[band];
+  const from = tone.from;
+  const to = tone.to;
   const score = health?.score ?? 50;
   const sweep = Math.max(0.08, Math.min(1, score / 100));
   const dashOffset = C * (1 - sweep);
 
   // ── Ambient particles inside the ring ─────────────────────────
+  // Density + speed scale with the state band so the screen reads
+  // calmer when safe, denser/quicker when tense.
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const toneRef = useRef(tone);
+  useEffect(() => {
+    toneRef.current = tone;
+  }, [tone]);
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
@@ -94,33 +95,40 @@ export function ProjectionRing({
     const w = (c.width = SIZE * dpr);
     const h = (c.height = SIZE * dpr);
     type P = { a: number; r: number; speed: number; rad: number; alpha: number };
-    const COUNT = 6;
+    const COUNT = toneRef.current.particleCount;
     const items: P[] = Array.from({ length: COUNT }, () => ({
       a: Math.random() * Math.PI * 2,
       r: (40 + Math.random() * 80) * dpr,
       speed: 0.0006 + Math.random() * 0.0008,
       rad: (0.9 + Math.random() * 0.9) * dpr,
-      alpha: 0.18 + Math.random() * 0.18,
+      alpha: 0.18 + Math.random() * 0.2,
     }));
     let raf = 0;
     const tick = () => {
       ctx.clearRect(0, 0, w, h);
       const cx = w / 2;
       const cy = h / 2;
+      const mul = toneRef.current.particleSpeedMul;
+      const color = toneRef.current.particle;
       for (const p of items) {
-        p.a += p.speed;
+        p.a += p.speed * mul;
         const x = cx + Math.cos(p.a) * p.r;
         const y = cy + Math.sin(p.a) * p.r;
         ctx.beginPath();
         ctx.arc(x, y, p.rad, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
+        ctx.fillStyle = color;
+        ctx.fill();
+        // Soft white core for a hint of dual-tone shimmer.
+        ctx.beginPath();
+        ctx.arc(x, y, p.rad * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${p.alpha * 0.7})`;
         ctx.fill();
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [tone.particleCount]);
 
   // ── Checkpoint positions ──────────────────────────────────────
   // Distribute checkpoints around the upper hemisphere (12 → 6
@@ -318,10 +326,12 @@ export function ProjectionRing({
         <motion.span
           data-mono="true"
           dir="ltr"
-          className="text-[44px] font-light leading-none text-foreground sm:text-[56px]"
+          className="text-[48px] font-light leading-none sm:text-[64px]"
           style={{
             fontVariantNumeric: "tabular-nums",
-            textShadow: `0 0 24px ${from}33`,
+            color: tone.numberTint,
+            textShadow: tone.textShadow,
+            transition: "color 480ms ease, text-shadow 480ms ease",
           }}
         >
           <motion.span>{display}</motion.span>

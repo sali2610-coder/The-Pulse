@@ -33,6 +33,22 @@ export function HorizonRail({
   const [showStartFade, setShowStartFade] = useState(false);
   const [showEndFade, setShowEndFade] = useState(true);
   const [customMode, setCustomMode] = useState(false);
+  const [hint, setHint] = useState(false);
+
+  // Phase 361 — first-mount scroll hint. A brief pulse on the end
+  // fade tells the user "there's more here." Fires once.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const overflows = el.scrollWidth - el.clientWidth > 4;
+    if (!overflows) return;
+    const t1 = setTimeout(() => setHint(true), 480);
+    const t2 = setTimeout(() => setHint(false), 2200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [checkpoints.length]);
 
   // Phase 360 — edge fades indicate "more available." RTL flips the
   // scrollLeft sign on some engines, so we read raw width math.
@@ -82,7 +98,7 @@ export function HorizonRail({
             transition: "opacity 220ms ease",
           }}
         />
-        <div
+        <motion.div
           aria-hidden
           className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 rounded-l-full"
           style={{
@@ -91,6 +107,22 @@ export function HorizonRail({
             opacity: showEndFade ? 1 : 0,
             transition: "opacity 220ms ease",
           }}
+          animate={
+            hint
+              ? {
+                  boxShadow: [
+                    "0 0 0px rgba(212,175,55,0)",
+                    "0 0 26px rgba(212,175,55,0.5) inset",
+                    "0 0 0px rgba(212,175,55,0)",
+                  ],
+                }
+              : { boxShadow: "0 0 0px rgba(212,175,55,0)" }
+          }
+          transition={
+            hint
+              ? { duration: 1.6, repeat: 1, ease: "easeInOut" }
+              : { duration: 0.2 }
+          }
         />
 
         <div

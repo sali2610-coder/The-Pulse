@@ -1,28 +1,28 @@
 "use client";
 
-// Phase 358 / D — TimeAmbience.
+// Phase 361 — TimeAmbience.
 //
-// Backplate gradient + drifting dot field. Tone shifts with the band.
-// Fixed positioning behind the screen content. Honors prefers-
-// reduced-motion (renders a static gradient with no particles).
+// Backplate gradient + drifting dot field. Reads the centralised
+// STATE_TONE palette so the whole screen breathes the same color
+// language. Particle density + speed scale with the band so the
+// atmosphere reads calm or tense without text.
+//
+// Honors prefers-reduced-motion (static gradient, no particles).
 
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "framer-motion";
 
 import type { ForecastHealth } from "@/lib/forecast-health";
-
-const BAND_TONE: Record<ForecastHealth["band"], string> = {
-  safe: "#D4AF37",
-  steady: "#00E5FF",
-  watch: "#F5C76A",
-  risk: "#FF8A65",
-  danger: "#F87171",
-};
+import { STATE_TONE } from "./state-tone";
 
 export function TimeAmbience({ band }: { band: ForecastHealth["band"] }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const reduced = useReducedMotion();
-  const tone = BAND_TONE[band];
+  const tone = STATE_TONE[band];
+  const toneRef = useRef(tone);
+  useEffect(() => {
+    toneRef.current = tone;
+  }, [tone]);
 
   useEffect(() => {
     if (reduced) return;
@@ -41,20 +41,23 @@ export function TimeAmbience({ band }: { band: ForecastHealth["band"] }) {
     window.addEventListener("resize", resize);
 
     type Dot = { x: number; y: number; r: number; vy: number; a: number };
-    const COUNT = 36;
+    // Density scales with band tone (calmer → fewer dots).
+    const baseCount = 28;
+    const COUNT = Math.round(baseCount + toneRef.current.particleCount * 2);
     const dots: Dot[] = Array.from({ length: COUNT }).map(() => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       r: (0.4 + Math.random() * 1.2) * dpr,
       vy: (0.08 + Math.random() * 0.18) * dpr,
-      a: 0.15 + Math.random() * 0.35,
+      a: 0.15 + Math.random() * 0.32,
     }));
 
     let raf = 0;
     const tick = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const mul = toneRef.current.particleSpeedMul;
       for (const d of dots) {
-        d.y -= d.vy;
+        d.y -= d.vy * mul;
         if (d.y < -2) {
           d.y = canvas.height + 2;
           d.x = Math.random() * canvas.width;
@@ -76,13 +79,13 @@ export function TimeAmbience({ band }: { band: ForecastHealth["band"] }) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] overflow-hidden"
+      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden"
     >
       <div
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${tone}14 0%, transparent 60%)`,
-          transition: "background 600ms ease",
+          background: `radial-gradient(circle at 50% 0%, ${tone.glow}1A 0%, ${tone.glow}07 38%, transparent 62%)`,
+          transition: "background 640ms ease",
         }}
       />
       {!reduced ? (
