@@ -539,3 +539,13 @@ main[data-danger="true"] [data-tone="accent"] {
   background-size: 200% 100%;
   animation: shimmer-skeleton 1.6s ease-in-out infinite;
 }
+
+/* Phase 360 — TimeScreen chip rail hides the native scrollbar so
+   only the edge fades hint at additional content. */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

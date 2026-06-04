@@ -27,12 +27,11 @@ import { todayPulse } from "@/lib/today-pulse";
 
 export type CheckpointKind =
   | "now"
-  | "salary"
-  | "plus7"
-  | "plus14"
+  | "day10"
   | "eom"
-  | "next1"
-  | "next10";
+  | "next2"
+  | "next10"
+  | "custom";
 
 export type Checkpoint = {
   kind: CheckpointKind;
@@ -152,56 +151,64 @@ export function useTimeEngine(offset: number | null): TimeFrame {
     const now = new Date();
     const points = curve.points;
     const max = Math.max(1, points.length - 1);
+    // Phase 360 — fixed, financially-meaningful ladder. The order is
+    // explicit (LIVE → 10 → סוף חודש → 2 → 10+ → מותאם) and not
+    // resorted by offset.
     const list: Checkpoint[] = [];
     list.push({
       kind: "now",
-      label: "עכשיו",
+      label: "LIVE",
       offset: 0,
       iso: points[0]?.whenISO ?? now.toISOString(),
     });
-    if (curve.nextSalaryAt) {
-      const idx = points.findIndex((p) =>
-        sameLocalDay(p.whenISO, curve.nextSalaryAt!),
-      );
-      if (idx > 0) {
-        list.push({
-          kind: "salary",
-          label: "משכורת",
-          offset: idx,
-          iso: points[idx].whenISO,
-        });
-      }
-    }
-    const p7 = Math.min(7, max);
-    list.push({ kind: "plus7", label: "+7", offset: p7, iso: points[p7].whenISO });
-    const p14 = Math.min(14, max);
-    list.push({ kind: "plus14", label: "+14", offset: p14, iso: points[p14].whenISO });
+    const day10 = Math.min(offsetToDayOfMonth(now, 10), max);
+    list.push({
+      kind: "day10",
+      label: "10",
+      offset: day10,
+      iso: points[day10]?.whenISO ?? "",
+    });
     const eom = Math.min(offsetToEom(now), max);
-    list.push({ kind: "eom", label: "סוף החודש", offset: eom, iso: points[eom]?.whenISO ?? "" });
-    const n1 = Math.min(offsetToDayOfNextMonth(now, 1), max);
-    list.push({ kind: "next1", label: "1 לחודש הבא", offset: n1, iso: points[n1]?.whenISO ?? "" });
-    const n10raw = offsetToDayOfMonth(now, 10);
-    const n10 = Math.min(n10raw, max);
-    list.push({ kind: "next10", label: "10 לחודש הבא", offset: n10, iso: points[n10]?.whenISO ?? "" });
-    // Sort by offset asc + dedupe colliding ones (e.g. salary == +7).
-    list.sort((a, b) => a.offset - b.offset);
-    const dedup: Checkpoint[] = [];
-    for (const c of list) {
-      const last = dedup[dedup.length - 1];
-      if (!last || Math.abs(last.offset - c.offset) > 0) dedup.push(c);
-    }
-    return dedup;
+    list.push({
+      kind: "eom",
+      label: "סוף חודש",
+      offset: eom,
+      iso: points[eom]?.whenISO ?? "",
+    });
+    const n2 = Math.min(offsetToDayOfNextMonth(now, 2), max);
+    list.push({
+      kind: "next2",
+      label: "2",
+      offset: n2,
+      iso: points[n2]?.whenISO ?? "",
+    });
+    const n10 = Math.min(offsetToDayOfNextMonth(now, 10), max);
+    list.push({
+      kind: "next10",
+      label: "10+",
+      offset: n10,
+      iso: points[n10]?.whenISO ?? "",
+    });
+    // Custom chip — engine slot stays at the user-controlled offset.
+    // Default to "max" so the slider has somewhere to scrub.
+    list.push({
+      kind: "custom",
+      label: "מותאם",
+      offset: max,
+      iso: points[max]?.whenISO ?? "",
+    });
+    return list;
   }, [curve]);
 
   const cursorOffset = useMemo(() => {
     if (!curve) return 0;
     const max = Math.max(1, curve.points.length - 1);
     if (offset === null) {
-      // Default → next salary if known, else +14.
-      const salary = checkpoints.find((c) => c.kind === "salary");
-      if (salary) return salary.offset;
-      const p14 = checkpoints.find((c) => c.kind === "plus14");
-      return p14?.offset ?? Math.min(14, max);
+      // Phase 360 — default lands on סוף החודש (most informative
+      // single answer for the "where am I heading?" question).
+      const eom = checkpoints.find((c) => c.kind === "eom");
+      if (eom) return eom.offset;
+      return Math.min(14, max);
     }
     return Math.max(0, Math.min(max, Math.round(offset)));
   }, [curve, offset, checkpoints]);
@@ -289,12 +296,3 @@ export function useTimeEngine(offset: number | null): TimeFrame {
   return frame;
 }
 
-function sameLocalDay(a: string, b: string): boolean {
-  const ad = new Date(a);
-  const bd = new Date(b);
-  return (
-    ad.getFullYear() === bd.getFullYear() &&
-    ad.getMonth() === bd.getMonth() &&
-    ad.getDate() === bd.getDate()
-  );
-}

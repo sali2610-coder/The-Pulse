@@ -250,8 +250,11 @@ export function ProjectionRing({
         />
       </svg>
 
-      {/* Checkpoint nodes on the ring */}
+      {/* Checkpoint nodes on the ring. "מותאם" is not jump-able from
+         the ring; users adjust it via the inline stepper under the
+         chip rail, so it's rendered slightly subdued. */}
       {cpPos.map(({ cp, cx, cy }) => {
+        if (cp.kind === "custom") return null;
         const isActive = Math.abs(cp.offset - cursorOffset) < 1;
         const pctX = (cx / SIZE) * 100;
         const pctY = (cy / SIZE) * 100;

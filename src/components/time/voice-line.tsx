@@ -1,14 +1,14 @@
 "use client";
 
-// Phase 359 — VoiceLine (premium polish).
+// Phase 360 — VoiceLine.
 //
-// Two-line Hebrew companion voice. Speaks naturally, present tense,
-// no spreadsheet vibes.
+// Two-line Hebrew companion voice. Calm. Confident. Present tense.
+// Reads like the future is speaking to the user.
 //
-//   Line 1 — primary fact ("ב־10 ביולי נשארים לך 3,240 ₪ פנויים.")
-//   Line 2 — context ("אתה עדיין באזור יציב." / "המרווח מצטמצם.")
-//
-// Both crossfade when state or balance changes.
+//   Line 1 — primary fact, context-aware. Calls out סוף חודש and
+//            beginning-of-next-month explicitly so the line feels
+//            like a financial companion, not a date stamp.
+//   Line 2 — softer follow-up tied to the state band.
 
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -25,11 +25,14 @@ const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   month: "long",
 });
 
-// Phase 359 — Hebrew month name prefixed with ב־ so the sentence
-// reads "ב־10 ביולי" naturally. Falls back to the locale string if
-// for any reason the date is bad.
-function whenPhrase(cursorISO: string, cursorOffset: number): string {
-  if (cursorOffset === 0) return "היום";
+function isEom(cursorISO: string): boolean {
+  const d = new Date(cursorISO);
+  if (Number.isNaN(d.getTime())) return false;
+  const eom = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return d.getDate() === eom.getDate();
+}
+
+function whenPhrase(cursorISO: string): string {
   try {
     const d = new Date(cursorISO);
     return `ב־${DAY_FMT.format(d)}`;
@@ -44,14 +47,25 @@ function primary(args: {
   cursorISO: string;
   cursorOffset: number;
 }): string {
-  const when = whenPhrase(args.cursorISO, args.cursorOffset);
   const amount = ILS.format(Math.abs(args.balance));
+  if (args.cursorOffset === 0) {
+    if (args.balance < 0) return `אתה כעת במינוס ${amount}.`;
+    return `יש לך כעת ${amount} פנויים.`;
+  }
+  if (isEom(args.cursorISO)) {
+    if (args.balance < 0) {
+      return `אתה מסיים את החודש במינוס ${amount}.`;
+    }
+    return `אתה מסיים את החודש עם ${amount}.`;
+  }
+  const when = whenPhrase(args.cursorISO);
   if (args.balance < 0) return `${when} אתה במינוס ${amount}.`;
-  if (args.cursorOffset === 0) return `יש לך כעת ${amount} פנויים.`;
   if (args.band === "safe" || args.band === "steady") {
     return `${when} נשארים לך ${amount} פנויים.`;
   }
-  if (args.band === "watch") return `${when} נשארים לך ${amount} בלבד.`;
+  if (args.band === "watch") {
+    return `${when} נשארים לך ${amount} בלבד.`;
+  }
   return `${when} המאזן עומד על ${amount}.`;
 }
 
@@ -61,17 +75,19 @@ function secondary(args: {
 }): string {
   switch (args.band) {
     case "safe":
-      return "יש מספיק מרווח עד המשכורת הבאה.";
+      return "כרגע אין סיכון תזרימי.";
     case "steady":
-      return "אתה עדיין באזור יציב.";
+      return args.cursorOffset > 0
+        ? "החיובים הקרובים כבר מגולמים בתחזית."
+        : "המאזן יציב.";
     case "watch":
       return args.cursorOffset > 14
         ? "לקראת סוף החודש המרווח מצטמצם."
-        : "המרווח מתחיל להצטמצם.";
+        : "נשאר מרווח, אך הוא מצטמצם.";
     case "risk":
-      return "המרווח קטן — שווה לעצור הוצאות לא חיוניות.";
+      return "שווה לעצור הוצאות לא חיוניות עד המשכורת.";
     case "danger":
-      return "המאזן צפוי לחצות לאדום. שווה לפעול עכשיו.";
+      return "המאזן צפוי לחצות לאדום — שווה לפעול עכשיו.";
     default:
       return "";
   }
@@ -93,7 +109,7 @@ export function VoiceLine({
   const b = secondary({ band: health.band, cursorOffset });
   return (
     <div
-      className="min-h-[48px] flex flex-col items-center gap-1 text-center"
+      className="min-h-[52px] flex flex-col items-center gap-1 px-4 text-center"
       aria-live="polite"
       dir="rtl"
     >
@@ -103,8 +119,8 @@ export function VoiceLine({
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.26 }}
-          className="text-[14px] font-medium text-foreground/90"
+          transition={{ duration: 0.28 }}
+          className="text-[14.5px] font-medium leading-tight text-foreground/92"
         >
           {a}
         </motion.span>
@@ -113,10 +129,10 @@ export function VoiceLine({
         <motion.span
           key={`b-${b}`}
           initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 0.8, y: 0 }}
+          animate={{ opacity: 0.78, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
-          transition={{ duration: 0.26, delay: 0.04 }}
-          className="text-[11.5px] text-muted-foreground"
+          transition={{ duration: 0.28, delay: 0.04 }}
+          className="text-[11.5px] leading-tight text-muted-foreground"
         >
           {b}
         </motion.span>

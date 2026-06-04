@@ -34,7 +34,6 @@ import { Bell as BellIcon, ArrowLeft as ArrowLeftIcon } from "lucide-react";
 import { tap as hapticTap } from "@/lib/haptics";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
-import { HeroFutureBalanceCard } from "@/components/dashboard/simple/hero-future-balance-card";
 import { TimeRecapCard } from "@/components/time/time-recap-card";
 
 const lazy = (
@@ -290,15 +289,10 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* Phase 350 — "איפה אני אהיה" live snapshot. */}
-        <div className="sm:col-span-6">
-          <Safe name="HeroFutureBalanceCard">
-            <HeroFutureBalanceCard />
-          </Safe>
-        </div>
-
-        {/* Phase 358 — recap link to flagship TimeScreen ("זמן" tab).
-           Single tap drops the user into the immersive time machine. */}
+        {/* Phase 360 — old "איפה אני אהיה" forecast hero retired
+           from Home. TimeRecapCard is now the single entry to the
+           flagship Time experience; tapping it routes to the זמן
+           tab where the full immersive screen lives. */}
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="TimeRecapCard">
             <TimeRecapCard />

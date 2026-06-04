@@ -100,7 +100,9 @@ export function TimeScreen() {
           <HorizonRail
             checkpoints={frame.checkpoints}
             cursorOffset={frame.cursorOffset}
+            maxOffset={frame.maxOffset}
             onPick={onPickCheckpoint}
+            onCustomOffset={(n) => setOffset(n)}
           />
 
           <CashflowRiver frame={frame} />
