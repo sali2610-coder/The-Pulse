@@ -20,6 +20,7 @@ import { buildRecurringSectionSummary } from "@/lib/recurring-section-summary";
 import { navigateToTab } from "@/lib/tab-nav";
 import { tap as hapticTap } from "@/lib/haptics";
 import { ChevronLeft, Sparkles } from "lucide-react";
+import { ExpensesCommitmentsCockpit } from "@/components/expenses/expenses-commitments-cockpit";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -129,6 +130,16 @@ export function ExpensesTab() {
       <div className="sm:col-span-6 empty:hidden">
         <Safe name="PendingTray">
           <PendingTray />
+        </Safe>
+      </div>
+
+      {/* Phase 376 — Commitments Cockpit V2. ADDITION-only summary
+         layer at the top. Inline-expand-only — never a modal, never
+         a drawer, never navigation. Existing cards below stay
+         exactly as they were. */}
+      <div className="sm:col-span-6 empty:hidden">
+        <Safe name="ExpensesCommitmentsCockpit">
+          <ExpensesCommitmentsCockpit />
         </Safe>
       </div>
 
