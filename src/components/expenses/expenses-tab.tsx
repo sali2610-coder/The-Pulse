@@ -73,13 +73,6 @@ const LiquidityTimelineCard = lazy(() =>
       m.LiquidityTimelineCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-// Phase 301 — RiskWarningsCard ("סיכוני תזרים") relocated from Home.
-const RiskWarningsCard = lazy(() =>
-  import("@/components/dashboard/risk-warnings-card").then((m) => ({
-    default:
-      m.RiskWarningsCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
 // Phase 304 — interactive analytics widgets.
 const CategoryDonut = lazy(() =>
   import("@/components/dashboard/category-donut").then((m) => ({
@@ -167,14 +160,10 @@ export function ExpensesTab() {
         </Safe>
       </div>
 
-      {/* Phase 301 — "סיכוני תזרים" relocated from Home into the
-         financial-control-center cluster. Auto-hides when no risks
-         are detected. */}
-      <div className="sm:col-span-6 empty:hidden">
-        <Safe name="RiskWarningsCard">
-          <RiskWarningsCard />
-        </Safe>
-      </div>
+      {/* Phase 357 — "סיכוני תזרים" removed from Expenses tab. Info
+         already lives in Insights / Health / Forecast surfaces; no
+         direct action attached here. Keeps the tab as: CFO Brain →
+         Cards by month → category/card breakdown. */}
 
       <div className="sm:col-span-6">
         <Safe name="CardsHierarchyCard">
