@@ -13,9 +13,9 @@
 import { useRef, useState, type ReactNode, type PointerEvent } from "react";
 
 import type { Checkpoint } from "./use-time-engine";
-import { tap as hapticTap } from "@/lib/haptics";
+import { success as hapticSuccess } from "@/lib/haptics";
 import { useFinanceStore } from "@/lib/store";
-import { playTimeTick } from "@/lib/time-chime";
+import { playCheckpointTone } from "@/lib/time-chime";
 
 const GRAVITY_PCT = 0.06; // snap if release within 6% of viewport width
 const DRAG_DAY_PX = 12; // 12px = 1 day of curve travel
@@ -86,8 +86,8 @@ export function ScrubSurface({
       }
     }
     if (best && bestDist <= gravityDays) {
-      hapticTap();
-      if (audioEnabled) playTimeTick();
+      hapticSuccess();
+      if (audioEnabled) playCheckpointTone();
       onOffset(best.offset);
     }
   };

@@ -60,6 +60,18 @@ export function TimeScreen() {
       <div className="relative flex flex-col gap-6 pb-32">
         <TimeAmbience band={frame.health?.band ?? "steady"} />
 
+        {/* Phase 359 — bottom vignette adds depth to the ring + chips
+           on small phones. Pointer-events disabled so it never
+           swallows the scrub gesture. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40"
+          style={{
+            background:
+              "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 100%)",
+          }}
+        />
+
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -71,6 +83,9 @@ export function TimeScreen() {
             cursorISO={frame.cursorISO}
             health={frame.health}
             cursorOffset={frame.cursorOffset}
+            maxOffset={frame.maxOffset}
+            checkpoints={frame.checkpoints}
+            onPickCheckpoint={onPickCheckpoint}
           />
 
           <StabilityIndex health={frame.health} />
@@ -85,7 +100,6 @@ export function TimeScreen() {
           <HorizonRail
             checkpoints={frame.checkpoints}
             cursorOffset={frame.cursorOffset}
-            maxOffset={frame.maxOffset}
             onPick={onPickCheckpoint}
           />
 

@@ -1,48 +1,73 @@
 "use client";
 
-// Phase 358 — StabilityIndex.
+// Phase 359 — StabilityIndex (premium polish).
 //
-// Single-row pill: state word + tiny score. Letter-morphs when the
-// band changes. Sits just under the ring.
+// Single glass pill: state word + tiny score subscript. The visible
+// label maps the engine's 5 bands to the 4 user-facing names the PO
+// asked for (Stable / Caution / Tight / Risk) — done at the
+// presentation layer only; the engine output is left untouched so
+// every other reader stays consistent.
 
 import { AnimatePresence, motion } from "framer-motion";
 
 import type { ForecastHealth } from "@/lib/forecast-health";
 
 const BAND_TONE: Record<ForecastHealth["band"], { fg: string; bg: string }> = {
-  safe: { fg: "#F6D970", bg: "rgba(212,175,55,0.14)" },
-  steady: { fg: "#75F5FF", bg: "rgba(0,229,255,0.12)" },
-  watch: { fg: "#F5C76A", bg: "rgba(245,199,106,0.14)" },
-  risk: { fg: "#FF8A65", bg: "rgba(255,138,101,0.14)" },
-  danger: { fg: "#F87171", bg: "rgba(248,113,113,0.16)" },
+  safe: { fg: "#F6D970", bg: "rgba(212,175,55,0.16)" },
+  steady: { fg: "#75F5FF", bg: "rgba(0,229,255,0.14)" },
+  watch: { fg: "#F5C76A", bg: "rgba(245,199,106,0.16)" },
+  risk: { fg: "#FF8A65", bg: "rgba(255,138,101,0.16)" },
+  danger: { fg: "#F87171", bg: "rgba(248,113,113,0.18)" },
+};
+
+// Phase 359 — short, calm, Hebrew labels for the chip. Maps the
+// engine's 5 bands to the 4-state vocabulary the design calls for.
+const SHORT_LABEL: Record<ForecastHealth["band"], string> = {
+  safe: "יציב",
+  steady: "יציב",
+  watch: "תשומת לב",
+  risk: "מצומצם",
+  danger: "סיכון",
 };
 
 export function StabilityIndex({ health }: { health: ForecastHealth | null }) {
   if (!health) return null;
   const tone = BAND_TONE[health.band];
+  const label = SHORT_LABEL[health.band];
   return (
     <div className="flex flex-col items-center gap-1.5">
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span
-          key={health.band}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.22 }}
-          className="inline-flex items-center gap-2 rounded-full border px-3 py-1"
+          key={label}
+          initial={{ opacity: 0, y: 4, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -4, scale: 0.96 }}
+          transition={{ type: "spring", stiffness: 280, damping: 26 }}
+          className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5"
           style={{
             color: tone.fg,
             background: tone.bg,
             borderColor: `${tone.fg}33`,
+            boxShadow: `0 0 22px -8px ${tone.fg}66, 0 1px 0 rgba(255,255,255,0.04) inset`,
+            backdropFilter: "blur(8px)",
           }}
         >
-          <span
+          <motion.span
             className="size-1.5 rounded-full"
-            style={{ background: tone.fg, boxShadow: `0 0 8px ${tone.fg}` }}
+            style={{ background: tone.fg }}
+            animate={{
+              opacity: [0.6, 1, 0.6],
+              boxShadow: [
+                `0 0 4px ${tone.fg}88`,
+                `0 0 12px ${tone.fg}cc`,
+                `0 0 4px ${tone.fg}88`,
+              ],
+            }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
             aria-hidden
           />
           <span className="text-[12.5px] font-medium tracking-wide">
-            {health.label}
+            {label}
           </span>
           <span
             data-mono="true"
