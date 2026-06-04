@@ -32,19 +32,37 @@ const MONTH_LABEL = new Intl.DateTimeFormat("he-IL", {
   year: "numeric",
 });
 
+// Phase 355 — preserve real time-of-day. The picked day is anchored
+// at the current local hh:mm:ss instead of a flat 12:00, so an entry
+// recorded at 21:30 keeps that time even when the user backdates the
+// calendar day. iPhone clock = Asia/Jerusalem in the field; SSR-time
+// is irrelevant because this component is "use client".
+function occurrenceFromDate(d: Date): Date {
+  const now = new Date();
+  return new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    0,
+  );
+}
+
 function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 }
 
 function isoFromDate(d: Date): string {
-  return startOfDay(d).toISOString();
+  return occurrenceFromDate(d).toISOString();
 }
 
 function parseISOLocal(iso: string | undefined): Date {
-  if (!iso) return startOfDay(new Date());
+  if (!iso) return occurrenceFromDate(new Date());
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return startOfDay(new Date());
-  return startOfDay(d);
+  if (Number.isNaN(d.getTime())) return occurrenceFromDate(new Date());
+  return d;
 }
 
 function sameDay(a: Date, b: Date): boolean {

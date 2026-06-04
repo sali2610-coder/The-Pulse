@@ -28,11 +28,16 @@ import { PaymentDatePicker } from "./payment-date-picker";
 import { MerchantField } from "./merchant-field";
 import { CategoryPickerSheet } from "@/components/confirmation/category-picker-sheet";
 
-function todayNoonIso(): string {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  return d.toISOString();
+// Phase 355 — use the user's real local time instead of noon. A row
+// recorded at 21:43 should keep 21:43 in occurredAt so Pulse can
+// place it on the right slot of the day's timeline.
+function todayLocalIso(): string {
+  return new Date().toISOString();
 }
+
+// Kept as alias so call-sites (default values + reset blocks) read
+// the same intent under the same name.
+const todayNoonIso = todayLocalIso;
 
 type Props = {
   open: boolean;
@@ -102,6 +107,11 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
         source: "manual",
         accountId: values.accountId,
         chargeDate: values.paymentDate,
+        // Phase 355 — occurredAt tracks the real moment of the
+        // transaction. The picker emits picked-day + current local
+        // time, so today's row keeps "now" and a back-dated row
+        // keeps the picked day with the current hour.
+        occurredAt: values.paymentDate,
         // Phase 339 — structured store / place name → ExpenseEntry.merchant.
         // Every downstream surface that already keys off `merchant`
         // (RecentActivity row title, dedup, category drilldowns) picks

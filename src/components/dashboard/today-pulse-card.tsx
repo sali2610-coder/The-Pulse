@@ -787,8 +787,11 @@ function buildRichDrivers(args: {
   for (const e of args.entries) {
     if (e.excludeFromBudget) continue;
     if (e.currency && e.currency !== "ILS") continue;
-    const iso = e.chargeDate ?? e.createdAt;
-    if (!isSameLocalDay(iso, now) && !isSameLocalDay(e.createdAt, now)) {
+    // Phase 355 — gate on occurredAt only. A row created today but
+    // back-dated to yesterday must NOT appear in today's drivers;
+    // the previous OR-with-createdAt rule kept those rows visible.
+    const iso = e.occurredAt ?? e.chargeDate ?? e.createdAt;
+    if (!isSameLocalDay(iso, now)) {
       continue;
     }
     const d = new Date(iso ?? e.createdAt);

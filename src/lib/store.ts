@@ -57,6 +57,10 @@ type AddExpenseInput = {
     | "savings"
     | "other";
   withdrawalDestination?: string;
+  /** Phase 355 — when the transaction really happened. Falls back
+   *  to chargeDate (manual entries with picked date) and then to
+   *  new Date() so day-bucketed surfaces never have a null. */
+  occurredAt?: string;
 };
 
 type AddRuleInput = {
@@ -443,6 +447,7 @@ export const useFinanceStore = create<State & Actions>()(
           transactionType: input.transactionType,
           withdrawalKind: input.withdrawalKind,
           withdrawalDestination: input.withdrawalDestination,
+          occurredAt: input.occurredAt ?? input.chargeDate ?? now.toISOString(),
         };
 
         const matched = findMatchingRule({

@@ -88,8 +88,14 @@ function sliceValue(e: ExpenseEntry): number {
   return Math.abs(e.amount) / inst;
 }
 
+// Phase 355 — Pulse runs on the REAL transaction time. Read order:
+//   occurredAt (when it really happened) → chargeDate (manual
+//   back-date / card slice math) → createdAt (when the row entered
+//   the store, last-resort fallback only).
+// A row recorded today but back-dated to yesterday must NOT land in
+// today's Pulse window — the occurredAt field carries that intent.
 function effectiveDate(e: ExpenseEntry): Date | null {
-  const iso = e.chargeDate ?? e.createdAt;
+  const iso = e.occurredAt ?? e.chargeDate ?? e.createdAt;
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;

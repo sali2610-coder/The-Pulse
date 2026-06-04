@@ -63,10 +63,9 @@ type FormValues = {
   paymentDate: string;
 };
 
+// Phase 355 — preserve real local time-of-day in occurredAt.
 function todayNoonIso(): string {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  return d.toISOString();
+  return new Date().toISOString();
 }
 
 export function WithdrawalDialog({
@@ -118,6 +117,7 @@ export function WithdrawalDialog({
         source: "manual",
         accountId: values.accountId,
         chargeDate: values.paymentDate,
+        occurredAt: values.paymentDate,
         transactionType: "withdrawal",
         withdrawalKind: values.kind,
         withdrawalDestination: values.destination?.trim() || undefined,

@@ -259,7 +259,9 @@ export function RecentActivity() {
       // createdAt so "היום · 00:00" never appears. Future slices stay
       // midnight (no real time exists for them) and get hasRealTime
       // false so the UI hides the bogus HH:mm.
-      const sourceIso = e.chargeDate ?? e.createdAt;
+      // Phase 355 — prefer occurredAt; chargeDate / createdAt still
+      // serve as fallbacks for entries that predate the field.
+      const sourceIso = e.occurredAt ?? e.chargeDate ?? e.createdAt;
       let ts: Date;
       let amount: number;
       let hasRealTime = false;

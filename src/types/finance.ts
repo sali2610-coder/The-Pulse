@@ -146,6 +146,13 @@ export type ExpenseEntry = {
   withdrawalKind?: WithdrawalKind;
   /** Phase 348 — free-form withdrawal destination ("חיסכון" / "אבא"). */
   withdrawalDestination?: string;
+  /** Phase 355 — when the transaction actually happened (paid at the
+   *  cashier / Wallet push timestamp / iOS Shortcut occurredAt).
+   *  Different from `createdAt` (when the row entered Sally's store)
+   *  and from `chargeDate` (the day the bank/card statement attaches
+   *  the charge to). Pulse + activity-by-day surfaces must read this
+   *  field, with chargeDate / createdAt as fallbacks only. */
+  occurredAt?: string;
 };
 
 export type TransactionType = "expense" | "withdrawal";
