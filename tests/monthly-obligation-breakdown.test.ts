@@ -78,6 +78,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       ],
       loans: [],
       entries: [],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.creditCardsTotal).toBe(540);
@@ -99,6 +100,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       ],
       loans: [],
       entries: [],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.bankFixedTotal).toBe(800);
@@ -112,6 +114,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       rules: [],
       loans: [loan({ id: "l-1", monthlyInstallment: 4_970 })],
       entries: [],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.loansTotal).toBe(4_970);
@@ -128,6 +131,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       entries: [
         withdrawalEntry({ id: "e-1", amount: 400 }),
       ],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.cashTotal).toBe(400);
@@ -151,6 +155,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       ],
       loans: [loan({ id: "l-1", monthlyInstallment: 4_970 })],
       entries: [withdrawalEntry({ id: "e-1", amount: 400 })],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.total).toBe(
@@ -176,6 +181,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       ],
       loans: [loan({ id: "l-1" })],
       entries: [withdrawalEntry({ id: "e-1" })],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     const ids = result.explanationRows.map((r) => r.id);
@@ -198,6 +204,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       ],
       loans: [],
       entries: [],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.creditCardsTotal).toBe(320);
@@ -215,6 +222,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
       ],
       loans: [],
       entries: [],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.bankFixedTotal).toBe(99);
@@ -237,6 +245,7 @@ describe("getMonthlyObligationBreakdown — canonical lane classification", () =
         loan({ id: "l-off", monthlyInstallment: 9_000, active: false }),
       ],
       entries: [],
+      statuses: [],
       monthKey: MONTH_KEY,
     });
     expect(result.bankFixedTotal).toBe(100);

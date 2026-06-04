@@ -119,9 +119,10 @@ export function ObligationsCockpit() {
       rules,
       loans,
       entries,
+      statuses,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, rules, loans, entries]);
+  }, [hydrated, rules, loans, entries, statuses]);
 
   const exposure = useMemo<CreditCardExposure | null>(() => {
     if (!hydrated) return null;

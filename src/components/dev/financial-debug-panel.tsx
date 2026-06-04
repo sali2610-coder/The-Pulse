@@ -44,6 +44,7 @@ export function FinancialDebugPanel() {
       rules,
       loans,
       entries,
+      statuses,
       monthKey,
     });
     const exposure = getCreditCardExposure({

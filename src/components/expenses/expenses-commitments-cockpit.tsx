@@ -99,9 +99,10 @@ export function ExpensesCommitmentsCockpit() {
       rules,
       loans,
       entries,
+      statuses,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, rules, loans, entries]);
+  }, [hydrated, rules, loans, entries, statuses]);
 
   const exposure = useMemo(() => {
     if (!hydrated) return null;

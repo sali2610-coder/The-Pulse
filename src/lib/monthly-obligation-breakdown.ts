@@ -29,10 +29,12 @@ import type {
   Loan,
   MonthKey,
   RecurringRule,
+  RecurringStatus,
 } from "@/types/finance";
 import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
 import { isRuleCardSettled } from "@/lib/rule-settlement";
 import { sliceForMonth } from "@/lib/projections";
+import { getCreditCardExposure } from "@/lib/credit-card-exposure";
 
 export type ObligationLane =
   | "creditCards"
@@ -93,24 +95,60 @@ export function getMonthlyObligationBreakdown(args: {
   rules: RecurringRule[];
   loans: Loan[];
   entries: ExpenseEntry[];
+  /** Phase 377 — required so the credit lane can be delegated to
+   *  getCreditCardExposure (which respects paid-status filters).
+   *  Without statuses the breakdown would silently differ from the
+   *  cockpit's canonical credit total. */
+  statuses: RecurringStatus[];
   monthKey: MonthKey;
 }): MonthlyObligationBreakdown {
   const seen = new Set<string>();
   let duplicatesPrevented = 0;
   const rows: ObligationRow[] = [];
-  let creditCardsTotal = 0;
   let bankFixedTotal = 0;
   let loansTotal = 0;
   let cashTotal = 0;
-  let creditCount = 0;
   let bankCount = 0;
   let loanCount = 0;
   let cashCount = 0;
 
-  // ─── Recurring rules ────────────────────────────────────────────
+  // ─── Credit cards — delegated to the canonical exposure helper.
+  //
+  // Phase 377 — the cockpit's "אשראי" tile and the Credit Cards
+  // section MUST show the same number. We achieve that by routing
+  // ALL credit accounting through getCreditCardExposure here: rules
+  // card-settled this month + every credit entry slice (manual /
+  // wallet / sms / imported / installments / pending) deduped via
+  // its internal seen set. Total + rows are imported verbatim so
+  // the obligation cockpit cannot diverge.
+  const exposure = getCreditCardExposure({
+    rules: args.rules,
+    entries: args.entries,
+    statuses: args.statuses,
+    monthKey: args.monthKey,
+  });
+  const creditCardsTotal = exposure.totalExpectedCharge;
+  let creditCount = 0;
+  for (const row of exposure.breakdown) {
+    seen.add(row.id);
+    creditCount += 1;
+    rows.push({
+      id: row.id,
+      lane: "creditCards",
+      label: row.label,
+      amount: row.amount,
+      kind: row.kind,
+    });
+  }
+  duplicatesPrevented += exposure.duplicatesPrevented;
+
+  // ─── Recurring rules — bank + cash ─────────────────────────────
+  // Card-settled rules already counted via exposure above; the rule
+  // loop here only fans out the non-card lanes.
   for (const r of args.rules) {
     if (!r.active) continue;
     if (!ruleSchedule(r, args.monthKey).active) continue;
+    if (isRuleCardSettled(r)) continue; // already in exposure
     const id = `rule:${r.id}`;
     if (seen.has(id)) {
       duplicatesPrevented += 1;
@@ -118,21 +156,6 @@ export function getMonthlyObligationBreakdown(args: {
     }
     seen.add(id);
 
-    // Rule 6: payment source wins. Card-settled outranks category
-    // classification so a "housing" rule paid via card lands in
-    // CREDIT_CARDS, not BANK_FIXED.
-    if (isRuleCardSettled(r)) {
-      creditCardsTotal += r.estimatedAmount;
-      creditCount += 1;
-      rows.push({
-        id,
-        lane: "creditCards",
-        label: r.label,
-        amount: r.estimatedAmount,
-        kind: "rule",
-      });
-      continue;
-    }
     if (r.paymentSource === "cash") {
       cashTotal += r.estimatedAmount;
       cashCount += 1;
