@@ -1,24 +1,24 @@
 "use client";
 
-// Phase 373 — Expenses tab radically simplified.
+// Phase 374 — Expenses tab clean summary.
 //
-// One question, one answer: "לאן הולך לי הכסף החודש?"
+// Reverts the Phase 373 detail drawer (it brought back clutter).
+// The Expenses tab now answers ONE question and only one question:
 //
-// The radial ObligationsCockpit IS the answer. Everything else
-// (categories / cards / recurring / installments / donut / heatmap)
-// lives behind ONE quiet "פירוט מלא" drawer at the bottom so users
-// who want the deep dive get it, while users who just want the
-// answer see only the cockpit.
+//   "לאן הולך הכסף החודש?"
 //
-// Same philosophy as the Time screen: visual intelligence over
-// information density. Engine + helpers unchanged.
+// PendingTray surfaces only when there are items needing review.
+// ObligationsCockpit (radial control center, Phase 372) IS the
+// answer. Nothing else lives on this surface. Deeper detail lives
+// on its own dedicated screens accessed from elsewhere in the app.
+//
+// Engine + helpers unchanged.
 
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ObligationsCockpit } from "@/components/expenses/obligations-cockpit";
-import { ExpenseDetailDrawer } from "@/components/expenses/expense-detail-drawer";
 import { FinancialDebugPanel } from "@/components/dev/financial-debug-panel";
 
 const lazy = (
@@ -39,25 +39,16 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 export function ExpensesTab() {
   return (
     <div className="flex flex-col gap-6 pb-28 sm:pb-32">
-      {/* Pending tray surfaces only when there are items needing
-         review. Auto-collapses when empty via the lazy child. */}
       <div className="empty:hidden">
         <Safe name="PendingTray">
           <PendingTray />
         </Safe>
       </div>
 
-      {/* THE answer. Radial control center — see Phase 372. */}
       <Safe name="ObligationsCockpit">
         <ObligationsCockpit />
       </Safe>
 
-      {/* One quiet drawer holds every supporting card. */}
-      <Safe name="ExpenseDetailDrawer">
-        <ExpenseDetailDrawer />
-      </Safe>
-
-      {/* Dev-only Financial Debug Panel — Phase 371. */}
       {process.env.NODE_ENV !== "production" ? (
         <Safe name="FinancialDebugPanel">
           <FinancialDebugPanel />
