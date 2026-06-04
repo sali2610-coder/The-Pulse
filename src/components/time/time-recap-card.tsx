@@ -19,13 +19,7 @@ const ILS = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
 });
 
-const BAND_TONE: Record<string, string> = {
-  safe: "#D4AF37",
-  steady: "#00E5FF",
-  watch: "#F5C76A",
-  risk: "#FF8A65",
-  danger: "#F87171",
-};
+import { VIBE_TONE, VIBE_LABEL, vibeFromBalance } from "./state-tone";
 
 export function TimeRecapCard() {
   // Default offset (null) lands on the next salary / +14 — same as
@@ -33,8 +27,9 @@ export function TimeRecapCard() {
   const frame = useTimeEngine(null);
 
   if (!frame.ready || frame.noAnchors) return null;
-  const tone = BAND_TONE[frame.health?.band ?? "steady"];
-  const label = frame.health?.label ?? "תחזית";
+  const vibe = vibeFromBalance(frame.balance);
+  const tone = VIBE_TONE[vibe].glow;
+  const label = VIBE_LABEL[vibe];
 
   return (
     <motion.button

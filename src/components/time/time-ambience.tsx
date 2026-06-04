@@ -1,25 +1,28 @@
 "use client";
 
-// Phase 361 — TimeAmbience.
+// Phase 363 — TimeAmbience driven by the BALANCE VIBE.
 //
-// Backplate gradient + drifting dot field. Reads the centralised
-// STATE_TONE palette so the whole screen breathes the same color
-// language. Particle density + speed scale with the band so the
-// atmosphere reads calm or tense without text.
+// Whole canvas reads from the single vibe palette so the background
+// reinforces what the ring is saying:
 //
-// Honors prefers-reduced-motion (static gradient, no particles).
+//   HEALTHY  → emerald aura, slow upward dot field
+//   CAUTION  → gold aura, denser horizontal drift
+//   RISK     → red aura, slow downward drift (oxygen-leak)
+//
+// The aura at the top and the ambient dot canvas share a single
+// tone source. State change crossfades over 800ms — premium, not
+// abrupt.
 
 import { useEffect, useRef } from "react";
 import { useReducedMotion } from "framer-motion";
 
-import type { ForecastHealth } from "@/lib/forecast-health";
-import { STATE_TONE } from "./state-tone";
+import { VIBE_TONE, type BalanceVibe, type StateTone } from "./state-tone";
 
-export function TimeAmbience({ band }: { band: ForecastHealth["band"] }) {
+export function TimeAmbience({ vibe }: { vibe: BalanceVibe }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const reduced = useReducedMotion();
-  const tone = STATE_TONE[band];
-  const toneRef = useRef(tone);
+  const tone = VIBE_TONE[vibe];
+  const toneRef = useRef<StateTone>(tone);
   useEffect(() => {
     toneRef.current = tone;
   }, [tone]);
@@ -40,27 +43,41 @@ export function TimeAmbience({ band }: { band: ForecastHealth["band"] }) {
     resize();
     window.addEventListener("resize", resize);
 
-    type Dot = { x: number; y: number; r: number; vy: number; a: number };
-    // Density scales with band tone (calmer → fewer dots).
+    type Dot = { x: number; y: number; r: number; v: number; a: number };
     const baseCount = 28;
-    const COUNT = Math.round(baseCount + toneRef.current.particleCount * 2);
+    const COUNT = baseCount + toneRef.current.particleCount * 2;
     const dots: Dot[] = Array.from({ length: COUNT }).map(() => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       r: (0.4 + Math.random() * 1.2) * dpr,
-      vy: (0.08 + Math.random() * 0.18) * dpr,
+      v: (0.08 + Math.random() * 0.18) * dpr,
       a: 0.15 + Math.random() * 0.32,
     }));
 
     let raf = 0;
     const tick = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const mul = toneRef.current.particleSpeedMul;
+      const cur = toneRef.current;
+      const mul = cur.particleSpeedMul;
       for (const d of dots) {
-        d.y -= d.vy * mul;
-        if (d.y < -2) {
-          d.y = canvas.height + 2;
-          d.x = Math.random() * canvas.width;
+        if (cur.drift === "up") {
+          d.y -= d.v * mul;
+          if (d.y < -2) {
+            d.y = canvas.height + 2;
+            d.x = Math.random() * canvas.width;
+          }
+        } else if (cur.drift === "down") {
+          d.y += d.v * mul * 0.85;
+          if (d.y > canvas.height + 2) {
+            d.y = -2;
+            d.x = Math.random() * canvas.width;
+          }
+        } else {
+          d.x += d.v * mul * 0.35;
+          if (d.x > canvas.width + 2) {
+            d.x = -2;
+            d.y = Math.random() * canvas.height;
+          }
         }
         ctx.beginPath();
         ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
@@ -79,13 +96,22 @@ export function TimeAmbience({ band }: { band: ForecastHealth["band"] }) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] overflow-hidden"
+      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[620px] overflow-hidden"
     >
+      {/* Top aura — soft state aura behind the ring. */}
       <div
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(circle at 50% 0%, ${tone.glow}1A 0%, ${tone.glow}07 38%, transparent 62%)`,
-          transition: "background 640ms ease",
+          background: `radial-gradient(circle at 50% 0%, ${tone.glow}22 0%, ${tone.glow}0a 38%, transparent 64%)`,
+          transition: "background 800ms ease",
+        }}
+      />
+      {/* Lower vignette — adds depth so the ring + chips read on AMOLED black. */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-40"
+        style={{
+          background:
+            "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.45) 100%)",
         }}
       />
       {!reduced ? (

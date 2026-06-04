@@ -1,26 +1,37 @@
 "use client";
 
-// Phase 359 — StabilityIndex (premium polish).
+// Phase 363 — StabilityIndex driven by the balance vibe.
 //
-// Single glass pill: state word + tiny score subscript. The visible
-// label maps the engine's 5 bands to the 4 user-facing names the PO
-// asked for (Stable / Caution / Tight / Risk) — done at the
-// presentation layer only; the engine output is left untouched so
-// every other reader stays consistent.
+// Color + word both derive from the same vibe so the badge never
+// disagrees with the ring. Score subscript still comes from the
+// engine band (trajectory-aware), giving the user one extra
+// nuance without breaking the color hierarchy.
 
 import { AnimatePresence, motion } from "framer-motion";
 
 import type { ForecastHealth } from "@/lib/forecast-health";
-import { STATE_TONE, PUBLIC_STATE } from "./state-tone";
+import {
+  VIBE_LABEL,
+  VIBE_TONE,
+  vibeFromBalance,
+  type BalanceVibe,
+} from "./state-tone";
 
-export function StabilityIndex({ health }: { health: ForecastHealth | null }) {
+export function StabilityIndex({
+  health,
+  balance,
+}: {
+  health: ForecastHealth | null;
+  balance: number;
+}) {
   if (!health) return null;
-  const stateTone = STATE_TONE[health.band];
+  const vibe: BalanceVibe = vibeFromBalance(balance);
+  const stateTone = VIBE_TONE[vibe];
   const tone = {
     fg: stateTone.to,
     bg: `${stateTone.glow}26`,
   };
-  const label = PUBLIC_STATE[health.band];
+  const label = VIBE_LABEL[vibe];
   return (
     <div className="flex flex-col items-center gap-1.5">
       <AnimatePresence mode="popLayout" initial={false}>

@@ -1,27 +1,34 @@
 "use client";
 
-// Phase 359 — ProjectionRing (premium polish).
+// Phase 363 — ProjectionRing (balance-vibe atmosphere).
 //
-// The ring is no longer decoration. It IS the timeline.
+// Visual language now reads from the BALANCE VIBE (not the engine
+// band). One signal — the projected balance at the cursor —
+// determines whether the screen feels HEALTHY, CAUTION, or RISK.
 //
-//   • Checkpoint nodes ride the ring's circumference. Tap one →
-//     jump to that date.
-//   • Active node glows. Inactive nodes are soft white pearls.
-//   • Inner energy pulse breathes with the band tone.
-//   • Six ambient particles drift slowly INSIDE the ring (canvas).
-//   • Stroke gradient + glow shift smoothly between band tones.
+//   HEALTHY  emerald   • particles drift UP, occasional gentle
+//                       sparkle bursts
+//   CAUTION  warm gold • particles circle calmly, periodic shimmer
+//                       sweep across the ring
+//   RISK     deep red  • particles drift DOWN, slower decay; reads
+//                       as oxygen leaving the chamber
 //
-// Engine untouched. Renders from props only.
+// Engine math untouched. Pure presentation.
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { ForecastHealth } from "@/lib/forecast-health";
 import type { Checkpoint } from "./use-time-engine";
+import type { ForecastHealth } from "@/lib/forecast-health";
+import {
+  VIBE_TONE,
+  vibeFromBalance,
+  type BalanceVibe,
+  type StateTone,
+} from "./state-tone";
 import { tap as hapticTap, success as hapticSuccess } from "@/lib/haptics";
 import { playCheckpointTone } from "@/lib/time-chime";
 import { useFinanceStore } from "@/lib/store";
-import { STATE_TONE } from "./state-tone";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -50,6 +57,9 @@ export function ProjectionRing({
 }: {
   balance: number;
   cursorISO: string;
+  // Kept in the signature for compat — but the visual language now
+  // reads from the balance vibe, not the engine band. The score is
+  // still used to drive the stroke sweep length.
   health: ForecastHealth | null;
   cursorOffset: number;
   maxOffset: number;
@@ -70,8 +80,8 @@ export function ProjectionRing({
     value.set(balance);
   }, [balance, value]);
 
-  const band = health?.band ?? "steady";
-  const tone = STATE_TONE[band];
+  const vibe: BalanceVibe = vibeFromBalance(balance);
+  const tone = VIBE_TONE[vibe];
   const from = tone.from;
   const to = tone.to;
   const score = health?.score ?? 50;
@@ -79,10 +89,8 @@ export function ProjectionRing({
   const dashOffset = C * (1 - sweep);
 
   // ── Ambient particles inside the ring ─────────────────────────
-  // Density + speed scale with the state band so the screen reads
-  // calmer when safe, denser/quicker when tense.
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const toneRef = useRef(tone);
+  const toneRef = useRef<StateTone>(tone);
   useEffect(() => {
     toneRef.current = tone;
   }, [tone]);
@@ -94,56 +102,187 @@ export function ProjectionRing({
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = (c.width = SIZE * dpr);
     const h = (c.height = SIZE * dpr);
-    type P = { a: number; r: number; speed: number; rad: number; alpha: number };
+    type P = {
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      rad: number;
+      life: number;
+      maxLife: number;
+      seed: number;
+    };
+    const items: P[] = [];
     const COUNT = toneRef.current.particleCount;
-    const items: P[] = Array.from({ length: COUNT }, () => ({
-      a: Math.random() * Math.PI * 2,
-      r: (40 + Math.random() * 80) * dpr,
-      speed: 0.0006 + Math.random() * 0.0008,
-      rad: (0.9 + Math.random() * 0.9) * dpr,
-      alpha: 0.18 + Math.random() * 0.2,
-    }));
+
+    const respawn = (p: P) => {
+      const cur = toneRef.current;
+      const cx = w / 2;
+      const cy = h / 2;
+      // Start somewhere inside the ring's inner disc (radius R*0.85).
+      const angle = Math.random() * Math.PI * 2;
+      const dist = (Math.random() * R * 0.7) * dpr;
+      p.x = cx + Math.cos(angle) * dist;
+      p.y = cy + Math.sin(angle) * dist;
+      p.rad = (0.9 + Math.random() * 1.0) * dpr;
+      p.maxLife = 280 + Math.floor(Math.random() * 220);
+      p.life = 0;
+      p.seed = Math.random() * Math.PI * 2;
+      const base = (0.20 + Math.random() * 0.25) * dpr * cur.particleSpeedMul;
+      if (cur.drift === "up") {
+        p.vx = (Math.random() - 0.5) * 0.18 * dpr;
+        p.vy = -base; // upward
+      } else if (cur.drift === "down") {
+        p.vx = (Math.random() - 0.5) * 0.18 * dpr;
+        p.vy = base * 0.85; // slow downward, oxygen-leak feel
+      } else {
+        // calm: gentle circular drift around center
+        p.vx = Math.cos(angle + Math.PI / 2) * base * 0.6;
+        p.vy = Math.sin(angle + Math.PI / 2) * base * 0.6;
+      }
+    };
+
+    for (let i = 0; i < COUNT; i++) {
+      const p: P = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        rad: 1,
+        life: 0,
+        maxLife: 0,
+        seed: 0,
+      };
+      respawn(p);
+      // Stagger initial lives so they don't all expire together.
+      p.life = Math.floor(Math.random() * p.maxLife);
+      items.push(p);
+    }
+
+    // Sparkle bursts (healthy only).
+    type Sparkle = { x: number; y: number; t: number; max: number };
+    const sparkles: Sparkle[] = [];
+    let nextSparkleAt = 0;
+
+    // Shimmer sweep (caution only). 0..1 across the ring vertically.
+    let shimmerT = -1;
+    let nextShimmerAt = 0;
+
     let raf = 0;
+    let frame = 0;
     const tick = () => {
+      const cur = toneRef.current;
       ctx.clearRect(0, 0, w, h);
       const cx = w / 2;
       const cy = h / 2;
-      const mul = toneRef.current.particleSpeedMul;
-      const color = toneRef.current.particle;
+
+      // ── Particles ────────────────────────────────
       for (const p of items) {
-        p.a += p.speed * mul;
-        const x = cx + Math.cos(p.a) * p.r;
-        const y = cy + Math.sin(p.a) * p.r;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life += 1;
+        const t = p.life / p.maxLife;
+        // distance-from-center clamp — fade if escaping the inner disc.
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const inner = R * 0.96 * dpr;
+        if (dist > inner || t >= 1) {
+          respawn(p);
+          continue;
+        }
+        // Smooth fade-in then fade-out.
+        const fade = t < 0.2 ? t / 0.2 : t > 0.8 ? (1 - t) / 0.2 : 1;
+        const alpha = 0.18 + 0.32 * fade;
+        const wobble = Math.sin(p.life * 0.06 + p.seed) * 0.18;
         ctx.beginPath();
-        ctx.arc(x, y, p.rad, 0, Math.PI * 2);
-        ctx.fillStyle = color;
+        ctx.arc(p.x, p.y, p.rad + wobble, 0, Math.PI * 2);
+        ctx.fillStyle = cur.particle.replace(/[\d.]+\)$/, `${alpha.toFixed(3)})`);
         ctx.fill();
-        // Soft white core for a hint of dual-tone shimmer.
         ctx.beginPath();
-        ctx.arc(x, y, p.rad * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${p.alpha * 0.7})`;
+        ctx.arc(p.x, p.y, p.rad * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${(alpha * 0.6).toFixed(3)})`;
         ctx.fill();
       }
+
+      // ── Sparkle bursts (HEALTHY) ─────────────────
+      if (cur.sparkle) {
+        if (frame >= nextSparkleAt) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = R * 0.5 * dpr;
+          sparkles.push({
+            x: cx + Math.cos(angle) * dist,
+            y: cy + Math.sin(angle) * dist,
+            t: 0,
+            max: 36,
+          });
+          // Sparkle every ~3-5s at 60fps.
+          nextSparkleAt = frame + 180 + Math.floor(Math.random() * 120);
+        }
+        for (let i = sparkles.length - 1; i >= 0; i--) {
+          const s = sparkles[i];
+          s.t += 1;
+          const p = s.t / s.max;
+          if (p >= 1) {
+            sparkles.splice(i, 1);
+            continue;
+          }
+          const r = p * 14 * dpr;
+          const alpha = (1 - p) * 0.55;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(110,231,183,${alpha.toFixed(3)})`;
+          ctx.lineWidth = 1 * dpr;
+          ctx.stroke();
+          // Core dot
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 1.4 * dpr, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${(alpha * 0.9).toFixed(3)})`;
+          ctx.fill();
+        }
+      }
+
+      // ── Shimmer sweep (CAUTION) ──────────────────
+      if (cur.shimmer) {
+        if (shimmerT < 0 && frame >= nextShimmerAt) shimmerT = 0;
+        if (shimmerT >= 0) {
+          shimmerT += 1 / 80; // ~80 frames sweep
+          if (shimmerT >= 1) {
+            shimmerT = -1;
+            nextShimmerAt = frame + 280 + Math.floor(Math.random() * 160);
+          } else {
+            // Soft vertical band drifting top→bottom.
+            const yPos = shimmerT * h;
+            const grad = ctx.createLinearGradient(0, yPos - 40 * dpr, 0, yPos + 40 * dpr);
+            grad.addColorStop(0, "rgba(246,217,112,0)");
+            grad.addColorStop(0.5, "rgba(246,217,112,0.13)");
+            grad.addColorStop(1, "rgba(246,217,112,0)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, yPos - 40 * dpr, w, 80 * dpr);
+          }
+        }
+      } else {
+        shimmerT = -1;
+      }
+
       raf = requestAnimationFrame(tick);
+      frame += 1;
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [tone.particleCount]);
+  }, [vibe]);
 
   // ── Checkpoint positions ──────────────────────────────────────
-  // Distribute checkpoints around the upper hemisphere (12 → 6
-  // clockwise) so they sit naturally above the number. Each node's
-  // angle is proportional to its offset within [0, maxOffset].
-  // First (0) goes top-right; last goes top-left.
-  const cpPos = checkpoints.map((cp) => {
-    const t = maxOffset > 0 ? cp.offset / maxOffset : 0;
-    // Spread across 220° starting from -200° (right) to +20° (left).
-    const angleDeg = -200 + t * 220;
-    const angle = (angleDeg * Math.PI) / 180;
-    const cx = SIZE / 2 + Math.cos(angle) * R;
-    const cy = SIZE / 2 + Math.sin(angle) * R;
-    return { cp, cx, cy };
-  });
+  const cpPos = useMemo(() => {
+    return checkpoints.map((cp) => {
+      const t = maxOffset > 0 ? cp.offset / maxOffset : 0;
+      const angleDeg = -200 + t * 220;
+      const angle = (angleDeg * Math.PI) / 180;
+      const cx = SIZE / 2 + Math.cos(angle) * R;
+      const cy = SIZE / 2 + Math.sin(angle) * R;
+      return { cp, cx, cy };
+    });
+  }, [checkpoints, maxOffset]);
 
   const handlePick = (cp: Checkpoint) => {
     hapticSuccess();
@@ -151,47 +290,76 @@ export function ProjectionRing({
     onPickCheckpoint(cp);
   };
 
+  // ── Vibe-change bloom — small pulse on state transition ──────
+  const prevVibeRef = useRef<BalanceVibe>(vibe);
+  const [bloomKey, setBloomKey] = useState(0);
+  useEffect(() => {
+    if (prevVibeRef.current !== vibe) {
+      prevVibeRef.current = vibe;
+      setBloomKey((k) => k + 1);
+    }
+  }, [vibe]);
+
   return (
     <div
       className="relative mx-auto flex aspect-square w-full max-w-[360px] items-center justify-center"
       aria-label="טבעת תחזית"
     >
-      {/* Outer halo — breathes calmly on safe/steady, holds steady on alert. */}
+      {/* Outer halo — calmer breath for healthy, sustained glow for caution + risk. */}
       <motion.div
         aria-hidden
         className="absolute inset-2 rounded-full"
         style={{
-          background: `radial-gradient(circle at 50% 50%, ${from}26 0%, ${from}00 65%)`,
+          background: `radial-gradient(circle at 50% 50%, ${from}28 0%, ${from}00 65%)`,
           filter: "blur(22px)",
         }}
         animate={
-          band === "safe" || band === "steady"
-            ? { opacity: [0.55, 0.9, 0.55], scale: [0.98, 1.02, 0.98] }
-            : { opacity: 0.75, scale: 1 }
+          vibe === "healthy"
+            ? { opacity: [0.55, 0.92, 0.55], scale: [0.98, 1.025, 0.98] }
+            : vibe === "caution"
+              ? { opacity: [0.7, 0.95, 0.7], scale: [1, 1.012, 1] }
+              : { opacity: [0.65, 0.85, 0.65], scale: [1, 1.008, 1] }
         }
         transition={
-          band === "safe" || band === "steady"
-            ? { duration: 3.8, repeat: Infinity, ease: "easeInOut" }
-            : { duration: 0.5 }
+          vibe === "healthy"
+            ? { duration: 4.2, repeat: Infinity, ease: "easeInOut" }
+            : vibe === "caution"
+              ? { duration: 2.6, repeat: Infinity, ease: "easeInOut" }
+              : { duration: 5.6, repeat: Infinity, ease: "easeInOut" }
         }
+      />
+
+      {/* Vibe-change bloom — one soft expansion ring on transition. */}
+      <motion.div
+        key={`bloom-${bloomKey}`}
+        aria-hidden
+        className="absolute rounded-full"
+        style={{
+          width: R * 2,
+          height: R * 2,
+          border: `1px solid ${from}66`,
+        }}
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: [0, 0.5, 0], scale: [0.92, 1.06, 1.14] }}
+        transition={{ duration: 0.9, ease: "easeOut" }}
       />
 
       {/* Ambient particles inside the ring */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 size-full"
-        style={{ opacity: 0.7 }}
+        style={{ opacity: 0.8 }}
         aria-hidden
       />
 
-      {/* Inner soft pulse — reads as a heartbeat without being one. */}
+      {/* Inner soft pulse */}
       <motion.div
         aria-hidden
         className="absolute rounded-full"
         style={{
           width: R * 1.4,
           height: R * 1.4,
-          background: `radial-gradient(circle, ${from}18 0%, ${from}00 70%)`,
+          background: `radial-gradient(circle, ${from}1c 0%, ${from}00 70%)`,
           filter: "blur(6px)",
         }}
         animate={{ scale: [0.96, 1.04, 0.96], opacity: [0.55, 0.9, 0.55] }}
@@ -209,7 +377,7 @@ export function ProjectionRing({
             <stop offset="100%" stopColor={to} />
           </linearGradient>
           <radialGradient id="trackHighlight" cx="50%" cy="0%" r="80%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+            <stop offset="0%" stopColor="rgba(255,255,255,0.2)" />
             <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
           </radialGradient>
           <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
@@ -221,7 +389,6 @@ export function ProjectionRing({
           </filter>
         </defs>
 
-        {/* Track */}
         <circle
           cx={SIZE / 2}
           cy={SIZE / 2}
@@ -230,7 +397,6 @@ export function ProjectionRing({
           stroke="rgba(255,255,255,0.05)"
           strokeWidth={11}
         />
-        {/* Top-highlight rim on the track — adds glass depth. */}
         <circle
           cx={SIZE / 2}
           cy={SIZE / 2}
@@ -240,7 +406,6 @@ export function ProjectionRing({
           strokeWidth={11}
         />
 
-        {/* Sweep */}
         <motion.circle
           cx={SIZE / 2}
           cy={SIZE / 2}
@@ -258,9 +423,7 @@ export function ProjectionRing({
         />
       </svg>
 
-      {/* Checkpoint nodes on the ring. "מותאם" is not jump-able from
-         the ring; users adjust it via the inline stepper under the
-         chip rail, so it's rendered slightly subdued. */}
+      {/* Checkpoint nodes — custom kind not rendered (rail-only). */}
       {cpPos.map(({ cp, cx, cy }) => {
         if (cp.kind === "custom") return null;
         const isActive = Math.abs(cp.offset - cursorOffset) < 1;
@@ -280,7 +443,7 @@ export function ProjectionRing({
               left: `${pctX}%`,
               top: `${pctY}%`,
               transform: "translate(-50%, -50%)",
-              padding: 8, // tap target expansion
+              padding: 8,
             }}
           >
             <motion.span
@@ -331,7 +494,7 @@ export function ProjectionRing({
             fontVariantNumeric: "tabular-nums",
             color: tone.numberTint,
             textShadow: tone.textShadow,
-            transition: "color 480ms ease, text-shadow 480ms ease",
+            transition: "color 640ms ease, text-shadow 640ms ease",
           }}
         >
           <motion.span>{display}</motion.span>

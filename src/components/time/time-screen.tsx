@@ -29,6 +29,7 @@ import { CashflowRiver } from "./cashflow-river";
 import { VoiceLine } from "./voice-line";
 import { TimeDrawer } from "./time-drawer";
 import { TimeAmbience } from "./time-ambience";
+import { vibeFromBalance } from "./state-tone";
 
 export function TimeScreen() {
   const [offset, setOffset] = useState<number | null>(null);
@@ -58,7 +59,7 @@ export function TimeScreen() {
       onOffset={(o) => setOffset(o)}
     >
       <div className="relative flex flex-col gap-6 pb-32">
-        <TimeAmbience band={frame.health?.band ?? "steady"} />
+        <TimeAmbience vibe={vibeFromBalance(frame.balance)} />
 
         {/* Phase 359 — bottom vignette adds depth to the ring + chips
            on small phones. Pointer-events disabled so it never
@@ -88,7 +89,7 @@ export function TimeScreen() {
             onPickCheckpoint={onPickCheckpoint}
           />
 
-          <StabilityIndex health={frame.health} />
+          <StabilityIndex health={frame.health} balance={frame.balance} />
 
           <VoiceLine
             health={frame.health}

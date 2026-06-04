@@ -1,27 +1,31 @@
-// Phase 361 — Single source of truth for the TimeScreen state palette.
+// Phase 363 — Balance-Vibe atmosphere system.
 //
-// All visual surfaces (ring stroke, ambience gradient, particles,
-// stability badge, balance number tint) read tones from here. One
-// place to tune the emotional language of the screen.
+// Single source of truth for how the TimeScreen *feels*. The
+// projected balance at the cursor determines the visual band:
 //
-// Mapping engine bands (5) → user-facing 4-state vocabulary:
+//     balance >  +500   → HEALTHY   (emerald)
+//     -500 ≤ b ≤ +500   → CAUTION   (warm gold)
+//     balance <  -500   → RISK      (deep red)
 //
-//   safe  → emerald  (Stable)
-//   steady→ emerald  (Stable, slightly cooler tint)
-//   watch → warm gold (Caution)
-//   risk  → orange   (Tight)
-//   danger→ deep red (Risk)
+// One signal, three vibes. Every ring/ambience/particle/number
+// surface reads its tone + behavior from this map. Engine math
+// untouched — this is purely the presentation layer.
 //
-// Each band ships:
-//   • from / to        — gradient stops for the ring stroke
-//   • glow             — outer halo hex
-//   • particle         — particle color tint
-//   • numberTint       — applied to hero balance figure
-//   • textShadow       — soft glow under the balance figure
-//   • particleSpeed    — slow → fast = calmer → tenser
-//   • particleCount    — visible density inside the ring
+// Each vibe ships:
+//
+//   from/to/glow         gradient + halo tone
+//   particle             color used inside the ring
+//   numberTint           tint for the hero balance figure
+//   textShadow           soft glow under the hero number
+//   particleCount        density inside the ring
+//   particleSpeedMul     ambient pacing multiplier
+//   drift                "up" | "calm" | "down" — particle vector
+//   shimmer              whether to flash a soft pass every N seconds
+//   sparkle              whether to ping tiny celebration motes
 
 import type { ForecastHealth } from "@/lib/forecast-health";
+
+export type BalanceVibe = "healthy" | "caution" | "risk";
 
 export type StateTone = {
   from: string;
@@ -30,76 +34,96 @@ export type StateTone = {
   particle: string;
   numberTint: string;
   textShadow: string;
-  particleSpeedMul: number;
   particleCount: number;
+  particleSpeedMul: number;
+  /** Direction vector for the in-ring particle field. */
+  drift: "up" | "calm" | "down";
+  /** Optional periodic shimmer pass (caution-only — financial yellow). */
+  shimmer: boolean;
+  /** Tiny celebration bursts inside the ring (healthy-only). */
+  sparkle: boolean;
 };
 
-const EMERALD: StateTone = {
+const HEALTHY: StateTone = {
   from: "#34D399",
   to: "#6EE7B7",
   glow: "#34D399",
   particle: "rgba(110,231,183,0.55)",
-  numberTint: "#F2FFFB",
-  textShadow: "0 0 24px rgba(52,211,153,0.28)",
-  particleSpeedMul: 0.7,
-  particleCount: 6,
+  numberTint: "#E9FFF6",
+  textShadow: "0 0 28px rgba(52,211,153,0.34)",
+  particleCount: 7,
+  particleSpeedMul: 0.65,
+  drift: "up",
+  shimmer: false,
+  sparkle: true,
 };
 
-const EMERALD_COOL: StateTone = {
-  ...EMERALD,
-  from: "#34D399",
-  to: "#9DECC9",
-  glow: "#34D399",
-  particleSpeedMul: 0.85,
-};
-
-const CAUTION_GOLD: StateTone = {
+const CAUTION: StateTone = {
   from: "#D4AF37",
   to: "#F6D970",
   glow: "#D4AF37",
-  particle: "rgba(246,217,112,0.55)",
-  numberTint: "#FFF7DA",
-  textShadow: "0 0 26px rgba(212,175,55,0.34)",
-  particleSpeedMul: 1.05,
-  particleCount: 7,
+  particle: "rgba(246,217,112,0.58)",
+  numberTint: "#FFF6D6",
+  textShadow: "0 0 30px rgba(212,175,55,0.42)",
+  particleCount: 8,
+  particleSpeedMul: 1.1,
+  drift: "calm",
+  shimmer: true,
+  sparkle: false,
 };
 
-const TIGHT_ORANGE: StateTone = {
-  from: "#FB923C",
-  to: "#F59E0B",
-  glow: "#FB923C",
-  particle: "rgba(251,146,60,0.55)",
-  numberTint: "#FFEAD0",
-  textShadow: "0 0 30px rgba(251,146,60,0.42)",
-  particleSpeedMul: 1.4,
-  particleCount: 9,
-};
-
-const RISK_RED: StateTone = {
+const RISK: StateTone = {
   from: "#F87171",
   to: "#B91C1C",
   glow: "#F87171",
-  particle: "rgba(248,113,113,0.6)",
-  numberTint: "#FFDADA",
-  textShadow: "0 0 34px rgba(248,113,113,0.52)",
-  particleSpeedMul: 1.75,
-  particleCount: 10,
+  particle: "rgba(248,113,113,0.62)",
+  numberTint: "#FFDDDD",
+  textShadow: "0 0 36px rgba(248,113,113,0.52)",
+  particleCount: 11,
+  particleSpeedMul: 1.45,
+  drift: "down",
+  shimmer: false,
+  sparkle: false,
 };
 
+/** Map a balance amount to one of the three vibes. */
+export function vibeFromBalance(balance: number): BalanceVibe {
+  if (balance > 500) return "healthy";
+  if (balance < -500) return "risk";
+  return "caution";
+}
+
+export const VIBE_TONE: Record<BalanceVibe, StateTone> = {
+  healthy: HEALTHY,
+  caution: CAUTION,
+  risk: RISK,
+};
+
+/** Visible label tied to the vibe. Used by the stability badge so
+ *  the colour and the word always tell the same story. */
+export const VIBE_LABEL: Record<BalanceVibe, string> = {
+  healthy: "יציב",
+  caution: "תשומת לב",
+  risk: "סיכון",
+};
+
+// ─── Legacy compatibility ─────────────────────────────────────────
+// Some surfaces (StabilityIndex chip rendering legacy code) still
+// import STATE_TONE keyed by the engine band. Keep that alias alive
+// by mapping each engine band to a sensible vibe tone — but new code
+// should prefer VIBE_TONE + vibeFromBalance().
 export const STATE_TONE: Record<ForecastHealth["band"], StateTone> = {
-  safe: EMERALD,
-  steady: EMERALD_COOL,
-  watch: CAUTION_GOLD,
-  risk: TIGHT_ORANGE,
-  danger: RISK_RED,
+  safe: HEALTHY,
+  steady: HEALTHY,
+  watch: CAUTION,
+  risk: RISK,
+  danger: RISK,
 };
 
-/** 4-state public vocabulary. Used by StabilityIndex + ambient
- *  tooling that wants the visible name rather than the engine band. */
 export const PUBLIC_STATE: Record<ForecastHealth["band"], string> = {
   safe: "יציב",
   steady: "יציב",
   watch: "תשומת לב",
-  risk: "מצומצם",
+  risk: "סיכון",
   danger: "סיכון",
 };

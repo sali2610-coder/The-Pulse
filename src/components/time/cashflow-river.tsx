@@ -38,7 +38,7 @@ import {
 import { useEffect, useState, type ComponentType } from "react";
 
 import type { TimeFrame } from "./use-time-engine";
-import { STATE_TONE } from "./state-tone";
+import { VIBE_TONE, vibeFromBalance } from "./state-tone";
 import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -62,7 +62,7 @@ type Node = {
 
 export function CashflowRiver({ frame }: { frame: TimeFrame }) {
   const snap = frame.snapshotEom;
-  const tone = STATE_TONE[frame.health?.band ?? "steady"];
+  const tone = VIBE_TONE[vibeFromBalance(frame.balance)];
 
   const nodes: Node[] = [];
   if (frame.windowInflow > 0 || (snap?.expectedIncomeUntilNextMonth ?? 0) > 0) {
