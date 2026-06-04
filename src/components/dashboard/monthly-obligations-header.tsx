@@ -68,7 +68,7 @@ export function MonthlyObligationsHeader() {
         <Tile
           icon={<Home className="size-3.5" />}
           label="קבועים"
-          value={ILS.format(overview.recurringMonthly)}
+          value={ILS.format(overview.fixedMonthly)}
           tone="#D4AF37"
         />
       </div>

@@ -29,7 +29,7 @@ import {
   monthIndex,
   monthKeyOf,
 } from "@/lib/dates";
-import { loanSchedule } from "@/lib/installment-schedule";
+import { loanSchedule, ruleSchedule } from "@/lib/installment-schedule";
 import { isRuleCardSettled } from "@/lib/rule-settlement";
 import {
   buildHousingBucket,
@@ -78,9 +78,22 @@ export type HousingRow = {
 
 export type ObligationsOverview = {
   monthKey: MonthKey;
-  /** Σ loansMonthly + recurringMonthly. */
+  /** Σ loansMonthly + fixedMonthly. Phase 369: was loansMonthly +
+   *  recurringMonthly which only counted housing — the header tile
+   *  labelled "סה״כ החודש" was undercounting all non-housing rules
+   *  (subscriptions, education, gifts, transport, …). The new
+   *  monthlyTotal is the honest "this calendar month's fixed bills
+   *  + loans" total. */
   monthlyTotal: number;
   loansMonthly: number;
+  /** Phase 369 — Σ active rules for the month, excluding card-
+   *  settled rules (those land in the cards lane via the card
+   *  billing day). Replaces `recurringMonthly` as the correct
+   *  "Fixed Obligations" tile source. */
+  fixedMonthly: number;
+  /** Σ housing-classified rules. Used by the Housing card's
+   *  share-of-income calculation. Kept distinct from `fixedMonthly`
+   *  because the housing card asks a different question. */
   recurringMonthly: number;
   loans: LoanRow[];
   housing: HousingRow[];
@@ -283,10 +296,24 @@ export function buildObligationsOverview(args: {
 
   const recurringMonthly = housing.reduce((s, r) => s + r.monthlyTotal, 0);
 
+  // Phase 369 — canonical "Fixed Obligations" total for the month.
+  // Σ every active rule scheduled for this month MINUS card-settled
+  // ones (those will land via the card billing day, not the bank).
+  // This is what the "קבועים" tile should show — not the housing
+  // subset that `recurringMonthly` measures.
+  let fixedMonthly = 0;
+  for (const r of args.rules) {
+    if (!r.active) continue;
+    if (!ruleSchedule(r, args.monthKey).active) continue;
+    if (isRuleCardSettled(r)) continue;
+    fixedMonthly += r.estimatedAmount;
+  }
+
   return {
     monthKey: args.monthKey,
-    monthlyTotal: loansMonthly + recurringMonthly,
+    monthlyTotal: loansMonthly + fixedMonthly,
     loansMonthly,
+    fixedMonthly,
     recurringMonthly,
     loans: loanRows,
     housing,
