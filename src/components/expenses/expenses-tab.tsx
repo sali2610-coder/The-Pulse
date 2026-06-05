@@ -18,6 +18,8 @@ import { navigateToTab } from "@/lib/tab-nav";
 import { tap as hapticTap } from "@/lib/haptics";
 import { ChevronLeft, Sparkles } from "lucide-react";
 import { ExpensesCommitmentsCockpit } from "@/components/expenses/expenses-commitments-cockpit";
+import { FinancialDebugPanel } from "@/components/dev/financial-debug-panel";
+import { FinancialAuditReport } from "@/components/dev/financial-audit-report";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -140,6 +142,20 @@ export function ExpensesTab() {
          information. The LiquidityTimelineCard component still
          exists on disk for other consumers; only the UI slot is
          dropped from this tab. */}
+
+      {/* Phase 392 — dev-only audit + debug panels. Render only in
+         non-production so the user can verify exactly which
+         transactions land in which container. */}
+      {process.env.NODE_ENV !== "production" ? (
+        <div className="sm:col-span-6">
+          <Safe name="FinancialDebugPanel">
+            <FinancialDebugPanel />
+          </Safe>
+          <Safe name="FinancialAuditReport">
+            <FinancialAuditReport />
+          </Safe>
+        </div>
+      ) : null}
     </div>
   );
 }
