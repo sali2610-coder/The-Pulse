@@ -21,11 +21,11 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
-  ChevronLeft,
   ShieldCheck,
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
+import { TapHint } from "@/components/dashboard/tap-hint";
 import { currentMonthKey } from "@/lib/dates";
 import {
   buildFinancialSnapshot,
@@ -168,13 +168,15 @@ export function FinancialHealthGauge() {
           }}
         />
 
-        <button
+        <motion.button
           type="button"
           onClick={() => {
             hapticTap();
             setSheetOpen(true);
           }}
-          aria-label="פתח פירוט בריאות פיננסית"
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          aria-label="פתח פירוט עבור בריאות פיננסית"
           className="relative flex w-full items-center gap-3 text-start focus-visible:outline-none"
         >
           <Speedometer
@@ -200,12 +202,9 @@ export function FinancialHealthGauge() {
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             <StatusPill score={health.score} tone={tone} />
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/60">
-              פירוט
-              <ChevronLeft className="size-3" />
-            </span>
+            <TapHint />
           </div>
-        </button>
+        </motion.button>
       </motion.section>
 
       <HealthExplainSheet

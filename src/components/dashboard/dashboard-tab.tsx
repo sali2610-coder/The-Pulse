@@ -34,6 +34,7 @@ import { tap as hapticTap } from "@/lib/haptics";
 import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
 import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
 import { TimeRecapCard } from "@/components/time/time-recap-card";
+import { TapDiscoveryToast } from "@/components/dashboard/tap-discovery-toast";
 
 const lazy = (
   loader: () => Promise<{
@@ -237,6 +238,7 @@ export function DashboardTab() {
 
   return (
     <SnapshotProvider>
+      <TapDiscoveryToast />
       <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
         {/* ── Critical banners — render only when relevant.
             Phase 276 — `empty:hidden` collapses the wrapper div when

@@ -29,7 +29,6 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Bell,
-  ChevronLeft,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -49,6 +48,7 @@ import {
 } from "@/lib/use-attention-center";
 import { tap as hapticTap } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { TapHint } from "@/components/dashboard/tap-hint";
 import { getCategory, type CategoryId } from "@/lib/categories";
 import type { Account, ExpenseEntry } from "@/types/finance";
 import {
@@ -208,13 +208,15 @@ export function TodayPulseCard() {
           />
         ) : null}
 
-        <button
+        <motion.button
           type="button"
           onClick={() => {
             hapticTap();
             setSheetOpen(true);
           }}
-          aria-label="פתח Pulse — פירוט יומי"
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          aria-label="פתח פירוט עבור Pulse"
           className="relative flex w-full flex-col gap-2 text-start focus-visible:outline-none"
         >
           <header className="flex items-center justify-between gap-2">
@@ -306,12 +308,9 @@ export function TodayPulseCard() {
             <p className="line-clamp-1 text-[11.5px] text-muted-foreground/90">
               {pulse.dynamicInsight}
             </p>
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60">
-              פירוט
-              <ChevronLeft className="size-3" />
-            </span>
+            <TapHint />
           </div>
-        </button>
+        </motion.button>
       </motion.section>
 
       <PulseDaySheet

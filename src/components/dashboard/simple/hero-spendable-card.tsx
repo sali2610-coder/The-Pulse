@@ -20,7 +20,9 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Wallet, ChevronLeft, AlertTriangle } from "lucide-react";
+import { Wallet, AlertTriangle } from "lucide-react";
+
+import { TapHint } from "@/components/dashboard/tap-hint";
 
 import { useFinanceStore } from "@/lib/store";
 import { autoBudget } from "@/lib/auto-budget";
@@ -254,13 +256,15 @@ export function HeroSpendableCard() {
             : `אפשר להוציא היום ${ILS.format(data.remainingToday)}`
         }
       >
-        <button
+        <motion.button
           type="button"
           onClick={() => {
             hapticTap();
             setSheetOpen(true);
           }}
-          aria-label="פתח פירוט תקציב יומי"
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          aria-label="פתח פירוט עבור תקציב יומי"
           className="flex w-full items-center gap-3 text-start focus-visible:outline-none"
         >
           {/* RIGHT — label + headline value */}
@@ -321,12 +325,9 @@ export function HeroSpendableCard() {
                 }}
               />
             </div>
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground/65">
-              פירוט
-              <ChevronLeft className="size-3" />
-            </span>
+            <TapHint />
           </div>
-        </button>
+        </motion.button>
       </motion.section>
 
       <ExplainSheet
