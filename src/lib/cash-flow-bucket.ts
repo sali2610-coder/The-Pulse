@@ -152,15 +152,26 @@ export function buildCashFlowBuckets(args: {
       if (!impact) continue;
       const ts = impact.effectiveCashDate.getTime();
       if (ts <= now.getTime() || ts > horizon.getTime()) continue;
-      const bucketId =
-        impact.kind === "card" && impact.viaCardId
-          ? `card:${impact.viaCardId}`
-          : bankBucketId;
-      const bucket = ensureBucket(bucketId, () =>
-        impact.kind === "card" && impact.viaCardId
-          ? cardBucketFor(impact.viaCardId, args.accounts)
-          : bankBucket(),
-      );
+      // Phase 388 — card-settled rules with NO resolved card go to a
+      // synthetic "card:__unassigned__" bucket instead of being
+      // silently misrouted to the bank lane. Keeps the canonical
+      // exposure total intact across every downstream surface.
+      let bucketId: string;
+      let bucketFactory: () => CashFlowBucket;
+      if (impact.kind === "card") {
+        if (impact.viaCardId) {
+          bucketId = `card:${impact.viaCardId}`;
+          bucketFactory = () =>
+            cardBucketFor(impact.viaCardId!, args.accounts);
+        } else {
+          bucketId = `card:${UNASSIGNED_CARD_ID}`;
+          bucketFactory = unassignedCardBucket;
+        }
+      } else {
+        bucketId = bankBucketId;
+        bucketFactory = bankBucket;
+      }
+      const bucket = ensureBucket(bucketId, bucketFactory);
       pushObligation(bucket, {
         label: rule.label,
         amount: impact.amount,
@@ -212,12 +223,17 @@ export function buildCashFlowBuckets(args: {
   });
   for (const impact of stream) {
     if (impact.kind !== "card") continue;
-    if (!impact.viaCardId) continue;
     const ts = impact.effectiveCashDate.getTime();
     if (ts <= now.getTime() || ts > horizon.getTime()) continue;
-    const bucketId = `card:${impact.viaCardId}`;
+    // Phase 388 — accept impacts even when no card account resolves.
+    // Synthetic "card:__unassigned__" bucket keeps the curve total
+    // aligned with the canonical Expenses-cockpit credit total.
+    const viaCardId = impact.viaCardId ?? UNASSIGNED_CARD_ID;
+    const bucketId = `card:${viaCardId}`;
     const bucket = ensureBucket(bucketId, () =>
-      cardBucketFor(impact.viaCardId!, args.accounts),
+      impact.viaCardId
+        ? cardBucketFor(impact.viaCardId, args.accounts)
+        : unassignedCardBucket(),
     );
     pushObligation(bucket, {
       label: pickEntryLabel(args.entries, impact),
@@ -225,7 +241,7 @@ export function buildCashFlowBuckets(args: {
       effectiveCashAt: impact.effectiveCashDate.toISOString(),
       transactionAt: impact.purchaseDate.toISOString(),
       kind: "card_entry",
-      refId: `entry:${impact.viaCardId}:${ts}`,
+      refId: `entry:${viaCardId}:${ts}`,
     });
   }
 
@@ -287,6 +303,26 @@ function cardBucketFor(cardId: string, accounts: Account[]): CashFlowBucket {
     obligations: [],
     cardId,
     cardLast4: card?.cardLast4,
+  };
+}
+
+// Phase 388 — synthetic "card with no resolved account" bucket.
+// Previously, credit impacts (rules + entries) without a viaCardId
+// were silently dropped from the curve OR misrouted to the bank
+// bucket. Result: Time-screen forecast deducted less than the
+// canonical Expenses-cockpit credit total. Every credit shekel must
+// still appear on the curve.
+const UNASSIGNED_CARD_ID = "__unassigned__";
+function unassignedCardBucket(): CashFlowBucket {
+  return {
+    id: `card:${UNASSIGNED_CARD_ID}`,
+    label: "אשראי ללא כרטיס מוגדר",
+    source: "card",
+    monthlyTotal: 0,
+    nextSettlementAt: null,
+    obligationCount: 0,
+    obligations: [],
+    cardId: UNASSIGNED_CARD_ID,
   };
 }
 
