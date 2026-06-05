@@ -21,6 +21,11 @@ import {
   type CardMonthFolder,
 } from "@/lib/card-month-folders";
 import { getCreditCardExposure } from "@/lib/credit-card-exposure";
+import {
+  getCreditCardStatement,
+  type CardStatement,
+  type CardStatementRow,
+} from "@/lib/credit-card-statement";
 import { currentMonthKey } from "@/lib/dates";
 import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
@@ -98,8 +103,23 @@ export function CardsHierarchyCard() {
     });
   }, [hydrated, rules, entries, statuses]);
 
+  // Phase 393 — canonical per-card statement for the current month.
+  // This is the source of truth for the visible per-card rows so
+  // every credit shekel routes to its real card folder and the
+  // header total = Σ visible cards + unassigned.
+  const statement = useMemo(() => {
+    if (!hydrated) return null;
+    return getCreditCardStatement({
+      accounts,
+      rules,
+      entries,
+      statuses,
+      monthKey: currentMonthKey(),
+    });
+  }, [hydrated, accounts, rules, entries, statuses]);
+
   if (!hydrated || !report) return null;
-  if (folders.length === 0) {
+  if (folders.length === 0 && (!statement || statement.cards.length === 0)) {
     return (
       <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
         <SectionHeader icon={<CreditCard />} title="כרטיסי אשראי לפי חודש" />
@@ -129,34 +149,47 @@ export function CardsHierarchyCard() {
         }
       />
       <p className="text-caption text-muted-foreground">
-        כל כרטיס × חודש = תיקייה משלו. תקיש על תיקייה כדי לראות פירוט
-        לקטגוריות ולהוצאות.
+        כל כרטיס מציג את כל העסקאות המשויכות אליו לחודש הנוכחי. תקיש
+        על שורה כדי לראות פירוט.
       </p>
-      <ul className="flex flex-col gap-2">
-        {folders.map((folder) => (
-          <FolderRow
-            key={folder.id}
-            folder={folder}
-            onEditEntry={(id) => setEditingId(id)}
-            onDeleteEntry={(id) => deleteWithUndo(id)}
-          />
-        ))}
-      </ul>
 
-      {/* Phase 391 — reconciliation footer. The header total comes
-         from getCreditCardExposure (canonical credit number). The
-         per-card folders use buildCardCategoryBreakdown and may
-         miss pending entries + entries with no resolvable card
-         account. When the two diverge, surface the gap so the
-         header is always explainable. */}
-      {exposure ? (
-        <ReconciliationFooter
-          headerTotal={Math.round(exposure.totalExpectedCharge)}
-          visibleTotal={Math.round(
-            folders.reduce((s, f) => s + f.subtotal, 0),
-          )}
-          pendingTotal={Math.round(exposure.pendingTransactions)}
-        />
+      {/* Phase 393 — canonical per-card statement. Every credit
+         transaction with an accountId lands inside its actual card
+         row. Only orphans land under "ללא כרטיס משויך" — exactly
+         what the user asked for. */}
+      {statement ? (
+        <ul className="flex flex-col gap-2">
+          {statement.cards.map((s) => (
+            <StatementCardRow key={s.cardId} statement={s} />
+          ))}
+          {statement.unassigned.total > 0 ? (
+            <UnassignedRow
+              total={statement.unassigned.total}
+              rows={statement.unassigned.transactions}
+            />
+          ) : null}
+        </ul>
+      ) : null}
+
+      {/* Future / next-month folders kept as a quiet drilldown
+         below so users who want forward-billing detail can still
+         find it. */}
+      {folders.length > 0 ? (
+        <details className="mt-2 rounded-2xl border border-white/8 bg-white/[0.02]">
+          <summary className="cursor-pointer px-3 py-2 text-[12px] text-muted-foreground">
+            פירוט עתידי (לפי חודש חיוב)
+          </summary>
+          <ul className="flex flex-col gap-2 px-3 pb-3">
+            {folders.map((folder) => (
+              <FolderRow
+                key={folder.id}
+                folder={folder}
+                onEditEntry={(id) => setEditingId(id)}
+                onDeleteEntry={(id) => deleteWithUndo(id)}
+              />
+            ))}
+          </ul>
+        </details>
       ) : null}
 
       <ExpenseEditFullScreen
@@ -582,82 +615,183 @@ function CategoryRow({
   );
 }
 
-function ReconciliationFooter({
-  headerTotal,
-  visibleTotal,
-  pendingTotal,
-}: {
-  headerTotal: number;
-  visibleTotal: number;
-  pendingTotal: number;
-}) {
-  // Phase 391 — show the gap between the header total and the
-  // visible per-card folders so every shekel in the header is
-  // explainable. Pending is surfaced explicitly; whatever remains
-  // (entries with no resolvable card account, etc.) is labelled
-  // "לא משויכים".
-  const remainder = headerTotal - visibleTotal - pendingTotal;
-  const unassigned = remainder > 1 ? remainder : 0;
-  const gap = headerTotal - visibleTotal;
-  // Don't bother rendering when everything reconciles cleanly.
-  if (gap <= 1 && pendingTotal <= 0) return null;
+function StatementCardRow({ statement }: { statement: CardStatement }) {
+  const [open, setOpen] = useState(false);
   return (
-    <section
-      className="mt-2 flex flex-col gap-1 rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+    <li
+      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
       dir="rtl"
-      aria-label="פירוט סך הכרטיסים"
     >
-      <span className="text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
-        פירוט סה״כ
-      </span>
-      <Row label="כרטיסים מוצגים" value={visibleTotal} tone="rgba(255,255,255,0.85)" />
-      {pendingTotal > 0 ? (
-        <Row
-          label="ממתינים לאישור"
-          value={pendingTotal}
-          tone="#FBBF24"
-        />
-      ) : null}
-      {unassigned > 0 ? (
-        <Row
-          label="עסקאות אשראי לא משויכות"
-          value={unassigned}
-          tone="#75F5FF"
-        />
-      ) : null}
-      <div className="mt-1 border-t border-white/8 pt-1" />
-      <Row
-        label="סה״כ"
-        value={headerTotal}
-        tone="#D4AF37"
-        emphasis
-      />
-    </section>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((v) => !v);
+          tap();
+        }}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right transition-colors hover:bg-white/3"
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-[#75F5FF]"
+            style={{ background: "rgba(117,245,255,0.14)" }}
+            aria-hidden
+          >
+            <CreditCard className="size-4" />
+          </span>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="text-section text-foreground">
+              {statement.cardLabel}
+              {statement.cardLast4 ? (
+                <span className="text-foreground/70"> · ····{statement.cardLast4}</span>
+              ) : null}
+            </span>
+            <span className="text-caption text-muted-foreground">
+              {statement.transactions.length} עסקאות החודש
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            data-mono="true"
+            dir="ltr"
+            className="text-section text-foreground"
+          >
+            {ILS.format(statement.total)}
+          </span>
+          <motion.span
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.18 }}
+            className="text-muted-foreground"
+          >
+            <ChevronDown className="size-5" />
+          </motion.span>
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <ul className="flex flex-col gap-1 border-t border-white/8 p-3" dir="rtl">
+              {statement.transactions.map((t) => (
+                <TransactionRow key={t.id} row={t} />
+              ))}
+            </ul>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </li>
   );
 }
 
-function Row({
-  label,
-  value,
-  tone,
-  emphasis,
+function UnassignedRow({
+  total,
+  rows,
 }: {
-  label: string;
-  value: number;
-  tone: string;
-  emphasis?: boolean;
+  total: number;
+  rows: CardStatementRow[];
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center justify-between gap-2 text-[12px]">
-      <span className="text-foreground/80">{label}</span>
+    <li
+      className="overflow-hidden rounded-2xl border border-[#FBBF24]/30 bg-[#FBBF24]/[0.06]"
+      dir="rtl"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right"
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-[#FBBF24]"
+            style={{ background: "rgba(251,191,36,0.16)" }}
+            aria-hidden
+          >
+            <CreditCard className="size-4" />
+          </span>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="text-section text-foreground">
+              עסקאות אשראי ללא כרטיס משויך
+            </span>
+            <span className="text-caption text-muted-foreground">
+              {rows.length} עסקאות · ניתן לערוך כל עסקה ולשייך לכרטיס
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            data-mono="true"
+            dir="ltr"
+            className="text-section text-foreground"
+          >
+            {ILS.format(total)}
+          </span>
+          <motion.span
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.18 }}
+            className="text-muted-foreground"
+          >
+            <ChevronDown className="size-5" />
+          </motion.span>
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="overflow-hidden"
+          >
+            <ul className="flex flex-col gap-1 border-t border-white/8 p-3" dir="rtl">
+              {rows.map((t) => (
+                <TransactionRow key={t.id} row={t} />
+              ))}
+            </ul>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </li>
+  );
+}
+
+function TransactionRow({ row }: { row: CardStatementRow }) {
+  return (
+    <li className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2 text-[12px]">
+      <div className="flex min-w-0 flex-col">
+        <span className="line-clamp-1 text-foreground/90">{row.label}</span>
+        <span className="text-[10.5px] text-muted-foreground/80">
+          {row.bucket === "futureCardCharges"
+            ? "חיוב קבוע"
+            : row.bucket === "existingInstallments"
+              ? "תשלום פתוח"
+              : row.bucket === "walletTransactions"
+                ? "Wallet"
+                : row.bucket === "importedTransactions"
+                  ? "ייבוא / SMS"
+                  : row.bucket === "manualCardTransactions"
+                    ? "תיעוד ידני"
+                    : "ממתין"}
+        </span>
+      </div>
       <span
         data-mono="true"
         dir="ltr"
-        className={emphasis ? "text-[13px] font-semibold" : "font-medium"}
-        style={{ color: tone, fontVariantNumeric: "tabular-nums" }}
+        className="shrink-0 text-foreground"
+        style={{ fontVariantNumeric: "tabular-nums" }}
       >
-        {ILS.format(value)}
+        {ILS.format(row.amount)}
       </span>
-    </div>
+    </li>
   );
 }
