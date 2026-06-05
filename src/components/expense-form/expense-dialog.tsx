@@ -20,6 +20,9 @@ import { getCategory, type CategoryId } from "@/lib/categories";
 import type { ExpensePayload } from "@/types/expense";
 
 import { AmountInput } from "./amount-input";
+import { ReceiptScanSheet } from "./receipt-scan-sheet";
+import { Scan } from "lucide-react";
+import type { ReceiptScanResult } from "@/lib/receipt-scan";
 import { InstallmentsInput } from "./installments-input";
 import { SourceAccountPicker } from "./source-account-picker";
 import { ExpenseImpactPreview } from "./expense-impact-preview";
@@ -57,10 +60,12 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
   const amountRef = useRef<HTMLInputElement | null>(null);
   const addExpense = useFinanceStore((s) => s.addExpense);
 
+  const [scanOpen, setScanOpen] = useState(false);
   const {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isValid },
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
@@ -272,22 +277,50 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
           </header>
 
           <form ref={formRef} onSubmit={submit} className="flex flex-col gap-3">
-            <Controller
-              control={control}
-              name="amount"
-              render={({ field }) => (
-                <AmountInput
-                  ref={(el) => {
-                    field.ref(el);
-                    amountRef.current = el;
-                  }}
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  hasError={Boolean(errors.amount)}
+            {/* Phase 386 — amount row: input on the right (compact a
+               touch), scan button on the left. Single tap → camera. */}
+            <div className="flex items-stretch gap-2">
+              <div className="min-w-0 flex-1">
+                <Controller
+                  control={control}
+                  name="amount"
+                  render={({ field }) => (
+                    <AmountInput
+                      ref={(el) => {
+                        field.ref(el);
+                        amountRef.current = el;
+                      }}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      hasError={Boolean(errors.amount)}
+                    />
+                  )}
                 />
-              )}
-            />
+              </div>
+              <button
+                type="button"
+                onClick={() => setScanOpen(true)}
+                aria-label="סרוק קבלה"
+                className="flex w-[78px] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] text-foreground/85 transition-colors hover:border-gold/40"
+                style={{
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.06), 0 0 22px -12px rgba(212,175,55,0.55)",
+                }}
+              >
+                <span
+                  className="flex size-9 items-center justify-center rounded-xl"
+                  style={{
+                    background: "rgba(212,175,55,0.14)",
+                    color: "#D4AF37",
+                  }}
+                  aria-hidden
+                >
+                  <Scan className="size-4" />
+                </span>
+                <span className="text-[11px] font-medium">סריקה</span>
+              </button>
+            </div>
             <AnimatePresence>
               {errors.amount?.message ? (
                 <motion.p
@@ -413,8 +446,75 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
           />
         )}
       />
+
+      <ReceiptScanSheet
+        open={scanOpen}
+        onOpenChange={setScanOpen}
+        onApply={(r) => applyScanToForm(r, setValue)}
+      />
     </>
   );
+}
+
+function applyScanToForm(
+  r: ReceiptScanResult,
+  setValue: ReturnType<typeof useForm<ExpenseFormValues>>["setValue"],
+): void {
+  const opts = { shouldValidate: true, shouldDirty: true } as const;
+  if (r.total !== null && r.total > 0) {
+    setValue("amount", r.total, opts);
+  }
+  if (r.merchant) {
+    setValue("merchantLabel", r.merchant.slice(0, 60), opts);
+  }
+  if (r.paymentMethod === "credit") {
+    setValue("paymentSource", "card", opts);
+  } else if (r.paymentMethod === "cash") {
+    setValue("paymentSource", "cash", opts);
+  }
+  if (r.date) {
+    const iso = scanDateToIso(r.date, r.time);
+    if (iso) setValue("paymentDate", iso, opts);
+  }
+  const noteParts: string[] = [];
+  if (r.transactionNumber) {
+    noteParts.push(`עסקה ${r.transactionNumber}`);
+  }
+  if (r.items.length > 0) {
+    noteParts.push(
+      r.items
+        .slice(0, 5)
+        .map((it) => it.label)
+        .filter(Boolean)
+        .join(" · "),
+    );
+  }
+  if (noteParts.length > 0) {
+    setValue("note", noteParts.join(" — ").slice(0, 200), opts);
+  }
+  // Category isn't extracted by the AI — leave the user's prior
+  // selection. They'll pick it before saving.
+}
+
+function scanDateToIso(date: string, time: string | null): string | null {
+  // date "YYYY-MM-DD", time "HH:mm"
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  let hh = 12;
+  let mm = 0;
+  if (time) {
+    const tm = /^(\d{1,2}):(\d{2})$/.exec(time);
+    if (tm) {
+      hh = Math.min(23, Math.max(0, Number(tm[1])));
+      mm = Math.min(59, Math.max(0, Number(tm[2])));
+    }
+  }
+  const dt = new Date(y, mo, d, hh, mm, 0);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
 }
 
 function CategoryChip({
