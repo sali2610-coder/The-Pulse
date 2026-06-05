@@ -20,6 +20,8 @@ import {
   buildCardMonthFolders,
   type CardMonthFolder,
 } from "@/lib/card-month-folders";
+import { getCreditCardExposure } from "@/lib/credit-card-exposure";
+import { currentMonthKey } from "@/lib/dates";
 import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -81,6 +83,21 @@ export function CardsHierarchyCard() {
     return buildCardMonthFolders(report);
   }, [report]);
 
+  // Phase 380 — header total must match the cockpit's canonical
+  // credit number. The per-card per-month folders below stay as the
+  // detailed lens, but the headline "סה״כ" reads from
+  // getCreditCardExposure so it equals
+  // breakdown.creditCardsTotal everywhere.
+  const exposure = useMemo(() => {
+    if (!hydrated) return null;
+    return getCreditCardExposure({
+      rules,
+      entries,
+      statuses,
+      monthKey: currentMonthKey(),
+    });
+  }, [hydrated, rules, entries, statuses]);
+
   if (!hydrated || !report) return null;
   if (folders.length === 0) {
     return (
@@ -102,7 +119,12 @@ export function CardsHierarchyCard() {
         title="כרטיסי אשראי לפי חודש"
         trailing={
           <span className="text-caption text-muted-foreground" dir="ltr">
-            סה״כ {ILS.format(Math.round(report.totalCommitted))}
+            סה״כ{" "}
+            {ILS.format(
+              Math.round(
+                exposure?.totalExpectedCharge ?? report.totalCommitted,
+              ),
+            )}
           </span>
         }
       />
