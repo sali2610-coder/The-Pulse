@@ -221,15 +221,23 @@ export function getMonthlyObligationBreakdown(args: {
     });
   }
 
-  const total = creditCardsTotal + bankFixedTotal + loansTotal + cashTotal;
+  // Phase 391 — round each lane FIRST, then sum the rounded lanes.
+  // Previously total was Math.round(rawSum) which could drift by a
+  // shekel or two from the visible lane sum due to rounding (six
+  // entries each rounding up + a sum that rounds down produced the
+  // user-reported ₪10 cockpit-vs-where-money-goes mismatch).
+  const creditR = Math.round(creditCardsTotal);
+  const bankR = Math.round(bankFixedTotal);
+  const loansR = Math.round(loansTotal);
+  const cashR = Math.round(cashTotal);
 
   return {
     monthKey: args.monthKey,
-    total: Math.round(total),
-    creditCardsTotal: Math.round(creditCardsTotal),
-    bankFixedTotal: Math.round(bankFixedTotal),
-    loansTotal: Math.round(loansTotal),
-    cashTotal: Math.round(cashTotal),
+    total: creditR + bankR + loansR + cashR,
+    creditCardsTotal: creditR,
+    bankFixedTotal: bankR,
+    loansTotal: loansR,
+    cashTotal: cashR,
     counts: {
       creditCards: creditCount,
       bankFixed: bankCount,

@@ -143,6 +143,22 @@ export function CardsHierarchyCard() {
         ))}
       </ul>
 
+      {/* Phase 391 — reconciliation footer. The header total comes
+         from getCreditCardExposure (canonical credit number). The
+         per-card folders use buildCardCategoryBreakdown and may
+         miss pending entries + entries with no resolvable card
+         account. When the two diverge, surface the gap so the
+         header is always explainable. */}
+      {exposure ? (
+        <ReconciliationFooter
+          headerTotal={Math.round(exposure.totalExpectedCharge)}
+          visibleTotal={Math.round(
+            folders.reduce((s, f) => s + f.subtotal, 0),
+          )}
+          pendingTotal={Math.round(exposure.pendingTransactions)}
+        />
+      ) : null}
+
       <ExpenseEditFullScreen
         entryId={editingId}
         open={editingId !== null}
@@ -563,5 +579,85 @@ function CategoryRow({
         ) : null}
       </AnimatePresence>
     </li>
+  );
+}
+
+function ReconciliationFooter({
+  headerTotal,
+  visibleTotal,
+  pendingTotal,
+}: {
+  headerTotal: number;
+  visibleTotal: number;
+  pendingTotal: number;
+}) {
+  // Phase 391 — show the gap between the header total and the
+  // visible per-card folders so every shekel in the header is
+  // explainable. Pending is surfaced explicitly; whatever remains
+  // (entries with no resolvable card account, etc.) is labelled
+  // "לא משויכים".
+  const remainder = headerTotal - visibleTotal - pendingTotal;
+  const unassigned = remainder > 1 ? remainder : 0;
+  const gap = headerTotal - visibleTotal;
+  // Don't bother rendering when everything reconciles cleanly.
+  if (gap <= 1 && pendingTotal <= 0) return null;
+  return (
+    <section
+      className="mt-2 flex flex-col gap-1 rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+      dir="rtl"
+      aria-label="פירוט סך הכרטיסים"
+    >
+      <span className="text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
+        פירוט סה״כ
+      </span>
+      <Row label="כרטיסים מוצגים" value={visibleTotal} tone="rgba(255,255,255,0.85)" />
+      {pendingTotal > 0 ? (
+        <Row
+          label="ממתינים לאישור"
+          value={pendingTotal}
+          tone="#FBBF24"
+        />
+      ) : null}
+      {unassigned > 0 ? (
+        <Row
+          label="עסקאות אשראי לא משויכות"
+          value={unassigned}
+          tone="#75F5FF"
+        />
+      ) : null}
+      <div className="mt-1 border-t border-white/8 pt-1" />
+      <Row
+        label="סה״כ"
+        value={headerTotal}
+        tone="#D4AF37"
+        emphasis
+      />
+    </section>
+  );
+}
+
+function Row({
+  label,
+  value,
+  tone,
+  emphasis,
+}: {
+  label: string;
+  value: number;
+  tone: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-[12px]">
+      <span className="text-foreground/80">{label}</span>
+      <span
+        data-mono="true"
+        dir="ltr"
+        className={emphasis ? "text-[13px] font-semibold" : "font-medium"}
+        style={{ color: tone, fontVariantNumeric: "tabular-nums" }}
+      >
+        {ILS.format(value)}
+      </span>
+    </div>
   );
 }
