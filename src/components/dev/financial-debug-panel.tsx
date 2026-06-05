@@ -21,6 +21,7 @@ import { getMonthlyObligationBreakdown } from "@/lib/monthly-obligation-breakdow
 import { getCreditCardExposure } from "@/lib/credit-card-exposure";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { buildDailyBudgetView } from "@/lib/daily-budget-view";
+import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -72,7 +73,34 @@ export function FinancialDebugPanel() {
       rules,
       statuses,
     });
-    return { obligations, exposure, snap, view, monthKey };
+    // Phase 390 — cross-surface delta detector. Σ buckets.card
+    // monthlyTotal (35-day window) must equal exposure −
+    // pendingTransactions. Anything else is a regression and we
+    // surface it in red.
+    const buckets = buildCashFlowBuckets({
+      accounts,
+      loans,
+      rules,
+      statuses,
+      entries,
+      windowDays: 35,
+    });
+    const cardBucketsTotal = buckets.buckets
+      .filter((b) => b.source === "card")
+      .reduce((s, b) => s + b.monthlyTotal, 0);
+    const expectedCurveCredit =
+      exposure.totalExpectedCharge - exposure.pendingTransactions;
+    const delta = Math.round(cardBucketsTotal - expectedCurveCredit);
+    return {
+      obligations,
+      exposure,
+      snap,
+      view,
+      monthKey,
+      cardBucketsTotal: Math.round(cardBucketsTotal),
+      expectedCurveCredit: Math.round(expectedCurveCredit),
+      delta,
+    };
   }, [
     hydrated,
     rules,
@@ -86,16 +114,45 @@ export function FinancialDebugPanel() {
 
   if (!data) return null;
 
-  const { obligations, exposure, snap, view, monthKey } = data;
+  const {
+    obligations,
+    exposure,
+    snap,
+    view,
+    monthKey,
+    cardBucketsTotal,
+    expectedCurveCredit,
+    delta,
+  } = data;
+  const mismatch = Math.abs(delta) > 1;
 
   return (
     <details
-      className="mx-auto mt-6 w-full max-w-md rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/[0.04] text-fuchsia-200/90"
+      className="mx-auto mt-6 w-full max-w-md rounded-2xl border text-fuchsia-200/90"
       dir="rtl"
+      style={{
+        borderColor: mismatch
+          ? "rgba(248,113,113,0.65)"
+          : "rgba(217,70,239,0.3)",
+        background: mismatch
+          ? "rgba(248,113,113,0.07)"
+          : "rgba(217,70,239,0.04)",
+      }}
     >
-      <summary className="cursor-pointer px-3 py-2 text-[11px] uppercase tracking-[0.22em]">
+      <summary
+        className="cursor-pointer px-3 py-2 text-[11px] uppercase tracking-[0.22em]"
+        style={{ color: mismatch ? "#FCA5A5" : undefined }}
+      >
         Financial Debug · {monthKey}
+        {mismatch ? " · MISMATCH" : " · OK"}
       </summary>
+      {mismatch ? (
+        <p className="px-3 py-2 text-[11px] text-red-200">
+          Curve card-buckets total ≠ exposure − pending. Delta{" "}
+          {ILS.format(delta)}. Something is calculating credit
+          locally. Open tests/engine-parity.test.ts.
+        </p>
+      ) : null}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 px-3 py-2 text-[11px]">
         <Row label="Cockpit · Total" value={obligations.total} />
         <Row label="Cockpit · Credit" value={obligations.creditCardsTotal} />
@@ -123,6 +180,9 @@ export function FinancialDebugPanel() {
         <Row label="Daily · per day" value={view.perDay} />
         <Row label="Daily · deficit" value={view.deficit} />
         <Row label="Daily · anchor offset (days)" value={view.anchorOffset} raw />
+        <Row label="Parity · curve card buckets" value={cardBucketsTotal} />
+        <Row label="Parity · expected (exposure − pending)" value={expectedCurveCredit} />
+        <Row label="Parity · delta" value={delta} />
       </div>
       <p className="px-3 pb-2 text-[10px] opacity-70">
         Dev-only. Renders only when NODE_ENV !== &quot;production&quot;.
