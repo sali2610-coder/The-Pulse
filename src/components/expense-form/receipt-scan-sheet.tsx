@@ -20,6 +20,7 @@ import {
   Loader2,
   Scan,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,7 +64,6 @@ export function ReceiptScanSheet({
       onOpenChange={onOpenChange}
       title="סריקת קבלה"
       fullScreen
-      lockDismiss
     >
       {/* key remount on open/close cycle guarantees fresh state +
          photo URLs without setState-in-effect. */}
@@ -166,22 +166,56 @@ function ScanBody({
     galleryRef.current?.click();
   };
 
+  // Phase 389 — cancel button with dirty-state confirmation. If the
+  // user already added images we ask before discarding; otherwise
+  // close immediately.
+  const handleCancel = () => {
+    hapticTap();
+    if (photos.length === 0) {
+      onOpenChange(false);
+      return;
+    }
+    const ok = window.confirm("לצאת בלי לשמור את הסריקה?");
+    if (ok) onOpenChange(false);
+  };
+
+  // Escape key closes the sheet (with the same dirty-state guard).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos.length]);
+
   return (
     <div className="flex flex-col gap-4 pb-4" dir="rtl">
-      <header className="flex items-center gap-2">
-        <span
-          className="flex size-8 items-center justify-center rounded-xl text-gold"
-          style={{ background: "rgba(212,175,55,0.16)" }}
-          aria-hidden
-        >
-          <Scan className="size-4" />
-        </span>
-        <div className="flex flex-col leading-tight">
-          <span className="text-section text-foreground">סריקת קבלה</span>
-          <span className="text-caption text-muted-foreground">
-            צלם, אשר, סיימת
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex size-8 items-center justify-center rounded-xl text-gold"
+            style={{ background: "rgba(212,175,55,0.16)" }}
+            aria-hidden
+          >
+            <Scan className="size-4" />
           </span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-section text-foreground">סריקת קבלה</span>
+            <span className="text-caption text-muted-foreground">
+              צלם, אשר, סיימת
+            </span>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={handleCancel}
+          aria-label="ביטול סריקת קבלה"
+          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11.5px] text-foreground/85 transition-colors hover:border-white/20"
+        >
+          <X className="size-3" aria-hidden />
+          ביטול
+        </button>
       </header>
 
       {step === "capture" || step === "error" ? (
@@ -375,42 +409,27 @@ function CaptureStep({
         </p>
       ) : null}
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCamera}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[12.5px] text-foreground/90 transition-colors hover:border-gold/40"
-        >
-          <Camera className="size-3.5" aria-hidden />
-          צלם
-        </button>
-        <button
-          type="button"
-          onClick={onGallery}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[12.5px] text-foreground/90 transition-colors hover:border-white/20"
-        >
-          <ImageIcon className="size-3.5" aria-hidden />
-          העלה
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            hapticTap();
-            onSubmit();
-          }}
-          disabled={photos.length === 0}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl px-3 py-2.5 text-[13.5px] font-semibold transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-          style={{
-            background: "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
-            color: "#1A140A",
-            boxShadow:
-              "0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 22px -6px rgba(212,175,55,0.55)",
-          }}
-        >
-          <Scan className="size-3.5" aria-hidden />
-          סיום וסריקה
-        </button>
-      </div>
+      {/* Phase 389 — single primary action at the bottom. Camera /
+         upload affordances live only above, inside the tile area, so
+         the action bar doesn't show the same buttons twice. */}
+      <button
+        type="button"
+        onClick={() => {
+          hapticTap();
+          onSubmit();
+        }}
+        disabled={photos.length === 0}
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-2xl px-3 py-3 text-[14px] font-semibold transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+        style={{
+          background: "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
+          color: "#1A140A",
+          boxShadow:
+            "0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 22px -6px rgba(212,175,55,0.55)",
+        }}
+      >
+        <Scan className="size-3.5" aria-hidden />
+        סיום וסריקה
+      </button>
     </div>
   );
 }
