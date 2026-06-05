@@ -27,6 +27,7 @@ import { autoBudget } from "@/lib/auto-budget";
 import { dailyAllowance } from "@/lib/forecast";
 import { todayPulse } from "@/lib/today-pulse";
 import { monthKeyOf } from "@/lib/dates";
+import { buildDailyBudgetView } from "@/lib/daily-budget-view";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { tap as hapticTap } from "@/lib/haptics";
@@ -205,13 +206,32 @@ export function HeroSpendableCard() {
 
   if (!hydrated || !data) return null;
 
-  const state = pickState(data);
+  // Phase 381 — canonical 10th-of-next-month view. When the real
+  // bank forecast at the anchor is negative the strip flips into
+  // deficit mode: shows −deficit, never clamps to ₪0.
+  const view = buildDailyBudgetView({
+    accounts,
+    loans,
+    incomes,
+    entries,
+    rules,
+    statuses,
+  });
+  const inDeficit = view.state === "deficit";
+
+  const state = inDeficit ? "stress" : pickState(data);
   const tone = STATE_TONE[state];
   const ratio =
     data.perDay > 0 ? Math.min(1, data.spentToday / data.perDay) : 0;
 
-  const subtitle =
-    state === "gray"
+  const headlineValue = inDeficit
+    ? -(view.deficit + Math.max(0, view.spentToday))
+    : data.remainingToday;
+  const subtitle = inDeficit
+    ? view.spentToday > 0
+      ? `היום הוצאת ${ILS.format(view.spentToday)} נוספים`
+      : "כל הוצאה נוספת מגדילה את החריגה"
+    : state === "gray"
       ? "חסר מידע לחישוב מדויק"
       : state === "stress"
         ? "היום עדיף לא להוציא מעבר להכרחי"
@@ -228,7 +248,11 @@ export function HeroSpendableCard() {
         style={{
           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 40px -32px ${tone.glow}99`,
         }}
-        aria-label={`אפשר להוציא היום ${ILS.format(data.remainingToday)}`}
+        aria-label={
+          inDeficit
+            ? `התקציב במינוס ${ILS.format(view.deficit + Math.max(0, view.spentToday))}`
+            : `אפשר להוציא היום ${ILS.format(data.remainingToday)}`
+        }
       >
         <button
           type="button"
@@ -243,7 +267,11 @@ export function HeroSpendableCard() {
           <div className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
               <Wallet className="size-3" />
-              אפשר להוציא היום
+              {inDeficit
+                ? view.spentToday > 0
+                  ? "החריגה המעודכנת"
+                  : "התקציב שלך כבר במינוס"
+                : "אפשר להוציא היום"}
             </span>
             <span
               data-mono="true"
@@ -252,7 +280,7 @@ export function HeroSpendableCard() {
               style={{ color: tone.fg }}
             >
               <AnimatedCounter
-                value={data.remainingToday}
+                value={headlineValue}
                 format={(v) => ILS.format(v)}
               />
             </span>

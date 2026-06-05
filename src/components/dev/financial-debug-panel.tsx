@@ -20,6 +20,7 @@ import { currentMonthKey } from "@/lib/dates";
 import { getMonthlyObligationBreakdown } from "@/lib/monthly-obligation-breakdown";
 import { getCreditCardExposure } from "@/lib/credit-card-exposure";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
+import { buildDailyBudgetView } from "@/lib/daily-budget-view";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -63,7 +64,15 @@ export function FinancialDebugPanel() {
       monthlyBudget,
       monthKey,
     });
-    return { obligations, exposure, snap, monthKey };
+    const view = buildDailyBudgetView({
+      accounts,
+      loans,
+      incomes,
+      entries,
+      rules,
+      statuses,
+    });
+    return { obligations, exposure, snap, view, monthKey };
   }, [
     hydrated,
     rules,
@@ -77,7 +86,7 @@ export function FinancialDebugPanel() {
 
   if (!data) return null;
 
-  const { obligations, exposure, snap, monthKey } = data;
+  const { obligations, exposure, snap, view, monthKey } = data;
 
   return (
     <details
@@ -104,6 +113,16 @@ export function FinancialDebugPanel() {
         <Row label="Snapshot · recurring" value={snap.recurringCommitmentsUntilNextMonth} />
         <Row label="Snapshot · fixed" value={snap.fixedExpensesUntilNextMonth} />
         <Row label="Snapshot · loans" value={snap.activeLoansPaymentsUntilNextMonth} />
+        <Row label="Daily · current bank" value={view.currentBankBalance} />
+        <Row label="Daily · forecast @ 10th next" value={view.forecastBankAtAnchor} />
+        <Row label="Daily · expected income" value={view.expectedIncome} />
+        <Row label="Daily · total commitments" value={view.totalCommitments} />
+        <Row label="Daily · income − commitments" value={view.monthlyFreeBalance} />
+        <Row label="Daily · real available" value={view.realAvailable} />
+        <Row label="Daily · spent today" value={view.spentToday} />
+        <Row label="Daily · per day" value={view.perDay} />
+        <Row label="Daily · deficit" value={view.deficit} />
+        <Row label="Daily · anchor offset (days)" value={view.anchorOffset} raw />
       </div>
       <p className="px-3 pb-2 text-[10px] opacity-70">
         Dev-only. Renders only when NODE_ENV !== &quot;production&quot;.
