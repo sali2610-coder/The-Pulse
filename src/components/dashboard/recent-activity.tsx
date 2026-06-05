@@ -44,7 +44,6 @@ const ILS = {
   format: (v: number) => formatCurrencyAmount(v),
 };
 
-const TIME_FMT = new Intl.RelativeTimeFormat("he-IL", { numeric: "auto" });
 const DAY_HEADER_FMT = new Intl.DateTimeFormat("he-IL", {
   weekday: "long",
   day: "2-digit",
@@ -77,24 +76,6 @@ function relativeChip(
   return null;
 }
 
-function timeAgo(date: Date, hasTime: boolean, now: Date = new Date()): string {
-  if (!hasTime) {
-    const todayKey = startOfDay(now);
-    const dayKey = startOfDay(date);
-    if (dayKey === todayKey) return "היום";
-    if (dayKey === todayKey - 86_400_000) return "אתמול";
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mo = String(date.getMonth() + 1).padStart(2, "0");
-    return `${dd}.${mo}`;
-  }
-  const diffMs = date.getTime() - now.getTime();
-  const minutes = Math.round(diffMs / 60_000);
-  if (Math.abs(minutes) < 1) return "עכשיו";
-  if (Math.abs(minutes) < 60) return TIME_FMT.format(minutes, "minute");
-  const hours = Math.round(diffMs / 3_600_000);
-  if (Math.abs(hours) < 24) return TIME_FMT.format(hours, "hour");
-  return HOUR_FMT.format(date);
-}
 
 // Phase 314 — richer per-row label: "היום · HH:mm" / "אתמול · HH:mm"
 // / "DD.MM · HH:mm" so the user reads when each activity actually
@@ -308,25 +289,12 @@ export function RecentActivity() {
       });
     }
 
-    const now = new Date();
-    const todayDay = now.getDate();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    for (const inc of incomes) {
-      if (!inc.active) continue;
-      if (inc.dayOfMonth > todayDay) continue;
-      const date = new Date(monthStart);
-      date.setDate(inc.dayOfMonth);
-      out.push({
-        id: `income:${inc.id}:${monthKey}`,
-        direction: "in",
-        amount: inc.amount,
-        ts: date,
-        // Income projections come from `dayOfMonth` only — no time.
-        hasRealTime: false,
-        title: inc.label,
-        paySource: "income",
-      });
-    }
+    // Phase 385 — income projections (salary cards) intentionally
+    // excluded. Recent Activity now answers "what did I spend this
+    // month?" — salaries already live in the Time tab and the
+    // Insights tab. `incomes` is referenced here only to satisfy
+    // the dependency array; no items derived.
+    void incomes;
 
     return out.sort((a, b) => b.ts.getTime() - a.ts.getTime());
   }, [hydrated, entries, incomes]);
@@ -339,15 +307,36 @@ export function RecentActivity() {
     const todayKey = startOfDay(now);
     let monthCount = 0;
     let todayCount = 0;
-    let lastIncome: ActivityItem | null = null;
+    let monthSpend = 0;
     let lastExpense: ActivityItem | null = null;
+    let walletCount = 0;
+    let manualCount = 0;
+    let creditCount = 0;
+    let cashCount = 0;
     for (const it of items) {
       monthCount++;
       if (startOfDay(it.ts) === todayKey) todayCount++;
-      if (it.direction === "in" && !lastIncome) lastIncome = it;
-      if (it.direction === "out" && !lastExpense) lastExpense = it;
+      if (it.direction === "out" && !it.isWithdrawal) {
+        monthSpend += it.amount;
+      }
+      if (it.direction === "out" && !lastExpense && !it.isWithdrawal) {
+        lastExpense = it;
+      }
+      if (it.source === "wallet") walletCount++;
+      else if (it.source === "manual") manualCount++;
+      if (it.paySource === "credit") creditCount++;
+      else if (it.paySource === "cash") cashCount++;
     }
-    return { monthCount, todayCount, lastIncome, lastExpense };
+    return {
+      monthCount,
+      todayCount,
+      monthSpend,
+      lastExpense,
+      walletCount,
+      manualCount,
+      creditCount,
+      cashCount,
+    };
   }, [items]);
 
   // Filter logic used by the bottom sheet.
@@ -400,26 +389,34 @@ export function RecentActivity() {
 
   return (
     <>
-      <section className="glass-card flex flex-col gap-2.5 rounded-3xl p-4">
-        <button
-          type="button"
-          onClick={() => {
-            tap();
-            setSheetOpen(true);
-          }}
-          aria-label="פתח פעילות מלאה"
-          className="flex w-full items-center justify-between gap-3 rounded-2xl text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
-        >
-          <div className="flex flex-col leading-tight">
-            <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              פעילות אחרונה
-            </span>
-            <span className="text-section text-foreground">
-              {summary.monthCount} פעולות החודש · {summary.todayCount} היום
-            </span>
-          </div>
-          <ChevronLeft className="size-4 text-muted-foreground/70" aria-hidden />
-        </button>
+      <motion.section
+        key={summary.monthCount}
+        layout
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0, scale: [1, 1.012, 1] }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="glass-card flex flex-col gap-3 rounded-3xl p-4"
+        dir="rtl"
+        aria-label="פעילות החודש"
+      >
+        {/* Header + KPI row */}
+        <header className="flex items-center justify-between gap-3">
+          <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            פעילות החודש
+          </span>
+        </header>
+        <div className="grid grid-cols-2 gap-2">
+          <Kpi
+            label="סה״כ פעולות"
+            value={summary.monthCount.toString()}
+            tone="#22D3EE"
+          />
+          <Kpi
+            label="סך הוצאות החודש"
+            value={ILS.format(Math.round(summary.monthSpend))}
+            tone="#F87171"
+          />
+        </div>
 
         {items.length === 0 ? (
           <div className="flex items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-[12px] text-muted-foreground">
@@ -427,37 +424,58 @@ export function RecentActivity() {
             עוד אין פעילות החודש. חיוב חדש שיתקבל יופיע כאן בזמן אמת.
           </div>
         ) : (
-          // Phase 314 — compact "what just happened" preview. Two
-          // tiles (income + expense) plus a single CTA. Full list
-          // lives inside the bottom sheet.
-          <div className="grid grid-cols-2 gap-2">
-            <SummaryTile
-              direction="in"
-              title="הכנסה אחרונה"
-              item={summary.lastIncome}
-              now={now}
-            />
-            <SummaryTile
-              direction="out"
-              title="הוצאה אחרונה"
-              item={summary.lastExpense}
-              now={now}
-            />
-            <button
+          <>
+            {/* Hero — latest expense */}
+            {summary.lastExpense ? (
+              <LatestExpenseCard item={summary.lastExpense} now={now} />
+            ) : null}
+
+            {/* Source chips */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <SourceChip
+                icon={<Wallet className="size-3" />}
+                label="Wallet"
+                count={summary.walletCount}
+                tone="#75F5FF"
+              />
+              <SourceChip
+                icon={<Sparkles className="size-3" />}
+                label="ידני"
+                count={summary.manualCount}
+                tone="#D4AF37"
+              />
+              <SourceChip
+                icon={<Banknote className="size-3" />}
+                label="אשראי"
+                count={summary.creditCount}
+                tone="#A78BFA"
+              />
+              <SourceChip
+                icon={<Smartphone className="size-3" />}
+                label="מזומן"
+                count={summary.cashCount}
+                tone="#34D399"
+              />
+            </div>
+
+            {/* Bottom CTA */}
+            <motion.button
               type="button"
               onClick={() => {
                 tap();
                 setSheetOpen(true);
               }}
-              aria-label="פתח פעילות מלאה"
-              className="col-span-2 inline-flex items-center justify-between gap-2 rounded-2xl border border-[color:var(--neon)]/30 bg-[color:var(--neon)]/10 px-3 py-2 text-[12px] font-medium text-[color:var(--neon)] transition-colors hover:border-[color:var(--neon)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              aria-label={`פתח פירוט: ${summary.monthCount} פעולות החודש`}
+              className="inline-flex w-full items-center justify-between gap-2 rounded-2xl border border-[color:var(--neon)]/30 bg-[color:var(--neon)]/10 px-3 py-2.5 text-[13px] font-medium text-[color:var(--neon)] transition-colors hover:border-[color:var(--neon)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
             >
-              פתח פעילות מלאה
+              <span>{summary.monthCount} פעולות החודש</span>
               <ChevronLeft className="size-3.5" aria-hidden />
-            </button>
-          </div>
+            </motion.button>
+          </>
         )}
-      </section>
+      </motion.section>
 
       <BottomSheet
         open={sheetOpen}
@@ -665,58 +683,128 @@ function ActivityRow({
   );
 }
 
-function SummaryTile({
-  direction,
-  title,
-  item,
-  now,
+function Kpi({
+  label,
+  value,
+  tone,
 }: {
-  direction: Direction;
-  title: string;
-  item: ActivityItem | null;
-  now: Date;
+  label: string;
+  value: string;
+  tone: string;
 }) {
-  const accent = direction === "in" ? "#34D399" : "#F87171";
-  if (!item) {
-    return (
-      <div
-        className="flex flex-col gap-0.5 rounded-2xl border border-white/8 bg-black/25 p-2.5"
-        aria-label={`${title}: אין עדיין`}
-      >
-        <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-          {title}
-        </span>
-        <span className="text-[11px] text-muted-foreground/70">
-          אין עדיין החודש
-        </span>
-      </div>
-    );
-  }
-  const sign = direction === "in" ? "+" : "−";
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-2xl border px-2.5 py-2"
-      style={{ borderColor: `${accent}33`, background: `${accent}10` }}
-      aria-label={`${title}: ${item.title}`}
+      className="flex flex-col gap-0.5 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2"
+      style={{ boxShadow: `inset 0 0 22px -10px ${tone}55` }}
     >
-      <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-        {title}
+      <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+        {label}
       </span>
       <span
         data-mono="true"
         dir="ltr"
-        className="text-[13px] font-semibold"
-        style={{ color: accent }}
+        className="text-[18px] font-light leading-tight"
+        style={{ color: "#F6F6F6", textShadow: `0 0 18px ${tone}33` }}
       >
-        {sign}
-        {ILS.format(item.amount)}
-      </span>
-      <span className="truncate text-[10px] text-foreground/85">
-        {item.title}
-      </span>
-      <span className="text-[9.5px] text-muted-foreground/85">
-        {timeAgo(item.ts, item.hasRealTime, now)}
+        {value}
       </span>
     </div>
+  );
+}
+
+function LatestExpenseCard({
+  item,
+  now,
+}: {
+  item: ActivityItem;
+  now: Date;
+}) {
+  const meta = item.category ? getCategory(item.category) : null;
+  return (
+    <motion.div
+      key={item.id}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32 }}
+      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+      style={{
+        boxShadow:
+          "0 1px 0 rgba(255,255,255,0.04) inset, 0 0 28px -16px rgba(247,113,113,0.45)",
+      }}
+      aria-label={`הוצאה אחרונה: ${item.title}`}
+    >
+      <span
+        aria-hidden
+        className="flex size-12 items-center justify-center rounded-2xl"
+        style={{
+          background: `${meta?.accent ?? "#F87171"}22`,
+          color: meta?.accent ?? "#F87171",
+        }}
+      >
+        {meta ? (
+          <meta.icon className="size-6" strokeWidth={1.6} />
+        ) : (
+          <ArrowUpRight className="size-6" />
+        )}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+          הוצאה אחרונה
+        </span>
+        <span className="line-clamp-1 text-[15px] font-medium text-foreground">
+          {item.title}
+        </span>
+        <span className="text-[10.5px] text-muted-foreground/85">
+          {whenLabel(item.ts, item.hasRealTime, now)}
+        </span>
+      </div>
+      <span
+        data-mono="true"
+        dir="ltr"
+        className="shrink-0 text-[20px] font-light"
+        style={{
+          color: "#F87171",
+          textShadow: "0 0 22px rgba(248,113,113,0.35)",
+        }}
+      >
+        −{ILS.format(item.amount)}
+      </span>
+    </motion.div>
+  );
+}
+
+function SourceChip({
+  icon,
+  label,
+  count,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  tone: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
+      style={{
+        color: tone,
+        borderColor: `${tone}44`,
+        background: `${tone}12`,
+      }}
+    >
+      <span aria-hidden className="inline-flex items-center" style={{ color: tone }}>
+        {icon}
+      </span>
+      {label}
+      <span
+        data-mono="true"
+        dir="ltr"
+        className="text-[10.5px] opacity-80"
+      >
+        {count}
+      </span>
+    </span>
   );
 }
