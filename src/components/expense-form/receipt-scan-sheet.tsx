@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   Loader2,
-  Plus,
   Scan,
   Trash2,
 } from "lucide-react";
@@ -90,7 +89,8 @@ function ScanBody({
   const [result, setResult] = useState<ReceiptScanResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [lineIdx, setLineIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const cameraRef = useRef<HTMLInputElement | null>(null);
+  const galleryRef = useRef<HTMLInputElement | null>(null);
   const photosRef = useRef<PreviewItem[]>([]);
   useEffect(() => {
     photosRef.current = photos;
@@ -157,9 +157,13 @@ function ScanBody({
     onOpenChange(false);
   };
 
-  const handleSnap = () => {
+  const handleCamera = () => {
     hapticTap();
-    inputRef.current?.click();
+    cameraRef.current?.click();
+  };
+  const handleGallery = () => {
+    hapticTap();
+    galleryRef.current?.click();
   };
 
   return (
@@ -183,9 +187,11 @@ function ScanBody({
       {step === "capture" || step === "error" ? (
         <CaptureStep
           photos={photos}
-          onAdd={handleSnap}
+          onCamera={handleCamera}
+          onGallery={handleGallery}
           onRemove={removeAt}
-          inputRef={inputRef}
+          cameraRef={cameraRef}
+          galleryRef={galleryRef}
           onFiles={handleFiles}
           onSubmit={startScan}
           errorMsg={step === "error" ? errorMsg : ""}
@@ -203,17 +209,21 @@ function ScanBody({
 
 function CaptureStep({
   photos,
-  onAdd,
+  onCamera,
+  onGallery,
   onRemove,
-  inputRef,
+  cameraRef,
+  galleryRef,
   onFiles,
   onSubmit,
   errorMsg,
 }: {
   photos: PreviewItem[];
-  onAdd: () => void;
+  onCamera: () => void;
+  onGallery: () => void;
   onRemove: (idx: number) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  cameraRef: React.RefObject<HTMLInputElement | null>;
+  galleryRef: React.RefObject<HTMLInputElement | null>;
   onFiles: (files: FileList | null) => void;
   onSubmit: () => void;
   errorMsg: string;
@@ -221,34 +231,57 @@ function CaptureStep({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[12.5px] text-muted-foreground">
-        צלם את הקבלה. אם היא ארוכה — אפשר לצלם מספר תמונות עד שרושמים
-        נדלק וזה מבצע את הבדיקה ומילוי הפרטים ומגיע לי לאישור ובדיקה
-        אם צריך לערוך לפני שמירה.
+        צלם את הקבלה או העלה תמונה קיימת מהגלריה. אפשר לשלב כמה תמונות
+        מהמצלמה ומהגלריה, ולסיים בכפתור &ldquo;סיום וסריקה&rdquo;.
       </p>
 
       {photos.length === 0 ? (
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-white/20 bg-white/[0.02] px-4 py-10 text-center transition-colors hover:border-white/40"
-          aria-label="פתח מצלמה לצילום קבלה"
-        >
-          <span
-            className="flex size-12 items-center justify-center rounded-2xl"
-            style={{
-              background: "rgba(212,175,55,0.14)",
-              color: "#D4AF37",
-            }}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onCamera}
+            className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-white/20 bg-white/[0.02] px-3 py-8 text-center transition-colors hover:border-gold/50"
+            aria-label="פתח מצלמה לצילום קבלה"
           >
-            <Camera className="size-6" />
-          </span>
-          <span className="text-[15px] font-medium text-foreground">
-            פתח מצלמה
-          </span>
-          <span className="text-[11.5px] text-muted-foreground">
-            אפשר לצלם מספר תמונות ולשלב לקבלה אחת
-          </span>
-        </button>
+            <span
+              className="flex size-12 items-center justify-center rounded-2xl"
+              style={{
+                background: "rgba(212,175,55,0.14)",
+                color: "#D4AF37",
+              }}
+            >
+              <Camera className="size-6" />
+            </span>
+            <span className="text-[14px] font-medium text-foreground">
+              צלם קבלה
+            </span>
+            <span className="text-[10.5px] text-muted-foreground">
+              מצלמה אחורית
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={onGallery}
+            className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-white/20 bg-white/[0.02] px-3 py-8 text-center transition-colors hover:border-white/40"
+            aria-label="העלה תמונת קבלה מהגלריה"
+          >
+            <span
+              className="flex size-12 items-center justify-center rounded-2xl"
+              style={{
+                background: "rgba(117,245,255,0.12)",
+                color: "#75F5FF",
+              }}
+            >
+              <ImageIcon className="size-6" />
+            </span>
+            <span className="text-[14px] font-medium text-foreground">
+              העלה תמונה
+            </span>
+            <span className="text-[10.5px] text-muted-foreground">
+              מהגלריה / קבצים
+            </span>
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((p, idx) => (
@@ -276,23 +309,40 @@ function CaptureStep({
             </div>
           ))}
           {photos.length < MAX_PHOTOS ? (
-            <button
-              type="button"
-              onClick={onAdd}
-              className="flex aspect-[3/4] items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-foreground/85"
-              aria-label="הוסף צילום"
-            >
-              <span className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground">
-                <Plus className="size-5" aria-hidden />
-                הוסף צילום
-              </span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={onCamera}
+                className="flex aspect-[3/4] items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02]"
+                aria-label="צלם תמונה נוספת"
+                style={{ color: "#D4AF37" }}
+              >
+                <span className="flex flex-col items-center gap-1 text-[10.5px]">
+                  <Camera className="size-5" aria-hidden />
+                  צלם
+                </span>
+              </button>
+              {photos.length < MAX_PHOTOS - 1 ? (
+                <button
+                  type="button"
+                  onClick={onGallery}
+                  className="flex aspect-[3/4] items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02]"
+                  aria-label="העלה תמונה מהגלריה"
+                  style={{ color: "#75F5FF" }}
+                >
+                  <span className="flex flex-col items-center gap-1 text-[10.5px]">
+                    <ImageIcon className="size-5" aria-hidden />
+                    העלה
+                  </span>
+                </button>
+              ) : null}
+            </>
           ) : null}
         </div>
       )}
 
       <input
-        ref={inputRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -300,8 +350,18 @@ function CaptureStep({
         className="hidden"
         onChange={(e) => {
           onFiles(e.target.files);
-          // Allow re-selecting the same file.
-          if (inputRef.current) inputRef.current.value = "";
+          if (cameraRef.current) cameraRef.current.value = "";
+        }}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          onFiles(e.target.files);
+          if (galleryRef.current) galleryRef.current.value = "";
         }}
       />
 
@@ -318,11 +378,19 @@ function CaptureStep({
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={onAdd}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[13px] text-foreground/90 transition-colors hover:border-white/20"
+          onClick={onCamera}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[12.5px] text-foreground/90 transition-colors hover:border-gold/40"
+        >
+          <Camera className="size-3.5" aria-hidden />
+          צלם
+        </button>
+        <button
+          type="button"
+          onClick={onGallery}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[12.5px] text-foreground/90 transition-colors hover:border-white/20"
         >
           <ImageIcon className="size-3.5" aria-hidden />
-          הוסף צילום
+          העלה
         </button>
         <button
           type="button"
