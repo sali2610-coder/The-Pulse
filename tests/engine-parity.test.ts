@@ -158,14 +158,14 @@ describe("Phase 389 — every credit source agrees on the monthly total", () => 
       (s, b) => s + b.monthlyTotal,
       0,
     );
-    // Pending entries (needsConfirmation || bankPending) are excluded
-    // from the liquidity curve by design — the bank hasn't seen
-    // them yet, so a forecast must not deduct them as if they
-    // were committed. Subtract that bucket from the exposure for
-    // an apples-to-apples comparison.
-    const exposureSansPending =
-      exposure.totalExpectedCharge - exposure.pendingTransactions;
-    expect(curveCardTotal).toBeCloseTo(exposureSansPending, 2);
+    // Phase 402 — pending entries (needsConfirmation || bankPending)
+    // ARE deducted by the curve now. The Wallet push fires because
+    // Apple Pay genuinely charged the card; the bank will settle on
+    // the card's paymentDay regardless of user-side review. The
+    // curve must anticipate the debit so the user sees the real
+    // future balance — and so 2-of-month / next-paymentDay markers
+    // surface every credit charge the cards screen counts.
+    expect(curveCardTotal).toBeCloseTo(exposure.totalExpectedCharge, 2);
   });
 
   it("no credit shekel leaks into bank_debit / loan / cash lanes", () => {

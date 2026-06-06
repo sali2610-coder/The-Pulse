@@ -114,7 +114,10 @@ describe("Phase 390 — liquidityCurve deducts manual credit entries on the card
     expect(lowest).toBeLessThanOrEqual(10_000 - 1_500 + 1);
   });
 
-  it("pending entry is NOT deducted from the curve (intentional)", () => {
+  it("Phase 402 — pending wallet entry IS deducted from the curve (real bank reality)", () => {
+    // Pre-Phase-402: needsConfirmation suppressed the curve event.
+    // Post-Phase-402: bank settles Wallet partials on paymentDay
+    // regardless of user review; the curve must anticipate.
     const accounts = [bank({ anchorBalance: 10_000 }), card()];
     const entries: ExpenseEntry[] = [
       manualCreditEntry({
@@ -134,7 +137,7 @@ describe("Phase 390 — liquidityCurve deducts manual credit entries on the card
       windowDays: 45,
     });
     const lowest = curve.lowestPoint.balance;
-    expect(lowest).toBeGreaterThanOrEqual(10_000 - 1);
+    expect(lowest).toBeLessThanOrEqual(10_000 - 800 + 1);
   });
 
   it("wallet + sms + imported credit entries all deduct on the curve", () => {

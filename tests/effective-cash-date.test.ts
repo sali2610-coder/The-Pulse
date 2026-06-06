@@ -110,14 +110,14 @@ describe("effectiveCashImpacts — credit card path", () => {
     expect(impacts[0].effectiveCashDate.getDate()).toBe(10);
   });
 
-  it("skips refunded / unconfirmed-wallet / excluded entries entirely", () => {
-    // Phase 399 — bankPending is NO LONGER an exclude (the bank will
-    // finalize and settle on the card's paymentDay; the curve must
-    // anticipate it). Wallet partials still skip while
-    // needsConfirmation && !confirmedAt; once confirmedAt lands the
-    // entry rejoins the curve.
+  it("skips refunded / excluded entries entirely", () => {
+    // Phase 402 — bankPending AND needsConfirmation entries both
+    // flow through. The bank will settle Apple-Pay Wallet partials
+    // and "תלוי ועומד" SMS charges on the card's paymentDay
+    // regardless of user-side review state. Only refunds + opt-out
+    // (excludeFromBudget) are hard excludes.
     const c = card({ id: "cal", paymentDay: 10, cardLast4: "1234" });
-    for (const flag of ["isRefund", "needsConfirmation", "excludeFromBudget"] as const) {
+    for (const flag of ["isRefund", "excludeFromBudget"] as const) {
       const e = entry({
         amount: 100,
         iso: "2026-05-02T10:00:00Z",
@@ -149,6 +149,20 @@ describe("effectiveCashImpacts — credit card path", () => {
       cardLast4: "1234",
       needsConfirmation: true,
       confirmedAt: "2026-05-03T10:00:00Z",
+    });
+    const impacts = effectiveCashImpacts({ entry: e, accounts: [c] });
+    expect(impacts).toHaveLength(1);
+    expect(impacts[0].amount).toBe(100);
+  });
+
+  it("Phase 402 — unconfirmed Wallet partial ALSO flows through (bank settles regardless)", () => {
+    const c = card({ id: "cal", paymentDay: 10, cardLast4: "1234" });
+    const e = entry({
+      amount: 100,
+      iso: "2026-05-02T10:00:00Z",
+      cardLast4: "1234",
+      needsConfirmation: true,
+      // confirmedAt deliberately undefined.
     });
     const impacts = effectiveCashImpacts({ entry: e, accounts: [c] });
     expect(impacts).toHaveLength(1);

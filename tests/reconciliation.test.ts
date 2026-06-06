@@ -39,6 +39,7 @@ import {
   getTimelineProjection,
 } from "@/lib/financial-engine";
 import { getMonthlyObligationBreakdown } from "@/lib/monthly-obligation-breakdown";
+import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
 import type {
   Account,
   ExpenseEntry,
@@ -498,6 +499,54 @@ describe("Phase 397 — manual cash zero-drift", () => {
       (r) => r.id === "entry:e-cash-supermarket",
     )?.amount;
     expect(cashRowAmt).toBe(10);
+  });
+
+  it("Phase 402 — Time-curve credit lane === getCreditExposure total", () => {
+    // 2-of-month / next-paymentDay marker on the Time tab MUST
+    // equal the canonical credit exposure surfaced by Cards screen +
+    // cockpit. Both come from the same engine pipeline; Phase 402
+    // pins parity so any future filter divergence fails CI.
+    const s = seedState();
+    // Add a Wallet partial (needsConfirmation=true, no confirmedAt)
+    // to reproduce the user-reported gap exactly. Pre-Phase-402 the
+    // cards screen counted it (pendingTransactions bucket) but the
+    // curve dropped it.
+    s.entries.push({
+      id: "e-wallet-pending",
+      amount: 250,
+      category: "food",
+      source: "wallet",
+      paymentMethod: "credit",
+      installments: 1,
+      chargeDate: MONTH_DATE,
+      createdAt: MONTH_DATE,
+      accountId: "card-htz",
+      needsConfirmation: true,
+      merchant: "Wolt pending",
+    });
+    const c = buildEngineCtx({ ...s, now: NOW, monthKey: MONTH_KEY });
+
+    const exposure = getCreditExposure(c);
+    const buckets = buildCashFlowBuckets({
+      accounts: c.accounts,
+      loans: c.loans,
+      rules: c.rules,
+      statuses: c.statuses,
+      entries: c.entries,
+      now: c.now,
+      windowDays: 35,
+    });
+    const curveCreditTotal = buckets.buckets
+      .filter((b) => b.source === "card")
+      .reduce((sum, b) => sum + b.monthlyTotal, 0);
+
+    // Curve credit must include every entry the exposure does. Δ
+    // can only come from buckets aggregating events past the 35-day
+    // window — for entries dated this month with paymentDay in the
+    // next 35 days, parity is exact.
+    expect(Math.abs(curveCreditTotal - exposure.total)).toBeLessThanOrEqual(
+      0.01,
+    );
   });
 
   it("Phase 400 — matched entry follows rule.linkedCardId override", () => {
