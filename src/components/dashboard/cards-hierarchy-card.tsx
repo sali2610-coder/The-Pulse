@@ -23,12 +23,7 @@ import {
 import {
   buildEngineCtx,
   getCreditExposure,
-  getCreditExposureByCard,
 } from "@/lib/financial-engine";
-import {
-  type CardStatement,
-  type CardStatementRow,
-} from "@/lib/credit-card-statement";
 import { currentMonthKey } from "@/lib/dates";
 import { getCategory } from "@/lib/categories";
 import { tap } from "@/lib/haptics";
@@ -109,12 +104,6 @@ export function CardsHierarchyCard() {
     return getCreditExposure(ctx);
   }, [ctx]);
 
-  // Per-card statement rows — same data, grouped by card.
-  const statement = useMemo(() => {
-    if (!ctx) return null;
-    return getCreditExposureByCard(ctx);
-  }, [ctx]);
-
   // Per-(card × month) folder drilldown — buildCardMonthFolders is a
   // presentation rebucketing wrapper that now consumes the engine
   // exclusively (buildCardCategoryBreakdown rewritten in Phase 396).
@@ -136,7 +125,7 @@ export function CardsHierarchyCard() {
   }, [report]);
 
   if (!hydrated || !ctx || !report) return null;
-  if (folders.length === 0 && (!statement || statement.cards.length === 0)) {
+  if (folders.length === 0) {
     return (
       <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
         <SectionHeader icon={<CreditCard />} title="כרטיסי אשראי לפי חודש" />
@@ -151,6 +140,12 @@ export function CardsHierarchyCard() {
 
   return (
     <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
+      {/* Phase 404 — single section: the per-(card × billing month)
+         folder list. The previous "top per-card statement list" was
+         removed; it duplicated the same engine data shown below and
+         crowded the screen. The total in the section header still
+         comes from getCreditExposure so the cockpit + cards screen
+         continue to match. */}
       <SectionHeader
         icon={<CreditCard />}
         title="כרטיסי אשראי לפי חודש"
@@ -161,48 +156,20 @@ export function CardsHierarchyCard() {
         }
       />
       <p className="text-caption text-muted-foreground">
-        כל כרטיס מציג את כל העסקאות המשויכות אליו לחודש הנוכחי. תקיש
-        על שורה כדי לראות פירוט.
+        כל כרטיס מציג את חיובי החודש הנוכחי + חודשי החיוב הבאים. תקיש
+        על תיקייה לפתיחה, ועל סוג חיוב לסינון.
       </p>
 
-      {/* Phase 393 — canonical per-card statement. Every credit
-         transaction with an accountId lands inside its actual card
-         row. Only orphans land under "ללא כרטיס משויך" — exactly
-         what the user asked for. */}
-      {statement ? (
-        <ul className="flex flex-col gap-2">
-          {statement.cards.map((s) => (
-            <StatementCardRow key={s.cardId} statement={s} rules={rules} />
-          ))}
-          {statement.unassigned.total > 0 ? (
-            <UnassignedRow
-              total={statement.unassigned.total}
-              rows={statement.unassigned.transactions}
-            />
-          ) : null}
-        </ul>
-      ) : null}
-
-      {/* Future / next-month folders kept as a quiet drilldown
-         below so users who want forward-billing detail can still
-         find it. */}
-      {folders.length > 0 ? (
-        <details className="mt-2 rounded-2xl border border-white/8 bg-white/[0.02]">
-          <summary className="cursor-pointer px-3 py-2 text-[12px] text-muted-foreground">
-            פירוט עתידי (לפי חודש חיוב)
-          </summary>
-          <ul className="flex flex-col gap-2 px-3 pb-3">
-            {folders.map((folder) => (
-              <FolderRow
-                key={folder.id}
-                folder={folder}
-                onEditEntry={(id) => setEditingId(id)}
-                onDeleteEntry={(id) => deleteWithUndo(id)}
-              />
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      <ul className="flex flex-col gap-2">
+        {folders.map((folder) => (
+          <FolderRow
+            key={folder.id}
+            folder={folder}
+            onEditEntry={(id) => setEditingId(id)}
+            onDeleteEntry={(id) => deleteWithUndo(id)}
+          />
+        ))}
+      </ul>
 
       <ExpenseEditFullScreen
         entryId={editingId}
@@ -640,307 +607,3 @@ function CategoryRow({
   );
 }
 
-// Phase 401 — classify a statement row into the same 3 kinds the
-// future-folder lens uses (קבועים / תשלומים / חד-פעמיים). Pure UI
-// classification — no engine math is touched.
-type StatementKind = "recurring" | "installments" | "oneTime";
-
-function classifyStatementRow(
-  row: CardStatementRow,
-  rules: import("@/types/finance").RecurringRule[],
-): StatementKind {
-  if (row.id.startsWith("rule:")) {
-    const ruleId = row.id.slice("rule:".length);
-    const r = rules.find((x) => x.id === ruleId);
-    if (r && r.installmentTotal && r.installmentTotal > 1) return "installments";
-    return "recurring";
-  }
-  if (row.bucket === "existingInstallments") return "installments";
-  return "oneTime";
-}
-
-function StatementCardRow({
-  statement,
-  rules,
-}: {
-  statement: CardStatement;
-  rules: import("@/types/finance").RecurringRule[];
-}) {
-  const [open, setOpen] = useState(false);
-  // Phase 401 — per-card kind filter, defaults all-on. Resets when
-  // the row collapses (the AnimatePresence below remounts on next
-  // open).
-  const [filters, setFilters] = useState<KindFilters>(DEFAULT_KIND_FILTERS);
-
-  // Pre-classify once per row; tally totals + counts per kind for
-  // the 3 tiles. No new engine call.
-  const tally = useMemo(() => {
-    const counts = { recurring: 0, installments: 0, oneTime: 0 };
-    const totals = { recurring: 0, installments: 0, oneTime: 0 };
-    const classified: Array<{ row: CardStatementRow; kind: StatementKind }> = [];
-    for (const tx of statement.transactions) {
-      const kind = classifyStatementRow(tx, rules);
-      counts[kind] += 1;
-      totals[kind] += tx.amount;
-      classified.push({ row: tx, kind });
-    }
-    return { counts, totals, classified };
-  }, [statement.transactions, rules]);
-
-  const filteredSubtotal =
-    (filters.recurring ? tally.totals.recurring : 0) +
-    (filters.installments ? tally.totals.installments : 0) +
-    (filters.oneTime ? tally.totals.oneTime : 0);
-  const allOff =
-    !filters.recurring && !filters.installments && !filters.oneTime;
-  const filteredRows = tally.classified.filter(({ kind }) => filters[kind]);
-
-  return (
-    <li
-      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
-      dir="rtl"
-    >
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((v) => !v);
-          tap();
-        }}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right transition-colors hover:bg-white/3"
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-[#75F5FF]"
-            style={{ background: "rgba(117,245,255,0.14)" }}
-            aria-hidden
-          >
-            <CreditCard className="size-4" />
-          </span>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="text-section text-foreground">
-              {statement.cardLabel}
-              {statement.cardLast4 ? (
-                <span className="text-foreground/70"> · ····{statement.cardLast4}</span>
-              ) : null}
-            </span>
-            <span className="text-caption text-muted-foreground">
-              {statement.transactions.length} עסקאות החודש
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-section text-foreground"
-          >
-            {ILS.format(Math.round(statement.total))}
-          </span>
-          <motion.span
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.18 }}
-            className="text-muted-foreground"
-          >
-            <ChevronDown className="size-5" />
-          </motion.span>
-        </div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <div className="flex flex-col gap-3 border-t border-white/8 p-3" dir="rtl">
-              {/* Phase 401 — 3 kind filter tiles, same dynamic style
-                 as the future-folder lens. Tap to toggle inclusion;
-                 the list + subtotal below react instantly. */}
-              <div className="grid grid-cols-3 gap-2">
-                <KindFilterTile
-                  label="קבועים"
-                  value={tally.totals.recurring}
-                  count={tally.counts.recurring}
-                  tone="#A78BFA"
-                  active={filters.recurring}
-                  onToggle={() => {
-                    tap();
-                    setFilters((f) => ({ ...f, recurring: !f.recurring }));
-                  }}
-                />
-                <KindFilterTile
-                  label="תשלומים"
-                  value={tally.totals.installments}
-                  count={tally.counts.installments}
-                  tone="#F59E0B"
-                  active={filters.installments}
-                  onToggle={() => {
-                    tap();
-                    setFilters((f) => ({
-                      ...f,
-                      installments: !f.installments,
-                    }));
-                  }}
-                />
-                <KindFilterTile
-                  label="חד-פעמיים"
-                  value={tally.totals.oneTime}
-                  count={tally.counts.oneTime}
-                  tone="#60A5FA"
-                  active={filters.oneTime}
-                  onToggle={() => {
-                    tap();
-                    setFilters((f) => ({ ...f, oneTime: !f.oneTime }));
-                  }}
-                />
-              </div>
-
-              {/* Filtered subtotal — mirrors the future-folder lens
-                 so the user sees Σ-of-checked-tiles == the list
-                 below. */}
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2">
-                <span className="text-[11px] text-muted-foreground">
-                  סך החיובים בסינון
-                </span>
-                <span
-                  data-mono="true"
-                  dir="ltr"
-                  className="text-[12.5px] font-medium text-foreground"
-                  style={{ fontVariantNumeric: "tabular-nums" }}
-                >
-                  {ILS.format(Math.round(filteredSubtotal))}
-                </span>
-              </div>
-
-              {allOff ? (
-                <p className="rounded-2xl border border-white/8 bg-black/25 p-4 text-center text-caption text-muted-foreground">
-                  בחר לפחות סוג חיוב אחד להצגה
-                </p>
-              ) : filteredRows.length === 0 ? (
-                <p className="rounded-2xl border border-white/8 bg-black/25 p-4 text-center text-caption text-muted-foreground">
-                  אין חיובים מהסוג הזה החודש בכרטיס.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {filteredRows.map(({ row }) => (
-                    <TransactionRow key={row.id} row={row} />
-                  ))}
-                </ul>
-              )}
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </li>
-  );
-}
-
-function UnassignedRow({
-  total,
-  rows,
-}: {
-  total: number;
-  rows: CardStatementRow[];
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <li
-      className="overflow-hidden rounded-2xl border border-[#FBBF24]/30 bg-[#FBBF24]/[0.06]"
-      dir="rtl"
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right"
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-xl text-[#FBBF24]"
-            style={{ background: "rgba(251,191,36,0.16)" }}
-            aria-hidden
-          >
-            <CreditCard className="size-4" />
-          </span>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="text-section text-foreground">
-              עסקאות אשראי ללא כרטיס משויך
-            </span>
-            <span className="text-caption text-muted-foreground">
-              {rows.length} עסקאות · ניתן לערוך כל עסקה ולשייך לכרטיס
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-section text-foreground"
-          >
-            {ILS.format(Math.round(total))}
-          </span>
-          <motion.span
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.18 }}
-            className="text-muted-foreground"
-          >
-            <ChevronDown className="size-5" />
-          </motion.span>
-        </div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="overflow-hidden"
-          >
-            <ul className="flex flex-col gap-1 border-t border-white/8 p-3" dir="rtl">
-              {rows.map((t) => (
-                <TransactionRow key={t.id} row={t} />
-              ))}
-            </ul>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </li>
-  );
-}
-
-function TransactionRow({ row }: { row: CardStatementRow }) {
-  return (
-    <li className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2 text-[12px]">
-      <div className="flex min-w-0 flex-col">
-        <span className="line-clamp-1 text-foreground/90">{row.label}</span>
-        <span className="text-[10.5px] text-muted-foreground/80">
-          {row.bucket === "futureCardCharges"
-            ? "חיוב קבוע"
-            : row.bucket === "existingInstallments"
-              ? "תשלום פתוח"
-              : row.bucket === "walletTransactions"
-                ? "Wallet"
-                : row.bucket === "importedTransactions"
-                  ? "ייבוא / SMS"
-                  : row.bucket === "manualCardTransactions"
-                    ? "תיעוד ידני"
-                    : "ממתין"}
-        </span>
-      </div>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="shrink-0 text-foreground"
-        style={{ fontVariantNumeric: "tabular-nums" }}
-      >
-        {ILS.format(Math.round(row.amount))}
-      </span>
-    </li>
-  );
-}
