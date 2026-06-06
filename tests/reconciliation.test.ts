@@ -34,6 +34,7 @@ import {
   getManualTransactions,
   getMonthlyExpenses,
   getMonthlyIncome,
+  getOrphanedEntries,
   getRecurringCommitmentsByCategory,
   getTimelineProjection,
 } from "@/lib/financial-engine";
@@ -497,6 +498,16 @@ describe("Phase 397 — manual cash zero-drift", () => {
       (r) => r.id === "entry:e-cash-supermarket",
     )?.amount;
     expect(cashRowAmt).toBe(10);
+  });
+
+  it("getOrphanedEntries returns empty when manual cash entry exists (Phase 398)", () => {
+    // Regression: before Phase 397/398 a manual cash entry produced
+    // a non-empty orphan list because no cockpit lane caught it. Now
+    // the cash lane includes manual cash purchases, so orphans empty.
+    const c = ctxWithManualCash();
+    const orphans = getOrphanedEntries(c);
+    const cashOrphan = orphans.find((o) => o.entryId === "e-cash-supermarket");
+    expect(cashOrphan).toBeUndefined();
   });
 
   it("Donut total === Σ manual transactions when only manual entries present", () => {

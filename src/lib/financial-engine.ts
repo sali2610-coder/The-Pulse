@@ -644,6 +644,77 @@ export function getActivityFeed(ctx: EngineCtx): ActivityFeed {
   };
 }
 
+// ── 7d. getOrphanedEntries ─────────────────────────────────────────
+//
+// Phase 398 — completeness sentinel. Returns every entry that
+// SHOULD be counted somewhere (passes the canonical isBudgetExpense
+// filter via getMonthlyExpenses) but is missing from BOTH the
+// credit-card exposure rows AND the cockpit obligation breakdown
+// rows. An entry that surfaces here is invisible to the cockpit and
+// the cards screen even though it shows on the donut + activity
+// feed — the exact failure mode the user reported with the cash
+// σόπer entry.
+//
+// Use: cockpit can render a warning section listing these so no
+// charge ever falls through silently again. Tests pin emptiness on
+// known-good seed states.
+
+export type OrphanedEntry = {
+  entryId: string;
+  refId: string;
+  label: string;
+  amount: number;
+  chargeDate: string;
+  paymentMethod: "cash" | "credit";
+  category: CategoryId;
+  /** Where the engine COULD have surfaced it (but didn't). */
+  reason: string;
+};
+
+export function getOrphanedEntries(ctx: EngineCtx): OrphanedEntry[] {
+  // Engine-side: list everything in monthly expenses.
+  const monthly = getMonthlyExpenses(ctx);
+  const inExposure = new Set(
+    getCreditExposure(ctx)
+      .rows.map((r) => r.refId)
+      .filter((id) => id.startsWith("entry:")),
+  );
+  const breakdown = getMonthlyObligationBreakdown({
+    rules: ctx.rules,
+    loans: ctx.loans,
+    entries: ctx.entries,
+    statuses: ctx.statuses,
+    monthKey: ctx.monthKey,
+  });
+  const inCockpit = new Set(
+    breakdown.explanationRows
+      .map((r) => r.id)
+      .filter((id) => id.startsWith("entry:")),
+  );
+  const orphans: OrphanedEntry[] = [];
+  for (const row of monthly.rows) {
+    if (row.kind !== "entry") continue;
+    if (inExposure.has(row.refId)) continue;
+    if (inCockpit.has(row.refId)) continue;
+    const entryId = row.refId.slice("entry:".length);
+    const e = ctx.entries.find((x) => x.id === entryId);
+    if (!e) continue;
+    const chargeDate =
+      (row.meta?.chargeDate as string | undefined) ?? e.chargeDate;
+    orphans.push({
+      entryId,
+      refId: row.refId,
+      label: row.label,
+      amount: row.amount,
+      chargeDate,
+      paymentMethod: e.paymentMethod,
+      category: row.category ?? e.category,
+      reason: `paymentMethod=${e.paymentMethod} fell through every cockpit lane`,
+    });
+  }
+  return orphans;
+}
+
 // ── 7c. getManualTransactions ──────────────────────────────────────
 //
 // Phase 397 — canonical "what did I manually log this month" view.

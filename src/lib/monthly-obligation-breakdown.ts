@@ -48,6 +48,12 @@ export type ObligationRow = {
   label: string;
   amount: number;
   kind: "rule" | "loan" | "entry" | "withdrawal";
+  /** Phase 398 — ISO date of the underlying obligation so the cockpit
+   *  rows can render the day alongside the amount. Manual entries
+   *  carry their slice.chargeDate; rules use dayOfMonth-of-monthKey;
+   *  loans use loan.dayOfMonth-of-monthKey. Optional for legacy
+   *  fixtures that haven't been updated yet. */
+  chargeDate?: string;
 };
 
 export type MonthlyObligationBreakdown = {
@@ -121,6 +127,13 @@ function manualCashSliceFor(
   return slice ? Math.abs(slice.amount) : 0;
 }
 
+function dateOfMonth(monthKey: MonthKey, dayOfMonth: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const day = Math.min(Math.max(1, dayOfMonth), lastDay);
+  return new Date(y, m - 1, day, 12, 0, 0).toISOString();
+}
+
 export function getMonthlyObligationBreakdown(args: {
   rules: RecurringRule[];
   loans: Loan[];
@@ -185,6 +198,7 @@ export function getMonthlyObligationBreakdown(args: {
       continue;
     }
     seen.add(id);
+    const ruleChargeDate = dateOfMonth(args.monthKey, r.dayOfMonth);
 
     if (r.paymentSource === "cash") {
       cashTotal += r.estimatedAmount;
@@ -195,6 +209,7 @@ export function getMonthlyObligationBreakdown(args: {
         label: r.label,
         amount: r.estimatedAmount,
         kind: "rule",
+        chargeDate: ruleChargeDate,
       });
       continue;
     }
@@ -206,6 +221,7 @@ export function getMonthlyObligationBreakdown(args: {
       label: r.label,
       amount: r.estimatedAmount,
       kind: "rule",
+      chargeDate: ruleChargeDate,
     });
   }
 
@@ -227,6 +243,7 @@ export function getMonthlyObligationBreakdown(args: {
       label: l.label,
       amount: l.monthlyInstallment,
       kind: "loan",
+      chargeDate: dateOfMonth(args.monthKey, l.dayOfMonth),
     });
   }
 
@@ -248,6 +265,7 @@ export function getMonthlyObligationBreakdown(args: {
       label: e.merchant ?? e.note ?? "משיכה",
       amount,
       kind: "withdrawal",
+      chargeDate: sliceForMonth(e, args.monthKey)?.chargeDate.toISOString(),
     });
   }
 
@@ -272,6 +290,7 @@ export function getMonthlyObligationBreakdown(args: {
       label: e.merchant ?? e.note ?? "תיעוד מזומן",
       amount,
       kind: "entry",
+      chargeDate: sliceForMonth(e, args.monthKey)?.chargeDate.toISOString(),
     });
   }
 

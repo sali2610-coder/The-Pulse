@@ -43,6 +43,11 @@ import {
   type ObligationLane,
 } from "@/lib/monthly-obligation-breakdown";
 import { getCreditCardExposure } from "@/lib/credit-card-exposure";
+import {
+  buildEngineCtx,
+  getOrphanedEntries,
+  type OrphanedEntry,
+} from "@/lib/financial-engine";
 import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -88,10 +93,13 @@ const LANE_ORDER: LaneId[] = ["creditCards", "loans", "bankFixed", "cash"];
 
 export function ExpensesCommitmentsCockpit() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
   const rules = useFinanceStore((s) => s.rules);
   const loans = useFinanceStore((s) => s.loans);
   const entries = useFinanceStore((s) => s.entries);
   const statuses = useFinanceStore((s) => s.statuses);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
   const breakdown = useMemo(() => {
     if (!hydrated) return null;
@@ -113,6 +121,34 @@ export function ExpensesCommitmentsCockpit() {
       monthKey: currentMonthKey(),
     });
   }, [hydrated, rules, entries, statuses]);
+
+  // Phase 398 — completeness sentinel. Surfaces any entry that the
+  // donut/activity feed shows but the cockpit lanes miss, so no
+  // charge silently falls through.
+  const orphans = useMemo<OrphanedEntry[]>(() => {
+    if (!hydrated) return [];
+    return getOrphanedEntries(
+      buildEngineCtx({
+        accounts,
+        rules,
+        statuses,
+        entries,
+        loans,
+        incomes,
+        monthlyBudget,
+        monthKey: currentMonthKey(),
+      }),
+    );
+  }, [
+    hydrated,
+    accounts,
+    rules,
+    statuses,
+    entries,
+    loans,
+    incomes,
+    monthlyBudget,
+  ]);
 
   const [openLane, setOpenLane] = useState<LaneId | null>(null);
 
@@ -217,10 +253,70 @@ export function ExpensesCommitmentsCockpit() {
         ) : null}
       </AnimatePresence>
 
+      {orphans.length > 0 ? <OrphanWarning orphans={orphans} /> : null}
+
       <p className="mt-3 text-center text-[10.5px] text-muted-foreground/80">
         כל חיוב נספר פעם אחת בלבד
       </p>
     </section>
+  );
+}
+
+function OrphanWarning({ orphans }: { orphans: OrphanedEntry[] }) {
+  const total = orphans.reduce((s, o) => s + o.amount, 0);
+  return (
+    <div
+      className="mt-3 rounded-2xl border border-[#FBBF24]/40 bg-[#FBBF24]/[0.06] p-3"
+      dir="rtl"
+      role="status"
+      aria-label="חיובים שלא נקלטו באף לשונית"
+    >
+      <div className="flex items-center justify-between gap-2 pb-1.5">
+        <span className="text-[11px] uppercase tracking-[0.22em] text-[#FBBF24]">
+          חיובים שלא נקלטו · {orphans.length}
+        </span>
+        <span
+          data-mono="true"
+          dir="ltr"
+          className="text-[12px] font-medium text-[#FBBF24]"
+          style={{ fontVariantNumeric: "tabular-nums" }}
+        >
+          {ILS.format(Math.round(total))}
+        </span>
+      </div>
+      <p className="pb-2 text-[11px] text-foreground/80">
+        ההוצאות הבאות מופיעות בפעילות החודש אך אינן נספרות באף לשונית
+        קיימת. תיקנו זאת כדי שלא יחזור.
+      </p>
+      <ul className="flex flex-col gap-1">
+        {orphans.map((o) => (
+          <li
+            key={o.refId}
+            className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-2"
+          >
+            <div className="flex min-w-0 flex-col leading-tight">
+              <span className="line-clamp-1 text-[12px] text-foreground/90">
+                {o.label}
+              </span>
+              <span className="text-[10.5px] text-muted-foreground/80">
+                {formatRowDate(o.chargeDate)} · {o.paymentMethod === "cash" ? "מזומן" : "אשראי"}
+              </span>
+            </div>
+            <span
+              data-mono="true"
+              dir="ltr"
+              className="text-[12px] font-medium"
+              style={{
+                color: "#FBBF24",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {ILS.format(Math.round(o.amount))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -326,9 +422,19 @@ function LaneDetail({
           key={r.id}
           className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2"
         >
-          <span className="line-clamp-1 text-[12.5px] text-foreground/90">
-            {r.label}
-          </span>
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className="line-clamp-1 text-[12.5px] text-foreground/90">
+              {r.label}
+            </span>
+            {r.chargeDate ? (
+              <span
+                className="text-[10.5px] text-muted-foreground/75"
+                dir="rtl"
+              >
+                {formatRowDate(r.chargeDate)}
+              </span>
+            ) : null}
+          </div>
           <span
             data-mono="true"
             dir="ltr"
@@ -344,6 +450,19 @@ function LaneDetail({
       ))}
     </ul>
   );
+}
+
+const ROW_DATE_FMT = new Intl.DateTimeFormat("he-IL", {
+  day: "2-digit",
+  month: "2-digit",
+});
+
+function formatRowDate(iso: string): string {
+  try {
+    return ROW_DATE_FMT.format(new Date(iso));
+  } catch {
+    return iso.slice(0, 10);
+  }
 }
 
 function DetailRow({
