@@ -33,6 +33,7 @@ import {
 } from "@/lib/obligations-overview";
 import { currentMonthKey, monthIndex } from "@/lib/dates";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { LoanFullScreenEdit } from "@/components/loans/loan-fullscreen-edit";
 import { tap as hapticTap } from "@/lib/haptics";
 import { EASE_OUT_EXPO, STAGGER_TIGHT } from "@/lib/motion-tokens";
 
@@ -81,6 +82,11 @@ export function LoanSummaryCard() {
   const rules = useFinanceStore((s) => s.rules);
   const accounts = useFinanceStore((s) => s.accounts);
   const [openLoanId, setOpenLoanId] = useState<string | null>(null);
+  // Phase 409 — full-screen edit modal (shared shell with the
+  // expense-edit UX). `editLoanId === null` + `editOpen=true` means
+  // "add new loan" mode.
+  const [editLoanId, setEditLoanId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const monthKey = currentMonthKey();
 
@@ -197,12 +203,31 @@ export function LoanSummaryCard() {
                 row={row}
                 onOpen={() => {
                   hapticTap();
-                  setOpenLoanId(row.loan.id);
+                  // Phase 409 — tapping a loan row now opens the
+                  // full-screen edit instead of the detail sheet.
+                  // The legacy LoanDetailSheet stays mounted for
+                  // the older entry-point but no longer fires here.
+                  setEditLoanId(row.loan.id);
+                  setEditOpen(true);
                 }}
               />
             </motion.li>
           ))}
         </ul>
+
+        {/* Phase 409 — "הוסף הלוואה" CTA. Opens the same full-screen
+           in add mode (loanId=null). */}
+        <button
+          type="button"
+          onClick={() => {
+            hapticTap();
+            setEditLoanId(null);
+            setEditOpen(true);
+          }}
+          className="mt-1 inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/[0.02] text-[12.5px] text-foreground/85 transition-colors hover:border-white/16"
+        >
+          + הוסף הלוואה
+        </button>
       </motion.section>
 
       <LoanDetailSheet
@@ -210,6 +235,14 @@ export function LoanSummaryCard() {
         open={activeRow !== null}
         onOpenChange={(o) => {
           if (!o) setOpenLoanId(null);
+        }}
+      />
+      <LoanFullScreenEdit
+        loanId={editLoanId}
+        open={editOpen}
+        onOpenChange={(o) => {
+          setEditOpen(o);
+          if (!o) setEditLoanId(null);
         }}
       />
     </>
