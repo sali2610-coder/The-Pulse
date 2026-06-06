@@ -33,7 +33,7 @@ import { AudioToggle } from "./audio-toggle";
 import { PushToggle } from "./push-toggle";
 import { IphonePushOnboardingCard } from "./iphone-push-onboarding-card";
 import { AuthCard } from "./auth-card";
-import { AccountsPanel } from "@/components/accounts/accounts-panel";
+import { AccountsMiniApp } from "@/components/accounts/accounts-mini-app";
 import { LoansMiniApp } from "@/components/loans/loans-mini-app";
 import { NotificationsMiniApp } from "@/components/settings/notifications-mini-app";
 import { ShortcutMiniApp } from "@/components/settings/shortcut-mini-app";
@@ -114,7 +114,8 @@ export function SettingsTab() {
         subtitle="ניהול יתרות, חיוב יומי וכרטיסים"
         icon={<Landmark className="size-4" />}
       >
-        <AccountsPanel />
+        {/* Phase 412 — bank + cards split into two visual sections. */}
+        <AccountsMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
