@@ -64,8 +64,17 @@ export function effectiveCashImpacts(args: {
 }): CashImpact[] {
   const out: CashImpact[] = [];
   if (args.entry.isRefund) return out; // refunds — out of scope today
-  if (args.entry.needsConfirmation) return out;
-  if (args.entry.bankPending) return out;
+  // Phase 399 — Wallet partials with confirmedAt set ARE confirmed
+  // and must appear on the curve. The previous check only looked at
+  // `needsConfirmation` and silently excluded every confirmed wallet
+  // entry, leaving the user's paymentDay=2 marker showing only the
+  // recurring rule.
+  if (args.entry.needsConfirmation && !args.entry.confirmedAt) return out;
+  // Phase 399 — bankPending entries are real future debits. The bank
+  // hasn't finalized but WILL settle them on the card's paymentDay.
+  // Excluding them produced the "missing manual / Wallet / SMS
+  // charges" gap the user reported on every 2 of the month.
+  // (Refund + excludeFromBudget remain hard excludes.)
   if (args.entry.excludeFromBudget) return out;
 
   const totalInstallments = Math.max(1, args.entry.installments);

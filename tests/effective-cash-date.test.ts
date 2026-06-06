@@ -110,9 +110,14 @@ describe("effectiveCashImpacts — credit card path", () => {
     expect(impacts[0].effectiveCashDate.getDate()).toBe(10);
   });
 
-  it("skips refunded / pending / excluded entries entirely", () => {
+  it("skips refunded / unconfirmed-wallet / excluded entries entirely", () => {
+    // Phase 399 — bankPending is NO LONGER an exclude (the bank will
+    // finalize and settle on the card's paymentDay; the curve must
+    // anticipate it). Wallet partials still skip while
+    // needsConfirmation && !confirmedAt; once confirmedAt lands the
+    // entry rejoins the curve.
     const c = card({ id: "cal", paymentDay: 10, cardLast4: "1234" });
-    for (const flag of ["isRefund", "needsConfirmation", "bankPending", "excludeFromBudget"] as const) {
+    for (const flag of ["isRefund", "needsConfirmation", "excludeFromBudget"] as const) {
       const e = entry({
         amount: 100,
         iso: "2026-05-02T10:00:00Z",
@@ -121,6 +126,33 @@ describe("effectiveCashImpacts — credit card path", () => {
       });
       expect(effectiveCashImpacts({ entry: e, accounts: [c] })).toEqual([]);
     }
+  });
+
+  it("Phase 399 — bankPending entries flow through to the curve", () => {
+    const c = card({ id: "cal", paymentDay: 10, cardLast4: "1234" });
+    const e = entry({
+      amount: 100,
+      iso: "2026-05-02T10:00:00Z",
+      cardLast4: "1234",
+      bankPending: true,
+    });
+    const impacts = effectiveCashImpacts({ entry: e, accounts: [c] });
+    expect(impacts).toHaveLength(1);
+    expect(impacts[0].amount).toBe(100);
+  });
+
+  it("Phase 399 — confirmed Wallet partial flows through to the curve", () => {
+    const c = card({ id: "cal", paymentDay: 10, cardLast4: "1234" });
+    const e = entry({
+      amount: 100,
+      iso: "2026-05-02T10:00:00Z",
+      cardLast4: "1234",
+      needsConfirmation: true,
+      confirmedAt: "2026-05-03T10:00:00Z",
+    });
+    const impacts = effectiveCashImpacts({ entry: e, accounts: [c] });
+    expect(impacts).toHaveLength(1);
+    expect(impacts[0].amount).toBe(100);
   });
 });
 

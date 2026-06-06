@@ -715,6 +715,88 @@ export function getOrphanedEntries(ctx: EngineCtx): OrphanedEntry[] {
   return orphans;
 }
 
+// ── 7e. getTimelineCompleteness ────────────────────────────────────
+//
+// Phase 399 — completeness check for the Time-tab curve. Every
+// credit-card row in getCreditExposure that the user expects to see
+// on the next paymentDay must produce at least one event in the
+// 35-day liquidity curve. Anything missing → an entry the curve
+// silently dropped (typically Wallet partials, bankPending SMS, or
+// entries with no resolvable card).
+//
+// Use: Time tab can render a warning section listing missing entries
+// so the user can spot which charges didn't make it onto the curve.
+
+export type TimelineMissingEntry = {
+  entryId: string;
+  refId: string;
+  label: string;
+  amount: number;
+  paymentMethod: "cash" | "credit";
+  reason: string;
+};
+
+export function getTimelineCompleteness(
+  ctx: EngineCtx,
+): TimelineMissingEntry[] {
+  // Source-of-truth credit obligations (the cards header + cockpit
+  // credit lane both consume this).
+  const exposure = getCreditExposure(ctx);
+  const expectedRefIds = new Set(
+    exposure.rows
+      .map((r) => r.refId)
+      .filter((id) => id.startsWith("entry:")),
+  );
+
+  // What the Time curve actually surfaces in the 35-day window.
+  const buckets = buildCashFlowBuckets({
+    accounts: ctx.accounts,
+    loans: ctx.loans,
+    rules: ctx.rules,
+    statuses: ctx.statuses,
+    entries: ctx.entries,
+    now: ctx.now,
+    windowDays: 35,
+  });
+  const onCurve = new Set<string>();
+  for (const b of buckets.buckets) {
+    for (const o of b.obligations) {
+      onCurve.add(o.refId);
+    }
+  }
+
+  const missing: TimelineMissingEntry[] = [];
+  for (const row of exposure.rows) {
+    if (!row.refId.startsWith("entry:")) continue;
+    if (onCurve.has(row.refId)) continue;
+    // cash-flow-bucket synthesizes its refId as `entry:<viaCardId>:<ts>`
+    // so the rough comparison above will miss. Fall back to scanning
+    // the bucket items for any obligation whose refId carries the
+    // entry's id. (Practical: most "missing" entries are pending
+    // wallet partials with no viaCardId at all.)
+    const entryId = row.refId.slice("entry:".length);
+    const fuzzyHit = Array.from(onCurve).some((id) => id.includes(entryId));
+    if (fuzzyHit) continue;
+    const e = ctx.entries.find((x) => x.id === entryId);
+    if (!e) continue;
+    const reasons: string[] = [];
+    if (e.needsConfirmation && !e.confirmedAt) reasons.push("needsConfirmation");
+    if (e.bankPending) reasons.push("bankPending");
+    if (!e.accountId && !e.cardLast4) reasons.push("no resolved card");
+    if (reasons.length === 0) reasons.push("dropped by curve filter");
+    missing.push({
+      entryId,
+      refId: row.refId,
+      label: row.label,
+      amount: row.amount,
+      paymentMethod: e.paymentMethod,
+      reason: reasons.join(", "),
+    });
+  }
+  void expectedRefIds;
+  return missing;
+}
+
 // ── 7c. getManualTransactions ──────────────────────────────────────
 //
 // Phase 397 — canonical "what did I manually log this month" view.
