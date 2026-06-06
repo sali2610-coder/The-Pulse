@@ -172,7 +172,7 @@ export function CardsHierarchyCard() {
       {statement ? (
         <ul className="flex flex-col gap-2">
           {statement.cards.map((s) => (
-            <StatementCardRow key={s.cardId} statement={s} />
+            <StatementCardRow key={s.cardId} statement={s} rules={rules} />
           ))}
           {statement.unassigned.total > 0 ? (
             <UnassignedRow
@@ -406,12 +406,17 @@ function FolderRow({
 function KindFilterTile({
   label,
   value,
+  count,
   tone,
   active,
   onToggle,
 }: {
   label: string;
   value: number;
+  /** Phase 401 — optional transaction count surfaced under the
+   *  amount. The future-folder lens has no per-kind count; the
+   *  per-card statement does, so this is rendered only when given. */
+  count?: number;
   tone: string;
   active: boolean;
   onToggle: () => void;
@@ -442,6 +447,14 @@ function KindFilterTile({
       >
         {ILS.format(Math.round(value))}
       </span>
+      {typeof count === "number" ? (
+        <span
+          dir="rtl"
+          className="text-[10px] text-muted-foreground/70"
+        >
+          {count > 0 ? `${count} חיובים` : "—"}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -627,8 +640,61 @@ function CategoryRow({
   );
 }
 
-function StatementCardRow({ statement }: { statement: CardStatement }) {
+// Phase 401 — classify a statement row into the same 3 kinds the
+// future-folder lens uses (קבועים / תשלומים / חד-פעמיים). Pure UI
+// classification — no engine math is touched.
+type StatementKind = "recurring" | "installments" | "oneTime";
+
+function classifyStatementRow(
+  row: CardStatementRow,
+  rules: import("@/types/finance").RecurringRule[],
+): StatementKind {
+  if (row.id.startsWith("rule:")) {
+    const ruleId = row.id.slice("rule:".length);
+    const r = rules.find((x) => x.id === ruleId);
+    if (r && r.installmentTotal && r.installmentTotal > 1) return "installments";
+    return "recurring";
+  }
+  if (row.bucket === "existingInstallments") return "installments";
+  return "oneTime";
+}
+
+function StatementCardRow({
+  statement,
+  rules,
+}: {
+  statement: CardStatement;
+  rules: import("@/types/finance").RecurringRule[];
+}) {
   const [open, setOpen] = useState(false);
+  // Phase 401 — per-card kind filter, defaults all-on. Resets when
+  // the row collapses (the AnimatePresence below remounts on next
+  // open).
+  const [filters, setFilters] = useState<KindFilters>(DEFAULT_KIND_FILTERS);
+
+  // Pre-classify once per row; tally totals + counts per kind for
+  // the 3 tiles. No new engine call.
+  const tally = useMemo(() => {
+    const counts = { recurring: 0, installments: 0, oneTime: 0 };
+    const totals = { recurring: 0, installments: 0, oneTime: 0 };
+    const classified: Array<{ row: CardStatementRow; kind: StatementKind }> = [];
+    for (const tx of statement.transactions) {
+      const kind = classifyStatementRow(tx, rules);
+      counts[kind] += 1;
+      totals[kind] += tx.amount;
+      classified.push({ row: tx, kind });
+    }
+    return { counts, totals, classified };
+  }, [statement.transactions, rules]);
+
+  const filteredSubtotal =
+    (filters.recurring ? tally.totals.recurring : 0) +
+    (filters.installments ? tally.totals.installments : 0) +
+    (filters.oneTime ? tally.totals.oneTime : 0);
+  const allOff =
+    !filters.recurring && !filters.installments && !filters.oneTime;
+  const filteredRows = tally.classified.filter(({ kind }) => filters[kind]);
+
   return (
     <li
       className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
@@ -690,11 +756,82 @@ function StatementCardRow({ statement }: { statement: CardStatement }) {
             transition={{ duration: 0.22, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <ul className="flex flex-col gap-1 border-t border-white/8 p-3" dir="rtl">
-              {statement.transactions.map((t) => (
-                <TransactionRow key={t.id} row={t} />
-              ))}
-            </ul>
+            <div className="flex flex-col gap-3 border-t border-white/8 p-3" dir="rtl">
+              {/* Phase 401 — 3 kind filter tiles, same dynamic style
+                 as the future-folder lens. Tap to toggle inclusion;
+                 the list + subtotal below react instantly. */}
+              <div className="grid grid-cols-3 gap-2">
+                <KindFilterTile
+                  label="קבועים"
+                  value={tally.totals.recurring}
+                  count={tally.counts.recurring}
+                  tone="#A78BFA"
+                  active={filters.recurring}
+                  onToggle={() => {
+                    tap();
+                    setFilters((f) => ({ ...f, recurring: !f.recurring }));
+                  }}
+                />
+                <KindFilterTile
+                  label="תשלומים"
+                  value={tally.totals.installments}
+                  count={tally.counts.installments}
+                  tone="#F59E0B"
+                  active={filters.installments}
+                  onToggle={() => {
+                    tap();
+                    setFilters((f) => ({
+                      ...f,
+                      installments: !f.installments,
+                    }));
+                  }}
+                />
+                <KindFilterTile
+                  label="חד-פעמיים"
+                  value={tally.totals.oneTime}
+                  count={tally.counts.oneTime}
+                  tone="#60A5FA"
+                  active={filters.oneTime}
+                  onToggle={() => {
+                    tap();
+                    setFilters((f) => ({ ...f, oneTime: !f.oneTime }));
+                  }}
+                />
+              </div>
+
+              {/* Filtered subtotal — mirrors the future-folder lens
+                 so the user sees Σ-of-checked-tiles == the list
+                 below. */}
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2">
+                <span className="text-[11px] text-muted-foreground">
+                  סך החיובים בסינון
+                </span>
+                <span
+                  data-mono="true"
+                  dir="ltr"
+                  className="text-[12.5px] font-medium text-foreground"
+                  style={{ fontVariantNumeric: "tabular-nums" }}
+                >
+                  {ILS.format(Math.round(filteredSubtotal))}
+                </span>
+              </div>
+
+              {allOff ? (
+                <p className="rounded-2xl border border-white/8 bg-black/25 p-4 text-center text-caption text-muted-foreground">
+                  בחר לפחות סוג חיוב אחד להצגה
+                </p>
+              ) : filteredRows.length === 0 ? (
+                <p className="rounded-2xl border border-white/8 bg-black/25 p-4 text-center text-caption text-muted-foreground">
+                  אין חיובים מהסוג הזה החודש בכרטיס.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {filteredRows.map(({ row }) => (
+                    <TransactionRow key={row.id} row={row} />
+                  ))}
+                </ul>
+              )}
+            </div>
           </motion.div>
         ) : null}
       </AnimatePresence>
