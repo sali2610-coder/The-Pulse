@@ -37,7 +37,7 @@ import { AccountsMiniApp } from "@/components/accounts/accounts-mini-app";
 import { LoansMiniApp } from "@/components/loans/loans-mini-app";
 import { NotificationsMiniApp } from "@/components/settings/notifications-mini-app";
 import { ShortcutMiniApp } from "@/components/settings/shortcut-mini-app";
-import { IncomePanel } from "@/components/income/income-panel";
+import { IncomeMiniApp } from "@/components/income/income-mini-app";
 import { RecurringMiniApp } from "@/components/recurring/recurring-mini-app";
 import { SubscriptionSuggestions } from "./subscription-suggestions";
 import { RuleDriftCard } from "./rule-drift-card";
@@ -150,7 +150,8 @@ export function SettingsTab() {
         subtitle="משכורות, פנסיה והכנסות צפויות"
         icon={<HandCoins className="size-4" />}
       >
-        <IncomePanel />
+        {/* Phase 414 — variance KPIs + mark-as-received CTA + fullscreen edit. */}
+        <IncomeMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
