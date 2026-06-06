@@ -101,12 +101,19 @@ export function liquidityCurve(args: {
   // withdrawal made today after the anchor was last updated has
   // already moved the bank; LIVE must reflect that immediately
   // without waiting for the user to re-key the anchor.
+  //
+  // Phase 407 — also EMIT those past bank impacts as day-0 events
+  // so the Time-curve explanation path surfaces "משיכה בנקאית 1 ₪"
+  // (or "3 ₪ משיכות בנקאיות · N פעולות") next to the LIVE balance.
+  // Pre-Phase-407 the balance dropped silently — correct number,
+  // no traceable reason.
   const rawAnchors = sumAnchors(args.accounts);
   const maxAnchorAt = args.accounts
     .filter((a) => a.kind === "bank" && a.anchorUpdatedAt)
     .map((a) => new Date(a.anchorUpdatedAt!).getTime())
     .reduce((m, t) => (t > m ? t : m), 0);
   let pastBankDebits = 0;
+  const pastBankEvents: LiquidityEvent[] = [];
   for (const impact of effectiveCashImpactStream({
     entries: args.entries,
     accounts: args.accounts,
@@ -118,6 +125,21 @@ export function liquidityCurve(args: {
     if (ts > now.getTime()) continue;
     if (maxAnchorAt > 0 && ts <= maxAnchorAt) continue;
     pastBankDebits += impact.amount;
+    const sourceEntry = impact.entryId
+      ? args.entries.find((e) => e.id === impact.entryId)
+      : undefined;
+    pastBankEvents.push({
+      whenISO: impact.effectiveCashDate.toISOString(),
+      transactionISO: impact.purchaseDate.toISOString(),
+      label:
+        sourceEntry?.merchant ??
+        sourceEntry?.note ??
+        (sourceEntry?.transactionType === "withdrawal"
+          ? "משיכת בנק"
+          : "חיוב מהבנק"),
+      amount: -impact.amount,
+      kind: "bank_debit",
+    });
   }
   const startingBalance = rawAnchors - pastBankDebits;
 
@@ -199,15 +221,17 @@ export function liquidityCurve(args: {
   let cursor = noonOfDay(now);
   const points: LiquidityPoint[] = [];
 
-  // Day 0 — today — includes nothing because effective-cash dates
-  // are always strictly after `now` in this engine. Still emit so
-  // the sparkline anchors at the current balance.
+  // Day 0 — today. Phase 407 — past bank impacts (manual withdrawals
+  // dated today after the anchor was last set) surface here so the
+  // "מה השתנה עד התאריך" path can explain the LIVE drop. The
+  // balance is unchanged (startingBalance already deducted them);
+  // events are listed for traceability.
   points.push({
     whenISO: cursor.toISOString(),
     dayIndex: 0,
     balance,
-    delta: 0,
-    events: [],
+    delta: pastBankEvents.reduce((s, e) => s + e.amount, 0),
+    events: pastBankEvents.slice(),
   });
   cursor = addDays(cursor, 1);
 

@@ -29,7 +29,6 @@ import { getCategory, type CategoryId } from "@/lib/categories";
 import {
   buildEngineCtx,
   getActivityFeed,
-  getCategoryBreakdown,
   type ActivityFeedRow,
 } from "@/lib/financial-engine";
 import { Pill } from "@/components/ui/pill";
@@ -221,40 +220,12 @@ export function RecentActivity() {
   const incomes = useFinanceStore((s) => s.incomes);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
-  // Phase 406 — headline "סך הוצאות החודש" KPI = actuals only.
-  //
-  // Switched from getMonthlyExpenses (which adds pending recurring
-  // rules to the actual-spent total) to getCategoryBreakdown so the
-  // RecentActivity tile and the "לאן הולך הכסף" / CategoryDonut
-  // total are the SAME canonical engine number. Activity-month
-  // surfaces are now strictly "expenses that already happened this
-  // month" — no income, no future obligations, no loans, no bank,
-  // no credit forecast.
-  const engineMonthSpend = useMemo(() => {
-    if (!hydrated) return 0;
-    return Math.round(
-      getCategoryBreakdown(
-        buildEngineCtx({
-          accounts,
-          rules,
-          statuses,
-          entries,
-          loans,
-          incomes,
-          monthlyBudget,
-        }),
-      ).total,
-    );
-  }, [
-    hydrated,
-    accounts,
-    rules,
-    statuses,
-    entries,
-    loans,
-    incomes,
-    monthlyBudget,
-  ]);
+  // Phase 407 — KPI totals now derive from the activity feed items
+  // themselves (see `summary` useMemo). The previous Phase 406
+  // engineMonthSpend pulled getCategoryBreakdown.total, which the
+  // canonical isBudgetExpense filter strips withdrawals out of. A
+  // ₪1 bank withdrawal appeared in the feed but never in "סך
+  // הוצאות החודש" — same data source for the feed and the KPI now.
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ExpenseEntry | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -319,6 +290,7 @@ export function RecentActivity() {
     let monthCount = 0;
     let todayCount = 0;
     let lastExpense: ActivityItem | null = null;
+    let monthSpend = 0;
     let walletCount = 0;
     let manualCount = 0;
     let creditCount = 0;
@@ -326,8 +298,14 @@ export function RecentActivity() {
     for (const it of items) {
       monthCount++;
       if (startOfDay(it.ts) === todayKey) todayCount++;
-      if (it.direction === "out" && !lastExpense && !it.isWithdrawal) {
-        lastExpense = it;
+      // Phase 407 — KPI sources match the activity feed itself.
+      // monthSpend sums EVERY out-going activity row, including bank
+      // withdrawals + manual cash; the user-visible list and the
+      // headline number can never diverge again. Refunds + incomes
+      // (direction="in") still excluded — KPI measures outflows.
+      if (it.direction === "out") {
+        monthSpend += it.amount;
+        if (!lastExpense) lastExpense = it;
       }
       if (it.source === "wallet") walletCount++;
       else if (it.source === "manual") manualCount++;
@@ -337,15 +315,14 @@ export function RecentActivity() {
     return {
       monthCount,
       todayCount,
-      // Phase 394 — engine-sourced. Never a local sum of activity items.
-      monthSpend: engineMonthSpend,
+      monthSpend: Math.round(monthSpend),
       lastExpense,
       walletCount,
       manualCount,
       creditCount,
       cashCount,
     };
-  }, [items, engineMonthSpend]);
+  }, [items]);
 
   // Filter logic used by the bottom sheet.
   const filtered = useMemo(() => {

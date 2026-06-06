@@ -502,6 +502,62 @@ describe("Phase 397 — manual cash zero-drift", () => {
     expect(cashRowAmt).toBe(10);
   });
 
+  it("Phase 407 — past bank withdrawal surfaces as a day-0 curve event", async () => {
+    // Pre-Phase-407: liquidityCurve subtracted past withdrawals
+    // from startingBalance but emitted an empty events array on
+    // day 0. The Time-tab "מה השתנה" path had no entry to explain
+    // the LIVE balance drop. Phase 407 emits "משיכת בנק 1 ₪" on
+    // day 0 so the path can show the source.
+    const { liquidityCurve } = await import("@/lib/liquidity-curve");
+    const anchorYesterday = new Date(
+      NOW.getTime() - 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const withdrawalToday = new Date(
+      NOW.getTime() - 60 * 60 * 1000,
+    ).toISOString();
+    const curve = liquidityCurve({
+      accounts: [
+        {
+          id: "bank-1",
+          kind: "bank",
+          label: "Discount",
+          anchorBalance: 12_000,
+          anchorUpdatedAt: anchorYesterday,
+          active: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      loans: [],
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [
+        {
+          id: "e-withdrawal-today",
+          amount: 1,
+          category: "other",
+          source: "manual",
+          paymentMethod: "cash",
+          installments: 1,
+          chargeDate: withdrawalToday,
+          createdAt: withdrawalToday,
+          transactionType: "withdrawal",
+          accountId: "bank-1",
+          merchant: "משיכה ידנית",
+        },
+      ],
+      now: NOW,
+      windowDays: 35,
+    });
+    expect(curve.points[0].events).toHaveLength(1);
+    expect(curve.points[0].events[0].kind).toBe("bank_debit");
+    expect(curve.points[0].events[0].amount).toBe(-1);
+    expect(curve.points[0].events[0].label).toBe("משיכה ידנית");
+    // Balance still reflects the deduction (carried in
+    // startingBalance, not via day-0 event application).
+    expect(curve.points[0].balance).toBe(11_999);
+  });
+
   it("Phase 406 — RecentActivity headline === CategoryDonut total (actuals only)", () => {
     // Pre-Phase-406: RecentActivity tile read getMonthlyExpenses
     // which added pending recurring rules to the actuals total.

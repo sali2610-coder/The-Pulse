@@ -87,7 +87,12 @@ function totalsUpToCursor(frame: TimeFrame): CurveTotals {
   let fixed = 0;
   let loans = 0;
   let cards = 0;
-  for (let i = 1; i <= cap; i++) {
+  // Phase 407 — start at i=0 so LIVE / day-0 events (manual bank
+  // withdrawals dated today after the anchor) surface in the "מה
+  // השתנה" totals. Pre-Phase-407 the loop started at i=1 so day-0
+  // bank impacts were invisible to the explanation path even
+  // though the balance correctly reflected them.
+  for (let i = 0; i <= cap; i++) {
     for (const ev of curve.points[i].events) {
       if (ev.kind === "income") income += ev.amount;
       else if (ev.kind === "loan") loans += Math.abs(ev.amount);
