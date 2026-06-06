@@ -337,6 +337,130 @@ export function MiniAppEmpty({
 // mini-apps to separate active vs ended, for example.
 // ────────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────
+// Status hero — single big tone-glow card. Used by Notifications +
+// Shortcut mini-apps as the headline ("התראות פעילות", "Shortcut
+// עובד"). Larger than a KPI tile, smaller than the full hero strip.
+// ────────────────────────────────────────────────────────────────────
+
+export function MiniAppStatusHero({
+  tone,
+  icon: Icon,
+  title,
+  detail,
+}: {
+  tone: string;
+  icon: LucideIcon;
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <section
+      className="flex items-center gap-3 rounded-3xl border p-4"
+      dir="rtl"
+      style={{
+        background: `linear-gradient(180deg, ${tone}1f 0%, rgba(0,0,0,0.25) 100%)`,
+        borderColor: `${tone}55`,
+        boxShadow: `0 0 28px -14px ${tone}99`,
+      }}
+    >
+      <span
+        aria-hidden
+        className="flex size-12 shrink-0 items-center justify-center rounded-2xl"
+        style={{
+          background: `${tone}33`,
+          color: tone,
+          boxShadow: `0 0 18px -4px ${tone}88`,
+        }}
+      >
+        <Icon className="size-6" strokeWidth={1.7} />
+      </span>
+      <div className="flex min-w-0 flex-col leading-tight">
+        <span
+          className="text-[14px] font-semibold"
+          style={{ color: tone }}
+        >
+          {title}
+        </span>
+        {detail ? (
+          <span className="text-[11.5px] text-muted-foreground">{detail}</span>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// iOS-style toggle row — icon + label + description + control.
+// Used by Notifications mini-app for the four toggles.
+// ────────────────────────────────────────────────────────────────────
+
+export function MiniAppToggleRow({
+  icon: Icon,
+  title,
+  description,
+  control,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  control: ReactNode;
+}) {
+  return (
+    <div
+      className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/25 p-3"
+      dir="rtl"
+    >
+      <span
+        aria-hidden
+        className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-white/5 text-foreground/80"
+      >
+        <Icon className="size-5" strokeWidth={1.6} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="text-[13px] font-medium text-foreground">
+          {title}
+        </span>
+        {description ? (
+          <span className="text-[11px] text-muted-foreground">
+            {description}
+          </span>
+        ) : null}
+      </div>
+      <div className="shrink-0">{control}</div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Disclosure — collapsed-by-default block for technical / rare
+// content (diagnostics, advanced toggles). Same chrome as the rest
+// of the mini-app body, but a quiet summary chevron.
+// ────────────────────────────────────────────────────────────────────
+
+export function MiniAppDisclosure({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="rounded-2xl border border-white/8 bg-white/[0.02]">
+      <summary
+        className="flex cursor-pointer items-center justify-between gap-2 px-3.5 py-2.5 text-[12px] text-muted-foreground"
+        dir="rtl"
+      >
+        <span>{label}</span>
+        <span className="text-[10px] text-muted-foreground/70">פתח</span>
+      </summary>
+      <div className="border-t border-white/8 p-3" dir="rtl">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 export function MiniAppSectionLabel({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-2 pb-1 pt-1.5" dir="rtl">

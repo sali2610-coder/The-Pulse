@@ -35,6 +35,8 @@ import { IphonePushOnboardingCard } from "./iphone-push-onboarding-card";
 import { AuthCard } from "./auth-card";
 import { AccountsPanel } from "@/components/accounts/accounts-panel";
 import { LoansMiniApp } from "@/components/loans/loans-mini-app";
+import { NotificationsMiniApp } from "@/components/settings/notifications-mini-app";
+import { ShortcutMiniApp } from "@/components/settings/shortcut-mini-app";
 import { IncomePanel } from "@/components/income/income-panel";
 import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-panel";
 import { SubscriptionSuggestions } from "./subscription-suggestions";
@@ -203,12 +205,9 @@ export function SettingsTab() {
         subtitle="Web Push, אישור הוצאה ב-iPhone, צליל"
         icon={<BellRing className="size-4" />}
       >
-        <div className="flex flex-col gap-3">
-          <IphonePushOnboardingCard />
-          <PushToggle />
-          <AudioToggle />
-          <PushDeliveryMatrix />
-        </div>
+        {/* Phase 411 — mini-app: status hero + existing toggle cards +
+           diagnostics under a disclosure. */}
+        <NotificationsMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
@@ -218,10 +217,8 @@ export function SettingsTab() {
         subtitle="חיבור Apple Pay / כרטיסי האשראי לזרימה ב-Pulse"
         icon={<BellRing className="size-4" />}
       >
-        <div className="flex flex-col gap-3">
-          <ShortcutOnboardingCard />
-          <ShortcutHealthCard />
-        </div>
+        {/* Phase 411 — mini-app: status hero + health card + onboarding. */}
+        <ShortcutMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
