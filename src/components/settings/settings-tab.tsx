@@ -26,7 +26,7 @@ import {
   Target,
 } from "lucide-react";
 
-import { BudgetInput } from "./budget-input";
+import { BudgetMiniApp } from "./budget-mini-app";
 import { IntegrationInfo } from "./integration-info";
 import { StatementImport } from "./statement-import";
 import { AudioToggle } from "./audio-toggle";
@@ -161,7 +161,8 @@ export function SettingsTab() {
         subtitle="חישוב שקט ברקע אחרי כל פעולה"
         icon={<Target className="size-4" />}
       >
-        <BudgetInput />
+        {/* Phase 415 — live dashboard, not a form. */}
+        <BudgetMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
