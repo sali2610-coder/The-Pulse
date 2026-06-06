@@ -39,12 +39,9 @@ import { NotificationsMiniApp } from "@/components/settings/notifications-mini-a
 import { ShortcutMiniApp } from "@/components/settings/shortcut-mini-app";
 import { IncomeMiniApp } from "@/components/income/income-mini-app";
 import { RecurringMiniApp } from "@/components/recurring/recurring-mini-app";
-import { SubscriptionSuggestions } from "./subscription-suggestions";
-import { RuleDriftCard } from "./rule-drift-card";
-import { DormantRulesCard } from "./dormant-rules-card";
+import { InsightsInboxMiniApp } from "./insights-inbox-mini-app";
 import { BackupsCard } from "./backups-card";
 import { CloudSyncCard } from "./cloud-sync-card";
-import { RecurringSuggestionsCard } from "./recurring-suggestions-card";
 import { ReceiptScanCard } from "./receipt-scan-card";
 import { PushDiagnosticsCard } from "./push-diagnostics-card";
 import { SallyCsvImportCard } from "./sally-csv-import-card";
@@ -165,30 +162,18 @@ export function SettingsTab() {
         <BudgetMiniApp />
       </SettingsAccordion>
 
+      {/* Phase 416 — merged inbox. The two prior folders (הצעות
+         חכמות + בדיקות ומנויים) lived next to each other and asked
+         the user the same question (אשר / דחה תובנה). One folder,
+         one chip filter, one feed. */}
       <SettingsAccordion
         {...mutex}
-        storageKey="settings.smart-suggestions"
-        title="הצעות חכמות"
-        subtitle="חיובים חוזרים שזוהו ושחיקת קצב"
+        storageKey="settings.insights-inbox"
+        title="תובנות לאישור"
+        subtitle="חיובים חוזרים, מנויים שזוהו, שחיקת קצב, חוקים רדומים"
         icon={<Lightbulb className="size-4" />}
       >
-        <div className="flex flex-col gap-3">
-          <RecurringSuggestionsCard />
-          <RuleDriftCard />
-        </div>
-      </SettingsAccordion>
-
-      <SettingsAccordion
-        {...mutex}
-        storageKey="settings.checks-subs"
-        title="בדיקות ומנויים"
-        subtitle="מנויים שזוהו וכללים רדומים"
-        icon={<ListChecks className="size-4" />}
-      >
-        <div className="flex flex-col gap-3">
-          <SubscriptionSuggestions />
-          <DormantRulesCard />
-        </div>
+        <InsightsInboxMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
