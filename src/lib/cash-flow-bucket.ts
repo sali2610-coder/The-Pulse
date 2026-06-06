@@ -245,7 +245,12 @@ export function buildCashFlowBuckets(args: {
       effectiveCashAt: impact.effectiveCashDate.toISOString(),
       transactionAt: impact.purchaseDate.toISOString(),
       kind: "card_entry",
-      refId: `entry:${viaCardId}:${ts}`,
+      // Phase 403 — refId now carries the actual ExpenseEntry.id so
+      // getTimelineCompleteness can match against getCreditExposure
+      // rows without falling back to fuzzy id-substring matching.
+      refId: impact.entryId
+        ? `entry:${impact.entryId}`
+        : `entry:${viaCardId}:${ts}`,
     });
   }
 

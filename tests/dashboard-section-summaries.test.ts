@@ -173,17 +173,20 @@ describe("computeSummaries", () => {
       rules: [],
       statuses: [],
       entries: [
+        // Phase 403 — chargeDate ≤ billingDay 25 → closing billingDay
+        // May 25 → settle next paymentDay = June 10. Within the 35-day
+        // cash-flow horizon from NOW=May 26.
         entry({
           id: "e1",
           accountId: "c1",
           amount: 300,
-          chargeDate: "2026-05-26T12:00:00.000Z",
+          chargeDate: "2026-05-05T12:00:00.000Z",
         }),
         entry({
           id: "e2",
           accountId: "c1",
           amount: 500,
-          chargeDate: "2026-05-27T12:00:00.000Z",
+          chargeDate: "2026-05-06T12:00:00.000Z",
         }),
       ],
       monthlyBudget: 0,

@@ -171,6 +171,9 @@ describe("buildFutureBalanceBreakdown", () => {
   });
 
   it("subtracts credit-card settlements on the card payment day", () => {
+    // Phase 403 — Israeli cycle: chargeDate May 5 ≤ billingDay 25 →
+    // closing billingDay May 25 → settle on the next paymentDay
+    // after May 25 = June 10. offset 30 covers it.
     const out = buildFutureBalanceBreakdown({
       accounts: [bank({ anchorBalance: 5000 }), card()],
       loans: [],
@@ -182,7 +185,7 @@ describe("buildFutureBalanceBreakdown", () => {
           id: "e1",
           accountId: "c1",
           amount: 1200,
-          chargeDate: "2026-05-26T12:00:00.000Z",
+          chargeDate: "2026-05-05T12:00:00.000Z",
         }),
       ],
       offset: 30,
@@ -224,6 +227,10 @@ describe("buildFutureBalanceBreakdown", () => {
   });
 
   it("composes income + loans + cards into one figure", () => {
+    // Phase 403 — Israeli cycle: chargeDate May 5 ≤ billingDay 25 →
+    // closing billingDay May 25 → settle June 10 (the next
+    // paymentDay after May 25). offset 30 stays within a single
+    // salary cycle.
     const out = buildFutureBalanceBreakdown({
       accounts: [bank({ anchorBalance: 4000 }), card()],
       loans: [loan({ monthlyInstallment: 1500, dayOfMonth: 5 })],
@@ -235,7 +242,7 @@ describe("buildFutureBalanceBreakdown", () => {
           id: "e1",
           accountId: "c1",
           amount: 2400,
-          chargeDate: "2026-05-26T12:00:00.000Z",
+          chargeDate: "2026-05-05T12:00:00.000Z",
         }),
       ],
       offset: 30,

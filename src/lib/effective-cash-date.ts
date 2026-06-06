@@ -54,6 +54,11 @@ export type CashImpact = {
   /** Account.id of the card whose cycle determined the date, when
    *  applicable. Undefined for cash/bank. */
   viaCardId?: string;
+  /** Phase 403 — original ExpenseEntry.id so downstream consumers
+   *  (cash-flow-bucket refIds, getTimelineCompleteness orphan
+   *  matching) can round-trip back to the entry without fuzzy
+   *  date/amount matching. */
+  entryId?: string;
 };
 
 const DEFAULT_PAYMENT_DAY = 10;
@@ -120,6 +125,7 @@ export function effectiveCashImpacts(args: {
       kind,
       reason,
       viaCardId: card?.id,
+      entryId: args.entry.id,
     });
   }
   return out;
@@ -232,24 +238,70 @@ function cardPaymentDateFor(
   card: Account | null,
   purchase: Date,
 ): Date {
+  // Phase 403 — proper Israeli card cycle:
+  //   1. Find the closing billingDay that includes the purchase
+  //      (statement period END).
+  //   2. Settlement = first paymentDay on/after that closingBilling.
+  //
+  // Pre-Phase-403 logic ignored billingDay entirely and produced
+  // a same-month settlement that was already in the PAST, leaving
+  // June-1 purchases on a paymentDay=2 card with an effective date
+  // of June 2 (skipped by the 35-day window). Cards screen +
+  // cockpit counted them via getCreditCardExposure; the curve did
+  // not, so the user's 2-of-month marker showed the wrong balance.
   const paymentDay = clampDay(
     card?.paymentDay ?? card?.billingDay ?? DEFAULT_PAYMENT_DAY,
   );
+  // No billingDay → fall back to a "next paymentDay strictly AFTER
+  // purchase" rule so past-paymentDay charges roll forward instead
+  // of being silently skipped. Better than producing an in-the-past
+  // settlement date that no surface ever sees.
+  const billingDay = card?.billingDay
+    ? clampDay(card.billingDay)
+    : null;
   const purchaseDay = purchase.getDate();
   const year = purchase.getFullYear();
   const month = purchase.getMonth();
 
-  // If the purchase happened on/before the payment day in its own
-  // month, it still lands on this month's payment day (e.g. buy on
-  // the 3rd, pay on the 10th).
-  // Otherwise it rolls to next month's payment day (e.g. buy on the
-  // 20th when payment is the 10th → next month's 10th).
-  const sameMonthPay = purchaseDay <= paymentDay;
-  const targetYear = sameMonthPay ? year : month === 11 ? year + 1 : year;
-  const targetMonth0 = sameMonthPay ? month : month === 11 ? 0 : month + 1;
-  const lastDay = new Date(targetYear, targetMonth0 + 1, 0).getDate();
+  // Step 1 — closingBilling = first billingDay on/after the purchase.
+  let billingYear: number;
+  let billingMonth0: number;
+  if (billingDay !== null) {
+    if (purchaseDay <= billingDay) {
+      billingYear = year;
+      billingMonth0 = month;
+    } else {
+      billingYear = month === 11 ? year + 1 : year;
+      billingMonth0 = month === 11 ? 0 : month + 1;
+    }
+  } else {
+    // No billingDay configured — anchor on the purchase day itself
+    // and rely on step 2 to push to the NEXT paymentDay strictly
+    // after the purchase.
+    billingYear = year;
+    billingMonth0 = month;
+  }
+
+  // Step 2 — settlement = first paymentDay on/after closingBilling.
+  // When billingDay is set: paymentDay in the same month as the
+  // closing billingDay if it falls after it; otherwise next month.
+  // When billingDay is not set: paymentDay strictly AFTER purchaseDay.
+  let settleYear = billingYear;
+  let settleMonth0 = billingMonth0;
+  if (billingDay !== null) {
+    if (paymentDay <= billingDay) {
+      settleMonth0 = billingMonth0 + 1;
+    }
+  } else if (purchaseDay >= paymentDay) {
+    settleMonth0 = billingMonth0 + 1;
+  }
+  if (settleMonth0 > 11) {
+    settleMonth0 = 0;
+    settleYear += 1;
+  }
+  const lastDay = new Date(settleYear, settleMonth0 + 1, 0).getDate();
   const day = Math.min(paymentDay, lastDay);
-  return new Date(targetYear, targetMonth0, day, 12, 0, 0);
+  return new Date(settleYear, settleMonth0, day, 12, 0, 0);
 }
 
 function sliceCalendarDate(start: Date, sliceIndex: number): Date {

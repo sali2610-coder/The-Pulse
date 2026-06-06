@@ -40,6 +40,7 @@ import {
 } from "@/lib/financial-engine";
 import { getMonthlyObligationBreakdown } from "@/lib/monthly-obligation-breakdown";
 import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
+import { getTimelineCompleteness } from "@/lib/financial-engine";
 import type {
   Account,
   ExpenseEntry,
@@ -499,6 +500,38 @@ describe("Phase 397 — manual cash zero-drift", () => {
       (r) => r.id === "entry:e-cash-supermarket",
     )?.amount;
     expect(cashRowAmt).toBe(10);
+  });
+
+  it("Phase 403 — credit charges in current month roll to next-cycle paymentDay (never past)", () => {
+    // User report: 2-of-month marker shows credit drop only for the
+    // recurring rule; manual charges land on PAST paymentDay and the
+    // 35-day cash-flow window skips them. After Phase 403 the
+    // Israeli cycle (closing billingDay → next paymentDay) routes
+    // every chargeDate within the open cycle to the next paymentDay
+    // ahead — visible to the curve, no orphan rows.
+    const s = seedState();
+    s.entries = [
+      {
+        id: "e-manual-cycle",
+        amount: 800,
+        category: "shopping",
+        source: "manual",
+        paymentMethod: "credit",
+        installments: 1,
+        // chargeDate AFTER NOW=Jun 10 but ≤ billingDay 25 → cycle
+        // closes Jun 25 → settle on the next paymentDay.
+        chargeDate: new Date(2026, 5, 12, 12, 0, 0).toISOString(),
+        createdAt: new Date(2026, 5, 12, 12, 0, 0).toISOString(),
+        accountId: "card-htz",
+        merchant: "TodayBuy",
+      },
+    ];
+    const c = buildEngineCtx({ ...s, now: NOW, monthKey: MONTH_KEY });
+    const orphans = getTimelineCompleteness(c);
+    // The user-reported "dropped by curve filter" rows must be empty
+    // for a well-formed card entry within the active cycle.
+    const orphanAmounts = orphans.map((o) => o.amount).filter((a) => a > 0);
+    expect(orphanAmounts).not.toContain(800);
   });
 
   it("Phase 402 — Time-curve credit lane === getCreditExposure total", () => {
