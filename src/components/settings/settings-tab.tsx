@@ -38,7 +38,7 @@ import { LoansMiniApp } from "@/components/loans/loans-mini-app";
 import { NotificationsMiniApp } from "@/components/settings/notifications-mini-app";
 import { ShortcutMiniApp } from "@/components/settings/shortcut-mini-app";
 import { IncomePanel } from "@/components/income/income-panel";
-import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-panel";
+import { RecurringMiniApp } from "@/components/recurring/recurring-mini-app";
 import { SubscriptionSuggestions } from "./subscription-suggestions";
 import { RuleDriftCard } from "./rule-drift-card";
 import { DormantRulesCard } from "./dormant-rules-card";
@@ -125,7 +125,8 @@ export function SettingsTab() {
         subtitle="חיובים חוזרים, מקובצים לפי כרטיס"
         icon={<Repeat className="size-4" />}
       >
-        <RecurringRulesPanel />
+        {/* Phase 413 — flat list mini-app w/ source chips + countdown. */}
+        <RecurringMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion

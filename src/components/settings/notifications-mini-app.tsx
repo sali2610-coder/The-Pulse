@@ -25,17 +25,17 @@ import { useFinanceStore } from "@/lib/store";
 
 export function NotificationsMiniApp() {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
-    "default",
+    () => {
+      if (typeof window === "undefined") return "default";
+      if (!("Notification" in window)) return "unsupported";
+      return Notification.permission;
+    },
   );
   const audioEnabled = useFinanceStore((s) => s.audioEnabled);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!("Notification" in window)) {
-      setPermission("unsupported");
-      return;
-    }
-    setPermission(Notification.permission);
+    if (!("Notification" in window)) return;
     const onFocus = () => {
       if ("Notification" in window) setPermission(Notification.permission);
     };
