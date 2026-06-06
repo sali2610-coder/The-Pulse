@@ -19,6 +19,10 @@ import {
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
+import {
+  buildEngineCtx,
+  getPendingConfirmations,
+} from "@/lib/financial-engine";
 import { tap } from "@/lib/haptics";
 
 type LogEntry = {
@@ -72,9 +76,24 @@ export function ShortcutHealthCard() {
   const [error, setError] = useState<string | null>(null);
 
   const entries = useFinanceStore((s) => s.entries);
-  const pendingCount = entries.filter(
-    (e) => e.needsConfirmation && !e.confirmedAt,
-  ).length;
+  const accounts = useFinanceStore((s) => s.accounts);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  // Phase 394 — pending count via engine. Never a direct entries.filter.
+  const pendingCount = getPendingConfirmations(
+    buildEngineCtx({
+      accounts,
+      rules,
+      statuses,
+      entries,
+      loans,
+      incomes,
+      monthlyBudget,
+    }),
+  ).rows.length;
 
   async function refresh() {
     setLoading(true);

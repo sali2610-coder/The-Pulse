@@ -17,8 +17,12 @@ import {
 } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
-import { sliceForMonth, daysInMonth } from "@/lib/projections";
+import { daysInMonth } from "@/lib/projections";
 import { currentMonthKey, monthKeyOf } from "@/lib/dates";
+import {
+  buildEngineCtx,
+  getMonthlyExpenses,
+} from "@/lib/financial-engine";
 import { getCategory } from "@/lib/categories";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { tap as hapticTap } from "@/lib/haptics";
@@ -40,11 +44,46 @@ type DayCell = {
 
 export function HeatmapMini() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
   const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
   const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const monthKey = currentMonthKey();
+
+  // Phase 394 — engine-sourced per-day map. getMonthlyExpenses applies
+  // the canonical filter (no refund, no FX, no pending, no withdrawal)
+  // and carries chargeDate in row.meta so the heatmap groups straight
+  // off the engine output.
+  const expenseRows = useMemo(() => {
+    if (!hydrated) return [] as ReturnType<typeof getMonthlyExpenses>["rows"];
+    return getMonthlyExpenses(
+      buildEngineCtx({
+        accounts,
+        rules,
+        statuses,
+        entries,
+        loans,
+        incomes,
+        monthlyBudget,
+        monthKey,
+      }),
+    ).rows.filter((r) => r.kind === "entry");
+  }, [
+    hydrated,
+    accounts,
+    rules,
+    statuses,
+    entries,
+    loans,
+    incomes,
+    monthlyBudget,
+    monthKey,
+  ]);
 
   const data = useMemo<{
     days: DayCell[];
@@ -58,14 +97,12 @@ export function HeatmapMini() {
     const todayDay = todayMonth === monthKey ? today.getDate() : monthDays;
 
     const totals = new Array(monthDays).fill(0) as number[];
-    for (const entry of entries) {
-      if (entry.needsConfirmation) continue;
-      const slice = sliceForMonth(entry, monthKey);
-      if (!slice) continue;
-      if (entry.isRefund) continue;
-      const d = slice.chargeDate.getDate();
+    for (const row of expenseRows) {
+      const chargeAt = row.meta?.chargeDate as string | undefined;
+      if (!chargeAt) continue;
+      const d = new Date(chargeAt).getDate();
       if (d >= 1 && d <= monthDays) {
-        totals[d - 1] += slice.amount;
+        totals[d - 1] += row.amount;
       }
     }
     const incomeByDay = new Array(monthDays).fill(0) as number[];
@@ -87,23 +124,27 @@ export function HeatmapMini() {
       hasSalary: salaryDays.has(i + 1),
     }));
     return { days, monthTotal, monthDays };
-  }, [hydrated, entries, incomes, monthKey]);
+  }, [hydrated, expenseRows, incomes, monthKey]);
 
   const dayEntries = useMemo(() => {
     if (selectedDay === null || !hydrated) return [];
-    return entries
-      .filter((e) => {
-        if (e.needsConfirmation) return false;
-        const slice = sliceForMonth(e, monthKey);
-        if (!slice) return false;
-        return slice.chargeDate.getDate() === selectedDay;
-      })
-      .map((e) => ({
-        entry: e,
-        amount: sliceForMonth(e, monthKey)!.amount,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [selectedDay, entries, hydrated, monthKey]);
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    const list: Array<{
+      entry: import("@/types/finance").ExpenseEntry;
+      amount: number;
+    }> = [];
+    for (const row of expenseRows) {
+      const chargeAt = row.meta?.chargeDate as string | undefined;
+      if (!chargeAt) continue;
+      if (new Date(chargeAt).getDate() !== selectedDay) continue;
+      const id = row.refId.replace(/^entry:/, "");
+      const e = byId.get(id);
+      if (!e) continue;
+      list.push({ entry: e, amount: row.amount });
+    }
+    list.sort((a, b) => b.amount - a.amount);
+    return list;
+  }, [selectedDay, expenseRows, entries, hydrated]);
 
   return (
     <motion.div

@@ -20,6 +20,30 @@ export function sliceAmount(entry: ExpenseEntry): number {
   return entry.amount / entry.installments;
 }
 
+/** Phase 394 — canonical "is this entry a budget-relevant expense?"
+ *  filter. Mirrors what FinancialEngine.getMonthlyExpenses excludes,
+ *  so projectMonth / actualUntilDay / actualByPaymentMethod /
+ *  categoryTotals all agree on which entries count toward the
+ *  visible "spent this month" surfaces.
+ *
+ *  Excluded:
+ *    • needsConfirmation (and not yet confirmed) — Wallet partials
+ *    • bankPending — bank-side "תלוי ועומד"
+ *    • isRefund — positive-amount credit-back, not spend
+ *    • excludeFromBudget — user opt-out
+ *    • currency !== "ILS" — FX without rate
+ *    • transactionType === "withdrawal" — cash move, not consumption
+ */
+function isBudgetExpense(entry: ExpenseEntry): boolean {
+  if (entry.needsConfirmation && !entry.confirmedAt) return false;
+  if (entry.bankPending) return false;
+  if (entry.isRefund) return false;
+  if (entry.excludeFromBudget) return false;
+  if (entry.currency && entry.currency !== "ILS") return false;
+  if (entry.transactionType === "withdrawal") return false;
+  return true;
+}
+
 export type InstallmentProgress = {
   /** Total number of installments scheduled (entry.installments). */
   total: number;
@@ -160,10 +184,12 @@ export function projectMonth(args: {
   let upcoming = 0;
 
   for (const entry of args.entries) {
-    // Wallet partials the user hasn't reviewed don't count toward either
-    // bucket — they would double-count once SMS arrives and we merge.
-    if (entry.needsConfirmation) continue;
-    if (entry.bankPending) continue;
+    // Phase 394 — single canonical filter shared with FinancialEngine.
+    // Drops Wallet partials, bankPending, refunds, FX, withdrawals,
+    // excludeFromBudget. Without this, projectMonth.projected drifted
+    // from categoryTotals/getMonthlyExpenses by Σ refunds + Σ FX + Σ
+    // withdrawals.
+    if (!isBudgetExpense(entry)) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getTime() <= now.getTime()) {
@@ -192,8 +218,7 @@ export function actualUntilDay(args: {
 }): number {
   let total = 0;
   for (const entry of args.entries) {
-    if (entry.needsConfirmation) continue;
-    if (entry.bankPending) continue;
+    if (!isBudgetExpense(entry)) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getDate() <= args.day) {
@@ -211,8 +236,7 @@ export function actualByPaymentMethod(args: {
   const now = args.now ?? new Date();
   const totals: Record<PaymentMethod, number> = { cash: 0, credit: 0 };
   for (const entry of args.entries) {
-    if (entry.needsConfirmation) continue;
-    if (entry.bankPending) continue;
+    if (!isBudgetExpense(entry)) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getTime() > now.getTime()) continue;
@@ -229,8 +253,7 @@ export function categoryTotals(args: {
   const now = args.now ?? new Date();
   const map = new Map<CategoryId, number>();
   for (const entry of args.entries) {
-    if (entry.needsConfirmation) continue;
-    if (entry.bankPending) continue;
+    if (!isBudgetExpense(entry)) continue;
     const slice = sliceForMonth(entry, args.monthKey);
     if (!slice) continue;
     if (slice.chargeDate.getTime() > now.getTime()) continue;

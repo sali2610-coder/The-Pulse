@@ -33,6 +33,10 @@ import { liquidityCurve } from "@/lib/liquidity-curve";
 import { FutureBalanceExplain } from "@/components/dashboard/simple/future-balance-explain";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import { forecastHealthScore } from "@/lib/forecast-health";
+import {
+  buildEngineCtx,
+  getCreditExposure,
+} from "@/lib/financial-engine";
 import { PulseForecastGauge } from "@/components/dashboard/simple/pulse-forecast-gauge";
 import { todayPulse } from "@/lib/today-pulse";
 import { currentMonthKey } from "@/lib/dates";
@@ -178,6 +182,33 @@ export function HeroFutureBalanceCard() {
       incomes,
     });
   }, [hydrated, entries, rules, statuses, monthlyBudget, incomes]);
+
+  // Phase 394 — open-credit signal sourced from FinancialEngine.
+  // Counts entry rows inside the canonical credit exposure (no rule
+  // rows, no double-count, no raw entries.filter).
+  const creditExposureRows = useMemo(() => {
+    if (!hydrated) return 0;
+    return getCreditExposure(
+      buildEngineCtx({
+        accounts,
+        rules,
+        statuses,
+        entries,
+        loans,
+        incomes,
+        monthlyBudget,
+      }),
+    ).rows.filter((r) => r.kind === "entry").length;
+  }, [
+    hydrated,
+    accounts,
+    rules,
+    statuses,
+    entries,
+    loans,
+    incomes,
+    monthlyBudget,
+  ]);
 
   if (!hydrated || !curve) return <Skeleton />;
 
@@ -365,9 +396,12 @@ export function HeroFutureBalanceCard() {
         // Phase 350 — feed extra risk signals: open pending entries,
         // open credit transactions, days-to-next-salary.
         const pendingCount = (pulse?.pendingForReview ?? 0);
-        const openCredit = entries.filter(
-          (e) => e.paymentMethod === "credit" && !e.confirmedAt,
-        ).length;
+        // Phase 394 — open-credit count comes from the engine's
+        // canonical credit exposure (entry rows only). The previous
+        // raw `entries.filter` swept up nearly every credit entry
+        // because `confirmedAt` is only set by the confirmation
+        // sheet; the engine count is deduplicated and source-aware.
+        const openCredit = creditExposureRows;
         const salaryIso = curve.nextSalaryAt;
         const daysToSalary = salaryIso
           ? Math.round(

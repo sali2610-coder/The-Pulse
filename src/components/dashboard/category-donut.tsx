@@ -12,7 +12,10 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
-import { sliceForMonth } from "@/lib/projections";
+import {
+  buildEngineCtx,
+  getCategoryBreakdown,
+} from "@/lib/financial-engine";
 import { addMonths, currentMonthKey } from "@/lib/dates";
 import {
   CATEGORIES,
@@ -50,28 +53,20 @@ function monthKeyFor(p: PeriodKey): MonthKey {
 
 export function CategoryDonut() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
   const entries = useFinanceStore((s) => s.entries);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const [period, setPeriod] = useState<PeriodKey>("this");
   const [selected, setSelected] = useState<CategoryId | null>(null);
   const [drilldown, setDrilldown] = useState<CategoryId | null>(null);
   const monthKey = monthKeyFor(period);
 
   const data = useMemo(() => {
-    if (!hydrated) {
-      return {
-        slices: [] as Array<{
-          id: CategoryId;
-          label: string;
-          accent: string;
-          amount: number;
-          count: number;
-          biggest: number;
-        }>,
-        total: 0,
-        count: 0,
-      };
-    }
-    type Agg = {
+    type Slice = {
       id: CategoryId;
       label: string;
       accent: string;
@@ -79,34 +74,58 @@ export function CategoryDonut() {
       count: number;
       biggest: number;
     };
-    const map = new Map<CategoryId, Agg>();
-    for (const e of entries) {
-      if (e.needsConfirmation) continue;
-      const slice = sliceForMonth(e, monthKey);
-      if (!slice) continue;
-      if (e.isRefund) continue;
-      const meta = getCategory(e.category);
-      const cur = map.get(e.category) ?? {
-        id: e.category,
-        label: meta.label,
-        accent: meta.accent,
-        amount: 0,
-        count: 0,
-        biggest: 0,
-      };
-      cur.amount += slice.amount;
-      cur.count += 1;
-      if (slice.amount > cur.biggest) cur.biggest = slice.amount;
-      map.set(e.category, cur);
+    if (!hydrated) {
+      return { slices: [] as Slice[], total: 0, count: 0 };
     }
-    const slices = CATEGORIES.map((c) => map.get(c.id as CategoryId))
-      .filter((s): s is Agg => Boolean(s))
-      .filter((s) => s.amount > 0)
-      .sort((a, b) => b.amount - a.amount);
-    const total = slices.reduce((acc, s) => acc + s.amount, 0);
+    // Phase 394 — single source of truth via FinancialEngine.
+    // getCategoryBreakdown carries per-category count + biggest in
+    // row.meta so the donut doesn't have to walk raw entries.
+    const breakdown = getCategoryBreakdown(
+      buildEngineCtx({
+        accounts,
+        rules,
+        statuses,
+        entries,
+        loans,
+        incomes,
+        monthlyBudget,
+        monthKey,
+      }),
+    );
+    const order = new Map(CATEGORIES.map((c, i) => [c.id, i]));
+    const slices: Slice[] = breakdown.rows
+      .filter((r) => r.category && r.amount > 0)
+      .map((r) => {
+        const id = r.category as CategoryId;
+        const meta = getCategory(id);
+        const m = r.meta ?? {};
+        return {
+          id,
+          label: meta.label,
+          accent: meta.accent,
+          amount: r.amount,
+          count: (m.count as number) ?? 0,
+          biggest: (m.biggest as number) ?? 0,
+        };
+      })
+      .sort((a, b) => {
+        if (b.amount !== a.amount) return b.amount - a.amount;
+        return (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99);
+      });
+    const total = breakdown.total;
     const count = slices.reduce((acc, s) => acc + s.count, 0);
     return { slices, total, count };
-  }, [hydrated, entries, monthKey]);
+  }, [
+    hydrated,
+    accounts,
+    entries,
+    rules,
+    statuses,
+    loans,
+    incomes,
+    monthlyBudget,
+    monthKey,
+  ]);
 
   const arcs = useMemo(() => {
     if (data.total <= 0) return [];

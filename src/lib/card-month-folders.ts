@@ -138,10 +138,12 @@ function buildFolderFor(
     monthName,
     kind,
     folderLabel: `${card.cardLabel} — ${monthName}`,
-    subtotal: round2(subtotal),
-    recurringTotal: round2(recurringTotal),
-    installmentsTotal: round2(installmentsTotal),
-    oneTimeTotal: round2(oneTimeTotal),
+    // Phase 396 — engine is now the rounding boundary. Folders pass
+    // raw floats; UI rounds at display only.
+    subtotal,
+    recurringTotal,
+    installmentsTotal,
+    oneTimeTotal,
     categories,
   };
 }
@@ -162,16 +164,12 @@ function scopedGroup(
   }
   return {
     category,
-    total: round2(total),
-    recurring: round2(recurring),
-    installments: round2(installments),
-    oneTime: round2(oneTime),
+    total,
+    recurring,
+    installments,
+    oneTime,
     items,
   };
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }
 
 // Re-export so consumers can label kinds without importing two modules.

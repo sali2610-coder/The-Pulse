@@ -26,8 +26,12 @@ import {
 
 import { useFinanceStore } from "@/lib/store";
 import { getCategory, type CategoryId } from "@/lib/categories";
-import { currentMonthKey } from "@/lib/dates";
-import { sliceForMonth } from "@/lib/projections";
+import {
+  buildEngineCtx,
+  getActivityFeed,
+  getMonthlyExpenses,
+  type ActivityFeedRow,
+} from "@/lib/financial-engine";
 import { Pill } from "@/components/ui/pill";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ExpenseEditFullScreen } from "@/components/expense-form/expense-edit-fullscreen";
@@ -203,18 +207,51 @@ function sourcePill(item: ActivityItem) {
   );
 }
 
-function classifyPaySource(
-  e: ExpenseEntry,
-): ActivityItem["paySource"] {
-  if (e.source === "wallet") return "wallet";
-  if (e.paymentMethod === "cash") return "cash";
-  return "credit";
-}
+// Phase 394 — paySource classification moved into FinancialEngine
+// (getActivityFeed). RecentActivity is no longer responsible for
+// inferring activity classification from raw entry fields.
 
 export function RecentActivity() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const entries = useFinanceStore((s) => s.entries);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
   const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+
+  // Phase 394 — headline "סך הוצאות החודש" KPI sourced from
+  // FinancialEngine. The activity feed (`items`) intentionally keeps
+  // walking raw entries because it is a DISPLAY log that surfaces
+  // refunds, withdrawals and pending charges with badges. The total
+  // shown in the KPI tile is a financial number and must come from
+  // the engine — never from a local sum.
+  const engineMonthSpend = useMemo(() => {
+    if (!hydrated) return 0;
+    return Math.round(
+      getMonthlyExpenses(
+        buildEngineCtx({
+          accounts,
+          rules,
+          statuses,
+          entries,
+          loans,
+          incomes,
+          monthlyBudget,
+        }),
+      ).total,
+    );
+  }, [
+    hydrated,
+    accounts,
+    rules,
+    statuses,
+    entries,
+    loans,
+    incomes,
+    monthlyBudget,
+  ]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<ExpenseEntry | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -224,80 +261,51 @@ export function RecentActivity() {
 
   const items = useMemo<ActivityItem[]>(() => {
     if (!hydrated) return [];
-    const monthKey = currentMonthKey();
-    const out: ActivityItem[] = [];
-
-    for (const e of entries) {
-      const slice = sliceForMonth(e, monthKey);
-      // Phase 314 — Wallet partials / manual entries without a
-      // chargeDate previously fell through `sliceForMonth` and
-      // disappeared from RecentActivity entirely.
-      //
-      // Phase 321 — sliceForMonth synthesizes a `new Date(y, m-1, day)`
-      // at midnight local time, stripping the real time-of-day. For
-      // the FIRST slice (same calendar day as the entry's source
-      // timestamp) we re-hydrate the real time from chargeDate /
-      // createdAt so "היום · 00:00" never appears. Future slices stay
-      // midnight (no real time exists for them) and get hasRealTime
-      // false so the UI hides the bogus HH:mm.
-      // Phase 355 — prefer occurredAt; chargeDate / createdAt still
-      // serve as fallbacks for entries that predate the field.
-      const sourceIso = e.occurredAt ?? e.chargeDate ?? e.createdAt;
-      let ts: Date;
-      let amount: number;
-      let hasRealTime = false;
-      if (slice) {
-        ts = slice.chargeDate;
-        if (sourceIso) {
-          const src = new Date(sourceIso);
-          if (
-            !Number.isNaN(src.getTime()) &&
-            src.getFullYear() === ts.getFullYear() &&
-            src.getMonth() === ts.getMonth() &&
-            src.getDate() === ts.getDate()
-          ) {
-            ts = src;
-            hasRealTime = true;
-          }
-        }
-        amount = slice.amount;
-      } else {
-        if (!sourceIso) continue;
-        const d = new Date(sourceIso);
-        if (Number.isNaN(d.getTime())) continue;
-        ts = d;
-        hasRealTime = true;
-        amount = Math.abs(e.amount) / Math.max(1, e.installments);
-      }
-      out.push({
-        id: `${e.id}:${ts.toISOString()}`,
-        entryId: e.id,
-        direction: e.isRefund ? "in" : "out",
-        amount,
+    // Phase 394 — every row comes from FinancialEngine.getActivityFeed.
+    // Engine owns slice logic, source-timestamp fallback, refund /
+    // withdrawal / pending flags. RecentActivity is now a pure renderer.
+    const feed = getActivityFeed(
+      buildEngineCtx({
+        accounts,
+        rules,
+        statuses,
+        entries,
+        loans,
+        incomes,
+        monthlyBudget,
+      }),
+    );
+    return feed.rows.map((r: ActivityFeedRow) => {
+      const ts = new Date(r.whenISO);
+      return {
+        id: `${r.entryId}:${r.whenISO}`,
+        entryId: r.entryId,
+        direction: r.direction,
+        amount: r.amount,
         ts,
-        hasRealTime,
-        title: e.merchant ?? e.note ?? getCategory(e.category as CategoryId).label,
-        category: e.category as CategoryId,
-        source: e.source,
-        installments: e.installments,
-        isRefund: e.isRefund,
-        bankPending: e.bankPending,
-        needsConfirmation: e.needsConfirmation,
-        excludeFromBudget: e.excludeFromBudget,
-        isWithdrawal: e.transactionType === "withdrawal",
-        paySource: classifyPaySource(e),
-      });
-    }
-
-    // Phase 385 — income projections (salary cards) intentionally
-    // excluded. Recent Activity now answers "what did I spend this
-    // month?" — salaries already live in the Time tab and the
-    // Insights tab. `incomes` is referenced here only to satisfy
-    // the dependency array; no items derived.
-    void incomes;
-
-    return out.sort((a, b) => b.ts.getTime() - a.ts.getTime());
-  }, [hydrated, entries, incomes]);
+        hasRealTime: r.hasRealTime,
+        title: r.title === r.category ? getCategory(r.category).label : r.title,
+        category: r.category,
+        source: r.source,
+        installments: r.installments,
+        isRefund: r.isRefund,
+        bankPending: r.bankPending,
+        needsConfirmation: r.needsConfirmation,
+        excludeFromBudget: r.excludeFromBudget,
+        isWithdrawal: r.isWithdrawal,
+        paySource: r.paySource,
+      };
+    });
+  }, [
+    hydrated,
+    accounts,
+    rules,
+    statuses,
+    entries,
+    loans,
+    incomes,
+    monthlyBudget,
+  ]);
 
   // Summary numbers — same engine inputs.
   // Phase 314 — also surface the latest income + latest expense so
@@ -307,7 +315,6 @@ export function RecentActivity() {
     const todayKey = startOfDay(now);
     let monthCount = 0;
     let todayCount = 0;
-    let monthSpend = 0;
     let lastExpense: ActivityItem | null = null;
     let walletCount = 0;
     let manualCount = 0;
@@ -316,9 +323,6 @@ export function RecentActivity() {
     for (const it of items) {
       monthCount++;
       if (startOfDay(it.ts) === todayKey) todayCount++;
-      if (it.direction === "out" && !it.isWithdrawal) {
-        monthSpend += it.amount;
-      }
       if (it.direction === "out" && !lastExpense && !it.isWithdrawal) {
         lastExpense = it;
       }
@@ -330,14 +334,15 @@ export function RecentActivity() {
     return {
       monthCount,
       todayCount,
-      monthSpend,
+      // Phase 394 — engine-sourced. Never a local sum of activity items.
+      monthSpend: engineMonthSpend,
       lastExpense,
       walletCount,
       manualCount,
       creditCount,
       cashCount,
     };
-  }, [items]);
+  }, [items, engineMonthSpend]);
 
   // Filter logic used by the bottom sheet.
   const filtered = useMemo(() => {

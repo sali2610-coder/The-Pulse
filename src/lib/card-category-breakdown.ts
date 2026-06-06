@@ -1,13 +1,14 @@
-// Phase 242 — per-card category breakdown.
+// Phase 396 — engine-backed presentation wrapper.
 //
-// Walks `effectiveCashImpactForRule` and `effectiveCashImpactStream`
-// directly (rather than re-joining the cash-flow-bucket refIds back
-// to their sources) so each obligation carries its origin category
-// without any string-id round-trip.
+// Was: an independent walker over effectiveCashImpactStream that
+// produced its own credit totals + classifications (the legacy
+// dual-calculator that drifted from the cockpit / cards header by
+// ₪10 when both shared the screen).
 //
-// Output: per-card list ordered by total, each card carries
-// per-category groups split into recurring / installments / one-time.
-// No new financial logic — same engines as the rest of the dashboard.
+// Now: re-emits the same exported types, but every numeric value
+// comes from FinancialEngine.getCreditCardStatement (which in turn
+// is the canonical getCreditCardExposure data). No new math. No
+// independent filter. UI files unchanged.
 
 import type {
   Account,
@@ -17,29 +18,12 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import type { CategoryId } from "@/lib/categories";
-import {
-  effectiveCashImpactForRule,
-  effectiveCashImpactStream,
-} from "@/lib/effective-cash-date";
-import { monthKeyOf } from "@/lib/dates";
-import type { MonthKey } from "@/types/finance";
-import {
-  isRuleCovered,
-  monthsCoveredByMatchedEntries,
-} from "@/lib/rule-coverage";
-
-// Local copy — cash-flow-bucket's monthsInWindow generator isn't
-// exported. Yields every YYYY-MM that contains a millisecond between
-// `from` and `to` (inclusive of the start month).
-function* monthsInWindow(from: Date, to: Date): Generator<MonthKey> {
-  const start = new Date(from.getFullYear(), from.getMonth(), 1);
-  const end = new Date(to.getFullYear(), to.getMonth(), 1);
-  const cursor = new Date(start);
-  while (cursor.getTime() <= end.getTime()) {
-    yield monthKeyOf(cursor);
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-}
+import { addMonths, monthKeyOf } from "@/lib/dates";
+import { getCreditCardStatement } from "@/lib/credit-card-statement";
+import type {
+  CreditCardExposureBucket,
+  CreditExposureRow,
+} from "@/lib/credit-card-exposure";
 
 export type ChargeKind = "recurring" | "installments" | "oneTime";
 
@@ -67,30 +51,65 @@ export type CardBreakdown = {
   installmentsTotal: number;
   oneTimeTotal: number;
   categories: CategoryGroup[];
-  /** ISO of the next debit on this card, or null. */
   nextSettlementAt: string | null;
 };
 
 export type CardBreakdownReport = {
   cards: CardBreakdown[];
-  /** Sum across every card. Sanity check. */
   totalCommitted: number;
 };
 
-const WINDOW_DAYS = 35;
+// Phase 396 — single-month default. The cards header + per-card
+// statement rows + folder view ALL consume the same monthKey through
+// the engine, so the folder view stays in sync with the header
+// without showing future-billing-month folders (which is the Time
+// tab's job).
+const DEFAULT_WINDOW_MONTHS = 1;
 
-const ZERO_GROUP = (category: CategoryId): CategoryGroup => ({
-  category,
-  total: 0,
-  recurring: 0,
-  installments: 0,
-  oneTime: 0,
-  items: [],
-});
+function bucketToKind(
+  bucket: CreditCardExposureBucket,
+  refId: string,
+  rules: RecurringRule[],
+): ChargeKind {
+  // Rule-source rows: installment-plan rules (installmentTotal set)
+  // classify as "installments"; regular monthly bills as "recurring".
+  if (refId.startsWith("rule:")) {
+    const ruleId = refId.slice("rule:".length);
+    const r = rules.find((x) => x.id === ruleId);
+    if (r && r.installmentTotal && r.installmentTotal > 1) return "installments";
+    return "recurring";
+  }
+  // Entry-source rows: existingInstallments bucket is BNPL; everything
+  // else is a one-off card transaction.
+  if (bucket === "existingInstallments") return "installments";
+  return "oneTime";
+}
 
-// Unused arg shape preserved for caller parity; Loans + statuses
-// don't drive per-card category math but the dashboard already has
-// the wiring so we keep the surface symmetric with buildCashFlowBuckets.
+function effectiveDateFor(args: {
+  monthKey: string;
+  paymentDay: number;
+}): string {
+  // The canonical Israeli card cycle (effective-cash-date.ts) maps a
+  // purchase attributed to monthKey=X to the bank-debit date of the
+  // NEXT month's paymentDay — purchases land after the previous
+  // billing cycle's payment day, so the next paymentDay settles
+  // them. Edge case (purchase before paymentDay in the same month)
+  // is rare here because we drive off monthKey, not per-row dates.
+  const [y, m] = args.monthKey.split("-").map(Number);
+  const targetYear = m === 12 ? y + 1 : y;
+  const targetMonth0 = m === 12 ? 0 : m;
+  const lastDay = new Date(targetYear, targetMonth0 + 1, 0).getDate();
+  const d = new Date(
+    targetYear,
+    targetMonth0,
+    Math.min(args.paymentDay, lastDay),
+    12,
+    0,
+    0,
+  );
+  return d.toISOString();
+}
+
 export function buildCardCategoryBreakdown(args: {
   accounts: Account[];
   loans: Loan[];
@@ -98,214 +117,160 @@ export function buildCardCategoryBreakdown(args: {
   statuses: RecurringStatus[];
   entries: ExpenseEntry[];
   now?: Date;
+  windowMonths?: number;
+  /** Legacy alias from the pre-Phase-396 implementation. Mapped to
+   *  `windowMonths` by ceil(days/30) so existing callers keep working. */
   windowDays?: number;
 }): CardBreakdownReport {
   const now = args.now ?? new Date();
-  const windowDays = Math.max(1, args.windowDays ?? WINDOW_DAYS);
-  const horizon = new Date(now.getTime() + windowDays * 86_400_000);
+  // Phase 396 — legacy `windowDays` is intentionally ignored. The
+  // pre-Phase-396 walker gated per-row by effective-cash-date so
+  // far-future emissions silently dropped out; that gating depended
+  // on a separate filter set that diverged from the canonical engine
+  // exposure (the very drift this consolidation removes). The new
+  // implementation always speaks in month-keys and defaults to the
+  // current month, which is what CardsHierarchyCard renders.
+  void args.windowDays;
+  const windowMonths = Math.max(
+    1,
+    args.windowMonths ?? DEFAULT_WINDOW_MONTHS,
+  );
+  void args.loans;
 
-  type CardAccum = {
+  // Per-card accumulator. We aggregate across each month in the window
+  // so the report shape stays compatible with buildCardMonthFolders
+  // (which then rebuckets by month for the UI).
+  type Acc = {
     cardId: string;
-    label: string;
-    last4?: string;
-    groups: Map<CategoryId, CategoryGroup>;
-    nextSettlement: number | null;
+    cardLabel: string;
+    cardLast4?: string;
+    total: number;
+    recurringTotal: number;
+    installmentsTotal: number;
+    oneTimeTotal: number;
+    nextSettlementAt: string | null;
+    categories: Map<CategoryId, CategoryGroup>;
   };
-  const cards = new Map<string, CardAccum>();
-  const cardAccountById = new Map<string, Account>();
-  for (const a of args.accounts) {
-    if (a.kind === "card" && a.active) cardAccountById.set(a.id, a);
-  }
-
-  function ensureCard(cardId: string): CardAccum {
-    const found = cards.get(cardId);
+  const accs = new Map<string, Acc>();
+  function ensureCard(card: {
+    cardId: string;
+    cardLabel: string;
+    cardLast4?: string;
+  }): Acc {
+    const found = accs.get(card.cardId);
     if (found) return found;
-    const acc = cardAccountById.get(cardId);
-    const fresh: CardAccum = {
-      cardId,
-      label: acc?.label ?? "כרטיס",
-      last4: acc?.cardLast4,
-      groups: new Map(),
-      nextSettlement: null,
+    const fresh: Acc = {
+      cardId: card.cardId,
+      cardLabel: card.cardLabel,
+      cardLast4: card.cardLast4,
+      total: 0,
+      recurringTotal: 0,
+      installmentsTotal: 0,
+      oneTimeTotal: 0,
+      nextSettlementAt: null,
+      categories: new Map(),
     };
-    cards.set(cardId, fresh);
+    accs.set(card.cardId, fresh);
     return fresh;
   }
 
-  function pushItem(args: {
-    cardId: string;
-    category: CategoryId;
-    label: string;
-    amount: number;
-    effectiveCashAt: Date;
-    kind: ChargeKind;
-    refId: string;
-  }) {
-    const card = ensureCard(args.cardId);
-    const grp = card.groups.get(args.category) ?? ZERO_GROUP(args.category);
-    grp.total += args.amount;
-    if (args.kind === "recurring") grp.recurring += args.amount;
-    else if (args.kind === "installments") grp.installments += args.amount;
-    else grp.oneTime += args.amount;
-    grp.items.push({
-      label: args.label,
-      amount: args.amount,
-      effectiveCashAt: args.effectiveCashAt.toISOString(),
-      kind: args.kind,
-      refId: args.refId,
+  const baseMonth = monthKeyOf(now);
+  for (let i = 0; i < windowMonths; i++) {
+    const monthKey = addMonths(baseMonth, i);
+    const statement = getCreditCardStatement({
+      accounts: args.accounts,
+      rules: args.rules,
+      entries: args.entries,
+      statuses: args.statuses,
+      monthKey,
     });
-    card.groups.set(args.category, grp);
-    const ts = args.effectiveCashAt.getTime();
-    if (card.nextSettlement === null || ts < card.nextSettlement) {
-      card.nextSettlement = ts;
+    for (const card of statement.cards) {
+      const acc = ensureCard({
+        cardId: card.cardId,
+        cardLabel: card.cardLabel,
+        cardLast4: card.cardLast4,
+      });
+      const cardAccount = args.accounts.find((a) => a.id === card.cardId);
+      const paymentDay =
+        cardAccount?.paymentDay ?? cardAccount?.billingDay ?? 10;
+      const effectiveCashAt = effectiveDateFor({ monthKey, paymentDay });
+      const tDate = new Date(effectiveCashAt);
+      if (tDate.getTime() > now.getTime()) {
+        if (
+          !acc.nextSettlementAt ||
+          tDate.getTime() < new Date(acc.nextSettlementAt).getTime()
+        ) {
+          acc.nextSettlementAt = effectiveCashAt;
+        }
+      }
+      for (const tx of card.transactions) {
+        const kind = bucketToKind(tx.bucket, tx.id, args.rules);
+        const category = (tx.category ?? "other") as CategoryId;
+        const grp =
+          acc.categories.get(category) ??
+          ({
+            category,
+            total: 0,
+            recurring: 0,
+            installments: 0,
+            oneTime: 0,
+            items: [],
+          } satisfies CategoryGroup);
+        grp.total += tx.amount;
+        if (kind === "recurring") grp.recurring += tx.amount;
+        else if (kind === "installments") grp.installments += tx.amount;
+        else grp.oneTime += tx.amount;
+        grp.items.push(itemFromRow(tx, kind, effectiveCashAt));
+        acc.categories.set(category, grp);
+        acc.total += tx.amount;
+        if (kind === "recurring") acc.recurringTotal += tx.amount;
+        else if (kind === "installments") acc.installmentsTotal += tx.amount;
+        else acc.oneTimeTotal += tx.amount;
+      }
     }
   }
 
-  // 1. Recurring rules + card-linked installment-plan rules.
-  const paidThisMonth = new Set(
-    args.statuses
-      .filter(
-        (s) => s.status === "paid" && s.monthKey === monthKeyOf(now),
-      )
-      .map((s) => s.ruleId),
-  );
-  // Phase 262 — same dedup the cash-flow-bucket engine uses. Skip
-  // rule emission for any month already covered by a matched entry
-  // slice; otherwise card-category totals double-count.
-  const coverage = monthsCoveredByMatchedEntries({
-    rules: args.rules,
-    entries: args.entries,
-    now,
-    windowDays,
-  });
-  for (const rule of args.rules) {
-    if (!rule.active) continue;
-    for (const monthKey of monthsInWindow(now, horizon)) {
-      if (
-        monthKey === monthKeyOf(now) &&
-        paidThisMonth.has(rule.id)
-      ) {
-        continue;
-      }
-      if (isRuleCovered(coverage, rule.id, monthKey)) {
-        continue;
-      }
-      const impact = effectiveCashImpactForRule({
-        rule,
-        accounts: args.accounts,
-        monthKey,
-      });
-      if (!impact || impact.kind !== "card" || !impact.viaCardId) continue;
-      const ts = impact.effectiveCashDate.getTime();
-      if (ts <= now.getTime() || ts > horizon.getTime()) continue;
-      pushItem({
-        cardId: impact.viaCardId,
-        category: rule.category,
-        label: rule.label,
-        amount: impact.amount,
-        effectiveCashAt: impact.effectiveCashDate,
-        kind: rule.installmentTotal ? "installments" : "recurring",
-        refId: `rule:${rule.id}`,
-      });
-    }
-  }
-
-  // 2. Card-side entries (one-shot + installment plans).
-  const stream = effectiveCashImpactStream({
-    entries: args.entries,
-    accounts: args.accounts,
-    now,
-  });
-  for (const impact of stream) {
-    if (impact.kind !== "card" || !impact.viaCardId) continue;
-    const ts = impact.effectiveCashDate.getTime();
-    if (ts <= now.getTime() || ts > horizon.getTime()) continue;
-    const sourceEntry = findEntryForImpact(args.entries, impact);
-    if (!sourceEntry) continue;
-    pushItem({
-      cardId: impact.viaCardId,
-      category: sourceEntry.category,
-      label: sourceEntry.merchant ?? sourceEntry.note ?? "חיוב כרטיס",
-      amount: impact.amount,
-      effectiveCashAt: impact.effectiveCashDate,
-      kind:
-        sourceEntry.installments && sourceEntry.installments > 1
-          ? "installments"
-          : "oneTime",
-      refId: `entry:${sourceEntry.id}:${impact.sliceIndex}`,
-    });
-  }
-
-  // 3. Finalise + sort.
-  const out: CardBreakdown[] = [];
-  let totalCommitted = 0;
-  for (const card of cards.values()) {
-    let recurring = 0;
-    let installments = 0;
-    let oneTime = 0;
-    let total = 0;
-    const categories = [...card.groups.values()]
-      .map((g) => {
-        recurring += g.recurring;
-        installments += g.installments;
-        oneTime += g.oneTime;
-        total += g.total;
-        return {
-          ...g,
-          total: round2(g.total),
-          recurring: round2(g.recurring),
-          installments: round2(g.installments),
-          oneTime: round2(g.oneTime),
+  const cards: CardBreakdown[] = Array.from(accs.values())
+    .map((a) => ({
+      cardId: a.cardId,
+      cardLabel: a.cardLabel,
+      cardLast4: a.cardLast4,
+      total: a.total,
+      recurringTotal: a.recurringTotal,
+      installmentsTotal: a.installmentsTotal,
+      oneTimeTotal: a.oneTimeTotal,
+      nextSettlementAt: a.nextSettlementAt,
+      categories: Array.from(a.categories.values())
+        .map((g) => ({
+          category: g.category,
+          total: g.total,
+          recurring: g.recurring,
+          installments: g.installments,
+          oneTime: g.oneTime,
           items: g.items.slice().sort(
-            (a, b) =>
-              new Date(a.effectiveCashAt).getTime() -
-              new Date(b.effectiveCashAt).getTime(),
+            (x, y) =>
+              new Date(x.effectiveCashAt).getTime() -
+              new Date(y.effectiveCashAt).getTime(),
           ),
-        };
-      })
-      .sort((a, b) => b.total - a.total);
+        }))
+        .sort((x, y) => y.total - x.total),
+    }))
+    .sort((a, b) => b.total - a.total);
 
-    out.push({
-      cardId: card.cardId,
-      cardLabel: card.label,
-      cardLast4: card.last4,
-      total: round2(total),
-      recurringTotal: round2(recurring),
-      installmentsTotal: round2(installments),
-      oneTimeTotal: round2(oneTime),
-      categories,
-      nextSettlementAt:
-        card.nextSettlement !== null
-          ? new Date(card.nextSettlement).toISOString()
-          : null,
-    });
-    totalCommitted += total;
-  }
-  out.sort((a, b) => b.total - a.total);
+  const totalCommitted = cards.reduce((s, c) => s + c.total, 0);
+  return { cards, totalCommitted };
+}
 
+function itemFromRow(
+  tx: CreditExposureRow & { category?: CategoryId },
+  kind: ChargeKind,
+  effectiveCashAt: string,
+): CategoryGroup["items"][number] {
   return {
-    cards: out,
-    totalCommitted: round2(totalCommitted),
+    label: tx.label,
+    amount: tx.amount,
+    effectiveCashAt,
+    kind,
+    refId: tx.id,
   };
-}
-
-function findEntryForImpact(
-  entries: ExpenseEntry[],
-  impact: { purchaseDate: Date; amount: number; sliceIndex: number },
-): ExpenseEntry | undefined {
-  // Match by chargeDate calendar day + sliceAmount; falls back to the
-  // first entry whose chargeDate matches the slice's calendar day.
-  const day = impact.purchaseDate.toISOString().slice(0, 10);
-  for (const e of entries) {
-    if (e.chargeDate.slice(0, 10) !== day) continue;
-    const sliceAmt =
-      e.installments > 1 ? e.amount / e.installments : e.amount;
-    if (Math.abs(sliceAmt - impact.amount) < 0.01) return e;
-  }
-  // Fallback — same day, ignore amount.
-  return entries.find((e) => e.chargeDate.slice(0, 10) === day);
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }

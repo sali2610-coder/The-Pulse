@@ -58,3 +58,6 @@ perf-budget.snapshot.json
 # default to keep CI + Vercel build paths clean.
 /ios
 /android
+
+# Phase 395 — local E2E run output (screenshots + debug dumps).
+e2e-output/

@@ -17,8 +17,14 @@ import {
   buildCategorySpend,
   type CategorySpendBreakdown,
 } from "@/lib/category-spend";
+import {
+  buildEngineCtx,
+  getCategoryBreakdown,
+  getRecurringCommitmentsByCategory,
+} from "@/lib/financial-engine";
 import { addMonths, currentMonthKey } from "@/lib/dates";
 import type { MonthKey } from "@/types/finance";
+import type { CategoryId } from "@/lib/categories";
 import { getCategory } from "@/lib/categories";
 import { categoryTrends } from "@/lib/forecast";
 import { ruleSchedule } from "@/lib/installment-schedule";
@@ -41,6 +47,16 @@ const ILS = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
 });
 
+// Phase 396 — recurring rules carry only `dayOfMonth`; map to an ISO
+// for the per-category items array so the existing UI sorting still
+// works without poking into raw store state.
+function ruleDateIso(monthKey: MonthKey, dayOfMonth: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const day = Math.min(Math.max(1, dayOfMonth), lastDay);
+  return new Date(y, m - 1, day, 12, 0, 0).toISOString();
+}
+
 const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   day: "numeric",
   month: "short",
@@ -48,9 +64,13 @@ const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
 
 export function CategorySpendCard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
   const entries = useFinanceStore((s) => s.entries);
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const [editingId, setEditingId] = useState<string | null>(null);
   const deleteWithUndo = useDeleteWithUndo();
 
@@ -65,15 +85,100 @@ export function CategorySpendCard() {
   const [monthKey, setMonthKey] = useState<MonthKey>(currentMonthKey());
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
 
-  const report = useMemo(() => {
+  // Phase 396 — single source of truth.
+  //
+  // Total at the section header MUST equal CategoryDonut (= engine's
+  // canonical getCategoryBreakdown). Recurring rules are surfaced as
+  // an INFORMATIONAL per-row overlay; they are no longer added to
+  // each category's "total" — that figure is now actuals only, the
+  // same number the donut shows.
+  const report = useMemo<ReturnType<typeof buildCategorySpend> | null>(() => {
     if (!hydrated) return null;
-    return buildCategorySpend({
-      entries,
+    const ctx = buildEngineCtx({
+      accounts,
       rules,
       statuses,
+      entries,
+      loans,
+      incomes,
+      monthlyBudget,
       monthKey,
     });
-  }, [hydrated, entries, rules, statuses, monthKey]);
+    const cats = getCategoryBreakdown(ctx);
+    const recur = getRecurringCommitmentsByCategory(ctx);
+    // Build CategorySpendBreakdown rows from engine output. The legacy
+    // shape is preserved so the UI stays untouched.
+    const byCategory: CategorySpendBreakdown[] = cats.rows.map((row) => {
+      const cat = row.category as CategoryId;
+      const recurringOverlay = recur.byCategory.get(cat)?.total ?? 0;
+      const recurringRules = recur.byCategory.get(cat)?.rules ?? [];
+      // Per-category items: actual entry slices this month + recurring
+      // rule overlay rows (kept in the items list so the expanded row
+      // still surfaces the bills — they don't contribute to `total`).
+      const entryItems: CategorySpendBreakdown["items"] = entries
+        .flatMap((e) => {
+          if (e.category !== cat) return [];
+          if (e.isRefund) return [];
+          if (e.excludeFromBudget) return [];
+          if (e.currency && e.currency !== "ILS") return [];
+          if (e.needsConfirmation && !e.confirmedAt) return [];
+          if (e.bankPending) return [];
+          if (e.transactionType === "withdrawal") return [];
+          const slice = sliceForMonth(e, monthKey);
+          if (!slice) return [];
+          return [
+            {
+              id: e.id,
+              label: e.merchant ?? e.note ?? "הוצאה",
+              amount: slice.amount,
+              chargeDate: slice.chargeDate.toISOString(),
+              source: "entry" as const,
+              isRecurring: false,
+            },
+          ];
+        });
+      const ruleItems: CategorySpendBreakdown["items"] = recurringRules.map(
+        (r) => ({
+          id: r.ruleId,
+          label: r.label,
+          amount: r.amount,
+          chargeDate: ruleDateIso(monthKey, r.dayOfMonth),
+          source: "rule" as const,
+          isRecurring: true,
+        }),
+      );
+      return {
+        category: cat,
+        total: row.amount,
+        // Discretionary now = total (engine = actuals only). The
+        // recurring overlay is displayed BESIDE the total but does
+        // NOT inflate it — guaranteeing the section header matches
+        // the donut.
+        recurring: recurringOverlay,
+        discretionary: row.amount,
+        items: entryItems.concat(ruleItems).sort(
+          (a, b) =>
+            new Date(a.chargeDate).getTime() -
+            new Date(b.chargeDate).getTime(),
+        ),
+      };
+    });
+    return {
+      monthKey,
+      total: cats.total,
+      byCategory: byCategory.sort((a, b) => b.total - a.total),
+    };
+  }, [
+    hydrated,
+    accounts,
+    entries,
+    rules,
+    statuses,
+    loans,
+    incomes,
+    monthlyBudget,
+    monthKey,
+  ]);
 
   // Phase 280 — MoM trend + ending-installment count per category so
   // each collapsed row can show "in motion" cues without expanding.

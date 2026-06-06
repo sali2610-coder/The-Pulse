@@ -202,35 +202,35 @@ export function getCreditCardStatement(args: {
     }
   }
 
-  // Sort cards by total desc; transactions inside each card by
-  // amount desc.
+  // Phase 396 — RAW floats only. UI rounds at display. Eliminates
+  // per-card-round-then-sum vs round-once-on-sum drift that surfaced
+  // as the user-reported ₪10 mismatch between header and rows.
   const cards: CardStatement[] = Array.from(accMap.values())
     .map((a) => ({
       cardId: a.cardId,
       cardLabel: a.cardLabel,
       cardLast4: a.cardLast4,
-      total: Math.round(a.total),
+      total: a.total,
       transactions: a.transactions
         .slice()
         .sort((x, y) => y.amount - x.amount),
       categoryTotals: Array.from(a.categoryMap.entries())
         .map(([category, total]) => ({
           category,
-          total: Math.round(total),
+          total,
         }))
         .sort((x, y) => y.total - x.total),
     }))
     .sort((a, b) => b.total - a.total);
 
-  const total =
-    cards.reduce((s, c) => s + c.total, 0) + Math.round(unassignedTotal);
+  const total = cards.reduce((s, c) => s + c.total, 0) + unassignedTotal;
 
   return {
     monthKey: args.monthKey,
     total,
     cards,
     unassigned: {
-      total: Math.round(unassignedTotal),
+      total: unassignedTotal,
       transactions: unassignedRows.sort((x, y) => y.amount - x.amount),
     },
   };

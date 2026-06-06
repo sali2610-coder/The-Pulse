@@ -221,23 +221,15 @@ export function getMonthlyObligationBreakdown(args: {
     });
   }
 
-  // Phase 391 — round each lane FIRST, then sum the rounded lanes.
-  // Previously total was Math.round(rawSum) which could drift by a
-  // shekel or two from the visible lane sum due to rounding (six
-  // entries each rounding up + a sum that rounds down produced the
-  // user-reported ₪10 cockpit-vs-where-money-goes mismatch).
-  const creditR = Math.round(creditCardsTotal);
-  const bankR = Math.round(bankFixedTotal);
-  const loansR = Math.round(loansTotal);
-  const cashR = Math.round(cashTotal);
-
+  // Phase 396 — RAW floats. UI rounds at display only. Single
+  // rounding strategy across the engine eliminates per-surface drift.
   return {
     monthKey: args.monthKey,
-    total: creditR + bankR + loansR + cashR,
-    creditCardsTotal: creditR,
-    bankFixedTotal: bankR,
-    loansTotal: loansR,
-    cashTotal: cashR,
+    total: creditCardsTotal + bankFixedTotal + loansTotal + cashTotal,
+    creditCardsTotal,
+    bankFixedTotal,
+    loansTotal,
+    cashTotal,
     counts: {
       creditCards: creditCount,
       bankFixed: bankCount,

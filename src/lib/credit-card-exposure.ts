@@ -239,15 +239,18 @@ export function getCreditCardExposure(args: {
     manualCardTransactions +
     pendingTransactions;
 
+  // Phase 396 — engine emits RAW floats. UI rounds at display only.
+  // Eliminates Σ(round per bucket) ≠ round(Σ buckets) drift that
+  // produced the user-reported ₪10 mismatch on multi-card setups.
   return {
     monthKey: args.monthKey,
-    futureCardCharges: Math.round(futureCardCharges),
-    existingInstallments: Math.round(existingInstallments),
-    walletTransactions: Math.round(walletTransactions),
-    importedTransactions: Math.round(importedTransactions),
-    manualCardTransactions: Math.round(manualCardTransactions),
-    pendingTransactions: Math.round(pendingTransactions),
-    totalExpectedCharge: Math.round(totalExpectedCharge),
+    futureCardCharges,
+    existingInstallments,
+    walletTransactions,
+    importedTransactions,
+    manualCardTransactions,
+    pendingTransactions,
+    totalExpectedCharge,
     counts,
     breakdown,
     duplicatesPrevented,

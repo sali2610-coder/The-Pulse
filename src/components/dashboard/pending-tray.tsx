@@ -18,6 +18,10 @@ import { ConfirmationSheet } from "@/components/confirmation/confirmation-sheet"
 import { InstantConfirmSheet } from "@/components/confirmation/instant-confirm-sheet";
 import { classifyPending } from "@/lib/pending-lifecycle";
 import { detectStalePending } from "@/lib/stale-pending";
+import {
+  buildEngineCtx,
+  getPendingConfirmations,
+} from "@/lib/financial-engine";
 import type { ExpenseEntry } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -41,10 +45,45 @@ function pendingTimeLabel(iso: string): string {
 
 export function PendingTray() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
-  const pending = useFinanceStore((s) =>
-    s.entries.filter((e) => e.needsConfirmation && !e.confirmedAt),
-  );
+  const allEntries = useFinanceStore((s) => s.entries);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const confirmExpense = useFinanceStore((s) => s.confirmExpense);
+
+  // Phase 394 — pending list now comes from FinancialEngine, not a
+  // direct entries.filter. The engine is the single source of truth
+  // for which entries are pending; tray is a pure consumer.
+  const pending = useMemo<ExpenseEntry[]>(() => {
+    if (!hydrated) return [];
+    const ctx = buildEngineCtx({
+      accounts,
+      rules,
+      statuses,
+      entries: allEntries,
+      loans,
+      incomes,
+      monthlyBudget,
+    });
+    const ids = new Set(
+      getPendingConfirmations(ctx).rows.map(
+        (r) => r.refId.replace(/^entry:/, ""),
+      ),
+    );
+    return allEntries.filter((e) => ids.has(e.id));
+  }, [
+    hydrated,
+    allEntries,
+    accounts,
+    rules,
+    statuses,
+    loans,
+    incomes,
+    monthlyBudget,
+  ]);
 
   const [active, setActive] = useState<ExpenseEntry | null>(null);
 
@@ -56,7 +95,6 @@ export function PendingTray() {
   // Phase 206 — lifecycle classification. Reads ALL entries (not
   // only pending) so the merge-candidate detector can match against
   // already-confirmed siblings.
-  const allEntries = useFinanceStore((s) => s.entries);
   const lifecycle = useMemo(
     () => classifyPending({ entries: allEntries }),
     [allEntries],

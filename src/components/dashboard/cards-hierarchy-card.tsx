@@ -20,9 +20,12 @@ import {
   buildCardMonthFolders,
   type CardMonthFolder,
 } from "@/lib/card-month-folders";
-import { getCreditCardExposure } from "@/lib/credit-card-exposure";
 import {
-  getCreditCardStatement,
+  buildEngineCtx,
+  getCreditExposure,
+  getCreditExposureByCard,
+} from "@/lib/financial-engine";
+import {
   type CardStatement,
   type CardStatementRow,
 } from "@/lib/credit-card-statement";
@@ -69,56 +72,70 @@ export function CardsHierarchyCard() {
   const rules = useFinanceStore((s) => s.rules);
   const statuses = useFinanceStore((s) => s.statuses);
   const entries = useFinanceStore((s) => s.entries);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
   const [editingId, setEditingId] = useState<string | null>(null);
   const deleteWithUndo = useDeleteWithUndo();
 
-  const report = useMemo(() => {
+  // Phase 396 — single calculation path. All three views (header,
+  // per-card statement rows, per-month folder drilldown) consume
+  // the SAME engine output. No local sums, no parallel walkers.
+  const ctx = useMemo(() => {
     if (!hydrated) return null;
-    return buildCardCategoryBreakdown({
+    return buildEngineCtx({
       accounts,
-      loans,
       rules,
       statuses,
       entries,
+      loans,
+      incomes,
+      monthlyBudget,
+      monthKey: currentMonthKey(),
     });
-  }, [hydrated, accounts, loans, rules, statuses, entries]);
+  }, [
+    hydrated,
+    accounts,
+    rules,
+    statuses,
+    entries,
+    loans,
+    incomes,
+    monthlyBudget,
+  ]);
+
+  // Header total — engine canonical credit exposure.
+  const exposure = useMemo(() => {
+    if (!ctx) return null;
+    return getCreditExposure(ctx);
+  }, [ctx]);
+
+  // Per-card statement rows — same data, grouped by card.
+  const statement = useMemo(() => {
+    if (!ctx) return null;
+    return getCreditExposureByCard(ctx);
+  }, [ctx]);
+
+  // Per-(card × month) folder drilldown — buildCardMonthFolders is a
+  // presentation rebucketing wrapper that now consumes the engine
+  // exclusively (buildCardCategoryBreakdown rewritten in Phase 396).
+  const report = useMemo(() => {
+    if (!ctx) return null;
+    return buildCardCategoryBreakdown({
+      accounts: ctx.accounts,
+      loans: ctx.loans,
+      rules: ctx.rules,
+      statuses: ctx.statuses,
+      entries: ctx.entries,
+      now: ctx.now,
+    });
+  }, [ctx]);
 
   const folders = useMemo(() => {
     if (!report) return [];
     return buildCardMonthFolders(report);
   }, [report]);
 
-  // Phase 380 — header total must match the cockpit's canonical
-  // credit number. The per-card per-month folders below stay as the
-  // detailed lens, but the headline "סה״כ" reads from
-  // getCreditCardExposure so it equals
-  // breakdown.creditCardsTotal everywhere.
-  const exposure = useMemo(() => {
-    if (!hydrated) return null;
-    return getCreditCardExposure({
-      rules,
-      entries,
-      statuses,
-      monthKey: currentMonthKey(),
-    });
-  }, [hydrated, rules, entries, statuses]);
-
-  // Phase 393 — canonical per-card statement for the current month.
-  // This is the source of truth for the visible per-card rows so
-  // every credit shekel routes to its real card folder and the
-  // header total = Σ visible cards + unassigned.
-  const statement = useMemo(() => {
-    if (!hydrated) return null;
-    return getCreditCardStatement({
-      accounts,
-      rules,
-      entries,
-      statuses,
-      monthKey: currentMonthKey(),
-    });
-  }, [hydrated, accounts, rules, entries, statuses]);
-
-  if (!hydrated || !report) return null;
+  if (!hydrated || !ctx || !report) return null;
   if (folders.length === 0 && (!statement || statement.cards.length === 0)) {
     return (
       <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
@@ -139,12 +156,7 @@ export function CardsHierarchyCard() {
         title="כרטיסי אשראי לפי חודש"
         trailing={
           <span className="text-caption text-muted-foreground" dir="ltr">
-            סה״כ{" "}
-            {ILS.format(
-              Math.round(
-                exposure?.totalExpectedCharge ?? report.totalCommitted,
-              ),
-            )}
+            סה״כ {ILS.format(Math.round(exposure?.total ?? 0))}
           </span>
         }
       />
@@ -657,7 +669,7 @@ function StatementCardRow({ statement }: { statement: CardStatement }) {
             dir="ltr"
             className="text-section text-foreground"
           >
-            {ILS.format(statement.total)}
+            {ILS.format(Math.round(statement.total))}
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
@@ -732,7 +744,7 @@ function UnassignedRow({
             dir="ltr"
             className="text-section text-foreground"
           >
-            {ILS.format(total)}
+            {ILS.format(Math.round(total))}
           </span>
           <motion.span
             animate={{ rotate: open ? 180 : 0 }}
@@ -790,7 +802,7 @@ function TransactionRow({ row }: { row: CardStatementRow }) {
         className="shrink-0 text-foreground"
         style={{ fontVariantNumeric: "tabular-nums" }}
       >
-        {ILS.format(row.amount)}
+        {ILS.format(Math.round(row.amount))}
       </span>
     </li>
   );

@@ -1319,3 +1319,13 @@ export const useFinanceStore = create<State & Actions>()(
     },
   ),
 );
+
+// Phase 395 — E2E harness hook. Non-production only; gives Playwright
+// a deterministic way to read & drive the store from page.evaluate.
+// Not used by app code.
+if (typeof window !== "undefined") {
+  if (process.env.NODE_ENV !== "production") {
+    (window as unknown as { __finance__: typeof useFinanceStore }).__finance__ =
+      useFinanceStore;
+  }
+}

@@ -12,7 +12,7 @@ import {
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
-import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
+import { buildEngineCtx, getSnapshot } from "@/lib/financial-engine";
 import { useSnapshot } from "@/lib/snapshot-context";
 import {
   buildSmartSummary,
@@ -83,16 +83,18 @@ export function SmartSummaryCard() {
     if (!hydrated) return [];
     const snapshot =
       sharedSnapshot ??
-      buildFinancialSnapshot({
-        accounts,
-        loans,
-        incomes,
-        entries,
-        rules,
-        statuses,
-        monthlyBudget,
-        monthKey: currentMonthKey(),
-      });
+      getSnapshot(
+        buildEngineCtx({
+          accounts,
+          loans,
+          incomes,
+          entries,
+          rules,
+          statuses,
+          monthlyBudget,
+          monthKey: currentMonthKey(),
+        }),
+      );
     return buildSmartSummary({
       snapshot,
       incomes,
