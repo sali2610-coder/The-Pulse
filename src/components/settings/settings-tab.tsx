@@ -34,7 +34,7 @@ import { PushToggle } from "./push-toggle";
 import { IphonePushOnboardingCard } from "./iphone-push-onboarding-card";
 import { AuthCard } from "./auth-card";
 import { AccountsPanel } from "@/components/accounts/accounts-panel";
-import { LoansPanel } from "@/components/loans/loans-panel";
+import { LoansMiniApp } from "@/components/loans/loans-mini-app";
 import { IncomePanel } from "@/components/income/income-panel";
 import { RecurringRulesPanel } from "@/components/recurring/recurring-rules-panel";
 import { SubscriptionSuggestions } from "./subscription-suggestions";
@@ -132,7 +132,11 @@ export function SettingsTab() {
         subtitle="תשלומים חודשיים ויתרה"
         icon={<CreditCard className="size-4" />}
       >
-        <LoansPanel />
+        {/* Phase 410 — mini-app pilot. Replaces the admin-style
+           LoansPanel with a premium Loan Manager view. The legacy
+           panel stays in the codebase for the dashboard until that
+           caller migrates. */}
+        <LoansMiniApp />
       </SettingsAccordion>
 
       <SettingsAccordion
