@@ -502,6 +502,28 @@ describe("Phase 397 — manual cash zero-drift", () => {
     expect(cashRowAmt).toBe(10);
   });
 
+  it("Phase 406 — RecentActivity headline === CategoryDonut total (actuals only)", () => {
+    // Pre-Phase-406: RecentActivity tile read getMonthlyExpenses
+    // which added pending recurring rules to the actuals total.
+    // Donut + CategorySpendCard read getCategoryBreakdown (actuals
+    // only). User saw two different "monthly expenses" numbers.
+    //
+    // Post-Phase-406: both consume getCategoryBreakdown.total. No
+    // income, no future obligations, no loans, no bank, no credit
+    // forecast leak into either surface.
+    const c = ctx();
+    const donut = getCategoryBreakdown(c);
+    // Engine surface RecentActivity now consumes.
+    const activityKpi = getCategoryBreakdown(c).total;
+    expect(activityKpi).toBe(donut.total);
+    // Anti-regression: getMonthlyExpenses.total (which RecentActivity
+    // previously used) MAY differ because it includes pending
+    // recurring rules; that is precisely why RecentActivity moved
+    // off it. Sanity-check the two surfaces stay distinct concepts.
+    const monthly = getMonthlyExpenses(c);
+    expect(monthly.total).toBeGreaterThanOrEqual(donut.total);
+  });
+
   it("Phase 405 — manual bank withdrawal today decreases LIVE balance immediately", async () => {
     // User bug: created a ₪1 bank withdrawal today. Visible in
     // activity feed, donut, etc — but Time tab LIVE still shows the

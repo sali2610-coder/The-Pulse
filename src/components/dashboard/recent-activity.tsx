@@ -29,7 +29,7 @@ import { getCategory, type CategoryId } from "@/lib/categories";
 import {
   buildEngineCtx,
   getActivityFeed,
-  getMonthlyExpenses,
+  getCategoryBreakdown,
   type ActivityFeedRow,
 } from "@/lib/financial-engine";
 import { Pill } from "@/components/ui/pill";
@@ -221,16 +221,19 @@ export function RecentActivity() {
   const incomes = useFinanceStore((s) => s.incomes);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
-  // Phase 394 — headline "סך הוצאות החודש" KPI sourced from
-  // FinancialEngine. The activity feed (`items`) intentionally keeps
-  // walking raw entries because it is a DISPLAY log that surfaces
-  // refunds, withdrawals and pending charges with badges. The total
-  // shown in the KPI tile is a financial number and must come from
-  // the engine — never from a local sum.
+  // Phase 406 — headline "סך הוצאות החודש" KPI = actuals only.
+  //
+  // Switched from getMonthlyExpenses (which adds pending recurring
+  // rules to the actual-spent total) to getCategoryBreakdown so the
+  // RecentActivity tile and the "לאן הולך הכסף" / CategoryDonut
+  // total are the SAME canonical engine number. Activity-month
+  // surfaces are now strictly "expenses that already happened this
+  // month" — no income, no future obligations, no loans, no bank,
+  // no credit forecast.
   const engineMonthSpend = useMemo(() => {
     if (!hydrated) return 0;
     return Math.round(
-      getMonthlyExpenses(
+      getCategoryBreakdown(
         buildEngineCtx({
           accounts,
           rules,
