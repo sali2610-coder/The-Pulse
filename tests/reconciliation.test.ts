@@ -502,6 +502,57 @@ describe("Phase 397 — manual cash zero-drift", () => {
     expect(cashRowAmt).toBe(10);
   });
 
+  it("Phase 405 — manual bank withdrawal today decreases LIVE balance immediately", async () => {
+    // User bug: created a ₪1 bank withdrawal today. Visible in
+    // activity feed, donut, etc — but Time tab LIVE still shows the
+    // pre-withdrawal anchor balance. liquidityCurve.startingBalance
+    // now subtracts past bank impacts since anchorUpdatedAt.
+    const { liquidityCurve } = await import("@/lib/liquidity-curve");
+    const anchorYesterday = new Date(
+      NOW.getTime() - 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const withdrawalToday = new Date(
+      NOW.getTime() - 60 * 60 * 1000,
+    ).toISOString();
+    const curve = liquidityCurve({
+      accounts: [
+        {
+          id: "bank-1",
+          kind: "bank",
+          label: "Discount",
+          anchorBalance: 12_000,
+          anchorUpdatedAt: anchorYesterday,
+          active: true,
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      loans: [],
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [
+        {
+          id: "e-withdrawal-today",
+          amount: 1,
+          category: "other",
+          source: "manual",
+          paymentMethod: "cash",
+          installments: 1,
+          chargeDate: withdrawalToday,
+          createdAt: withdrawalToday,
+          transactionType: "withdrawal",
+          accountId: "bank-1",
+          merchant: "משיכה ידנית",
+        },
+      ],
+      now: NOW,
+      windowDays: 35,
+    });
+    // LIVE = day 0 balance = adjusted starting balance.
+    expect(curve.points[0].balance).toBe(11_999);
+    expect(curve.startingBalance).toBe(11_999);
+  });
+
   it("Phase 403 — credit charges in current month roll to next-cycle paymentDay (never past)", () => {
     // User report: 2-of-month marker shows credit drop only for the
     // recurring rule; manual charges land on PAST paymentDay and the

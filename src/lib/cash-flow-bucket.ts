@@ -226,32 +226,56 @@ export function buildCashFlowBuckets(args: {
     now,
   });
   for (const impact of stream) {
-    if (impact.kind !== "card") continue;
     const ts = impact.effectiveCashDate.getTime();
     if (ts <= now.getTime() || ts > horizon.getTime()) continue;
-    // Phase 388 — accept impacts even when no card account resolves.
-    // Synthetic "card:__unassigned__" bucket keeps the curve total
-    // aligned with the canonical Expenses-cockpit credit total.
-    const viaCardId = impact.viaCardId ?? UNASSIGNED_CARD_ID;
-    const bucketId = `card:${viaCardId}`;
-    const bucket = ensureBucket(bucketId, () =>
-      impact.viaCardId
-        ? cardBucketFor(impact.viaCardId, args.accounts)
-        : unassignedCardBucket(),
-    );
-    pushObligation(bucket, {
-      label: pickEntryLabel(args.entries, impact),
-      amount: impact.amount,
-      effectiveCashAt: impact.effectiveCashDate.toISOString(),
-      transactionAt: impact.purchaseDate.toISOString(),
-      kind: "card_entry",
-      // Phase 403 — refId now carries the actual ExpenseEntry.id so
-      // getTimelineCompleteness can match against getCreditExposure
-      // rows without falling back to fuzzy id-substring matching.
-      refId: impact.entryId
-        ? `entry:${impact.entryId}`
-        : `entry:${viaCardId}:${ts}`,
-    });
+    if (impact.kind === "card") {
+      // Phase 388 — accept impacts even when no card account resolves.
+      // Synthetic "card:__unassigned__" bucket keeps the curve total
+      // aligned with the canonical Expenses-cockpit credit total.
+      const viaCardId = impact.viaCardId ?? UNASSIGNED_CARD_ID;
+      const bucketId = `card:${viaCardId}`;
+      const bucket = ensureBucket(bucketId, () =>
+        impact.viaCardId
+          ? cardBucketFor(impact.viaCardId, args.accounts)
+          : unassignedCardBucket(),
+      );
+      pushObligation(bucket, {
+        label: pickEntryLabel(args.entries, impact),
+        amount: impact.amount,
+        effectiveCashAt: impact.effectiveCashDate.toISOString(),
+        transactionAt: impact.purchaseDate.toISOString(),
+        kind: "card_entry",
+        // Phase 403 — refId now carries the actual ExpenseEntry.id so
+        // getTimelineCompleteness can match against getCreditExposure
+        // rows without falling back to fuzzy id-substring matching.
+        refId: impact.entryId
+          ? `entry:${impact.entryId}`
+          : `entry:${viaCardId}:${ts}`,
+      });
+      continue;
+    }
+    if (impact.kind === "bank") {
+      // Phase 405 — manual bank withdrawals + paymentSource=bank
+      // entries dated in the future debit the bank on their charge
+      // date. Route through the bank_debit bucket so the Time
+      // curve deducts them on the right day.
+      const bucket = ensureBucket(bankBucketId, bankBucket);
+      const label =
+        args.entries.find((e) => e.id === impact.entryId)?.merchant ??
+        args.entries.find((e) => e.id === impact.entryId)?.note ??
+        "משיכת בנק";
+      pushObligation(bucket, {
+        label,
+        amount: impact.amount,
+        effectiveCashAt: impact.effectiveCashDate.toISOString(),
+        transactionAt: impact.purchaseDate.toISOString(),
+        kind: "card_entry",
+        refId: impact.entryId
+          ? `entry:${impact.entryId}`
+          : `entry:bank:${ts}`,
+      });
+      continue;
+    }
   }
 
   // Finalise buckets — sort obligations + compute totals + next date.

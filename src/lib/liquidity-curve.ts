@@ -25,6 +25,7 @@ import type {
   RecurringStatus,
 } from "@/types/finance";
 import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
+import { effectiveCashImpactStream } from "@/lib/effective-cash-date";
 import { incomeForMonth } from "@/lib/income-month";
 
 export type LiquidityEventKind =
@@ -94,7 +95,31 @@ export function liquidityCurve(args: {
 }): LiquidityCurve {
   const now = args.now ?? new Date();
   const windowDays = Math.max(1, args.windowDays ?? DEFAULT_WINDOW_DAYS);
-  const startingBalance = sumAnchors(args.accounts);
+
+  // Phase 405 — adjust the LIVE starting balance for bank impacts
+  // that already happened but the user-set anchor predates. A manual
+  // withdrawal made today after the anchor was last updated has
+  // already moved the bank; LIVE must reflect that immediately
+  // without waiting for the user to re-key the anchor.
+  const rawAnchors = sumAnchors(args.accounts);
+  const maxAnchorAt = args.accounts
+    .filter((a) => a.kind === "bank" && a.anchorUpdatedAt)
+    .map((a) => new Date(a.anchorUpdatedAt!).getTime())
+    .reduce((m, t) => (t > m ? t : m), 0);
+  let pastBankDebits = 0;
+  for (const impact of effectiveCashImpactStream({
+    entries: args.entries,
+    accounts: args.accounts,
+    rules: args.rules,
+    now,
+  })) {
+    if (impact.kind !== "bank") continue;
+    const ts = impact.effectiveCashDate.getTime();
+    if (ts > now.getTime()) continue;
+    if (maxAnchorAt > 0 && ts <= maxAnchorAt) continue;
+    pastBankDebits += impact.amount;
+  }
+  const startingBalance = rawAnchors - pastBankDebits;
 
   // 1. Gather every liquidity event in the window.
   const events: LiquidityEvent[] = [];

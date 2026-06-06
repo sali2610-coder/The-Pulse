@@ -93,7 +93,8 @@ export function effectiveCashImpacts(args: {
   if (Number.isNaN(start.getTime())) return out;
 
   const kind: CashImpactKind = resolveKind({
-    paymentMethod: args.entry.paymentMethod,
+    entry: args.entry,
+    accounts: args.accounts,
   });
   const card =
     kind === "card" ? findCard(args.accounts, args.entry, args.rules) : null;
@@ -181,10 +182,22 @@ export function remainingInstallmentCount(args: {
   return installmentProgress(args.entry, args.now ?? new Date()).remaining;
 }
 
-function resolveKind(args: { paymentMethod: PaymentMethod }): CashImpactKind {
-  if (args.paymentMethod === "credit") return "card";
-  // PaymentMethod is currently "credit" | "cash" — every non-credit
-  // settles immediately from the bank account.
+function resolveKind(args: {
+  entry: ExpenseEntry;
+  accounts: Account[];
+}): CashImpactKind {
+  if (args.entry.paymentMethod === "credit") return "card";
+  // Phase 405 — distinguish bank-debit cash entries from
+  // wallet-cash entries. Transactions that actually leave the bank
+  // (manual withdrawals via the WithdrawalDialog, paymentSource=bank
+  // entries with an accountId pointing at a bank account) must move
+  // the bank balance on the curve. Physical-wallet cash entries do
+  // not touch the bank and stay invisible to the cash-flow lane.
+  if (args.entry.transactionType === "withdrawal") return "bank";
+  if (args.entry.accountId) {
+    const acc = args.accounts.find((a) => a.id === args.entry.accountId);
+    if (acc && acc.kind === "bank") return "bank";
+  }
   return "cash";
 }
 
