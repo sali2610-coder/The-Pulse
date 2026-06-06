@@ -12,7 +12,6 @@
 import { useState } from "react";
 import {
   BellRing,
-  CalendarRange,
   CreditCard,
   Database,
   FileDown,
@@ -53,7 +52,6 @@ import { ShortcutHealthCard } from "./shortcut-health-card";
 import { ShortcutOnboardingCard } from "./shortcut-onboarding-card";
 import { PushDeliveryMatrix } from "./push-delivery-matrix";
 import { BudgetSettingsDiagnostics } from "./budget-settings-diagnostics";
-import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { useDevMode } from "@/lib/use-dev-mode";
 
 const ACTIVE_KEY = "sally.settings.openSection.v1";
@@ -176,15 +174,9 @@ export function SettingsTab() {
         <InsightsInboxMiniApp />
       </SettingsAccordion>
 
-      <SettingsAccordion
-        {...mutex}
-        storageKey="settings.month-activity"
-        title="פעילות החודש"
-        subtitle="כל מה שזז החודש — הוצאות והכנסות"
-        icon={<CalendarRange className="size-4" />}
-      >
-        <RecentActivity />
-      </SettingsAccordion>
+      {/* Phase 417 — "פעילות החודש" removed from Settings. The
+         identical RecentActivity widget already lives on the Home
+         tab; Settings duplicated it without adding context. */}
 
       {/* ── Secondary / system folders ─────────────────────── */}
       <SettingsAccordion
