@@ -194,6 +194,38 @@ export function HousingCard() {
             סל הדיור צורך כ-{sharePct}% מההכנסה החודשית — מעל הסף הבריא של 30%.
           </p>
         ) : null}
+
+        {/* Phase 408 — scope explainer. User confusion: "סל דיור" is
+           a SUBSET of the "קבועים" KPI above (rules tagged as
+           housing-related); the rest of the fixed bills sit
+           elsewhere. Inline disclosure spells out the criterion so
+           the user can reconcile the total against MonthlyObligations
+           "קבועים". No engine change. */}
+        <details className="rounded-2xl border border-white/8 bg-white/[0.02] p-2 text-[11.5px] text-foreground/85">
+          <summary className="cursor-pointer list-none px-1 text-[11px] text-muted-foreground">
+            מה נכנס לסל הדיור?
+          </summary>
+          <div className="mt-2 flex flex-col gap-1.5 px-1 pb-1" dir="rtl">
+            <p>
+              <strong className="text-foreground">סל דיור</strong> =
+              סכום החיובים הקבועים שסווגו כדיור: שכירות / משכנתא,
+              ביטוח דירה, ארנונה, חשמל, מים, גז, ועד בית, אינטרנט,
+              סטרימינג, ודיור נוסף.
+            </p>
+            <p>
+              הסיווג הוא{" "}
+              <strong className="text-foreground">אוטומטי</strong>{" "}
+              לפי label ו-keywords של החיוב הקבוע. חיובים שאינם נכנסים
+              לסל (חינוך, מנויים אחרים, תחבורה, מתנות וכו׳) ייספרו
+              תחת ״חיובים קבועים״ הרגיל למעלה.
+            </p>
+            <p className="text-[10.5px] text-muted-foreground/80">
+              לכן: ״קבועים״ {ILS.format(overview.fixedMonthly)} ≥
+              ״סל דיור״ {ILS.format(overview.recurringMonthly)}.
+              ההפרש = חיובים קבועים שאינם דיור.
+            </p>
+          </div>
+        </details>
       </section>
 
       <HousingRowSheet
