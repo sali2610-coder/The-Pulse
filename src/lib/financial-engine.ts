@@ -644,6 +644,70 @@ export function getActivityFeed(ctx: EngineCtx): ActivityFeed {
   };
 }
 
+// ── 7c. getManualTransactions ──────────────────────────────────────
+//
+// Phase 397 — canonical "what did I manually log this month" view.
+// Splits manual entries by payment method so the cockpit can show
+// the cash subtotal in the cash lane and the credit subtotal in
+// the credit lane without either falling through the cracks.
+//
+// Closes the user-reported ₪10 drift: a paymentMethod="cash" σόπer
+// entry was visible in donut/CategorySpendCard (which sums every
+// payment method) but invisible to the cockpit's "תיעוד ידני" tile
+// (credit-only) and the cards-screen "חד-פעמיים" filter (credit-
+// only). The cockpit's cash lane breakdown now surfaces it.
+
+export type ManualTransactionsResult = {
+  total: number;
+  credit: number;
+  cash: number;
+  rows: EngineRow[];
+  window: EngineWindow;
+  dataSources: string[];
+};
+
+export function getManualTransactions(
+  ctx: EngineCtx,
+): ManualTransactionsResult {
+  const { from, to } = monthWindow(ctx.monthKey);
+  let credit = 0;
+  let cash = 0;
+  const rows: EngineRow[] = [];
+  for (const e of ctx.entries) {
+    if (e.source !== "manual") continue;
+    if (e.isRefund) continue;
+    if (e.excludeFromBudget) continue;
+    if (e.needsConfirmation && !e.confirmedAt) continue;
+    if (e.bankPending) continue;
+    if (e.currency && e.currency !== "ILS") continue;
+    if (e.transactionType === "withdrawal") continue;
+    const slice = sliceForMonth(e, ctx.monthKey);
+    if (!slice) continue;
+    if (e.paymentMethod === "credit") credit += slice.amount;
+    else cash += slice.amount;
+    rows.push({
+      refId: `entry:${e.id}`,
+      label: e.merchant ?? e.note ?? e.category,
+      amount: slice.amount,
+      source: "manual",
+      kind: "entry",
+      category: e.category,
+      meta: {
+        paymentMethod: e.paymentMethod,
+        chargeDate: slice.chargeDate.toISOString(),
+      },
+    });
+  }
+  return {
+    total: credit + cash,
+    credit,
+    cash,
+    rows,
+    window: { from, to, monthKey: ctx.monthKey },
+    dataSources: ["entries(source=manual)", "sliceForMonth"],
+  };
+}
+
 // ── 8b. getCreditExposureByCard ────────────────────────────────────
 //
 // Phase 396 — returns the canonical per-card statement so the Cards

@@ -31,11 +31,13 @@ import {
   getCreditExposure,
   getCreditExposureByCard,
   getFutureCashFlow,
+  getManualTransactions,
   getMonthlyExpenses,
   getMonthlyIncome,
   getRecurringCommitmentsByCategory,
   getTimelineProjection,
 } from "@/lib/financial-engine";
+import { getMonthlyObligationBreakdown } from "@/lib/monthly-obligation-breakdown";
 import type {
   Account,
   ExpenseEntry,
@@ -442,5 +444,94 @@ describe("Phase 396 — zero-drift invariants", () => {
       throw new Error(`Strict reconciliation failed:\n${dump}`);
     }
     expect(failures).toHaveLength(0);
+  });
+});
+
+describe("Phase 397 — manual cash zero-drift", () => {
+  // Reproduces the user-reported ₪10 drift exactly: a manual cash σόπer
+  // entry must appear in every "manual" surface — donut, category
+  // breakdown, cockpit cash lane, getManualTransactions — without
+  // falling through the cracks.
+  function ctxWithManualCash() {
+    const s = seedState();
+    s.entries = [
+      ...s.entries,
+      {
+        id: "e-cash-supermarket",
+        amount: 10,
+        category: "supermarket",
+        source: "manual",
+        paymentMethod: "cash",
+        installments: 1,
+        chargeDate: MONTH_DATE,
+        createdAt: MONTH_DATE,
+        merchant: "σόπer דיל",
+      },
+    ];
+    return buildEngineCtx({ ...s, now: NOW, monthKey: MONTH_KEY });
+  }
+
+  it("Manual cash entry appears in getManualTransactions.cash", () => {
+    const c = ctxWithManualCash();
+    const m = getManualTransactions(c);
+    // baseline ctx manual cash σ = pre-existing seed manual cash 32 (פלאפל)
+    // + new 10 = 42.
+    expect(m.cash).toBe(42);
+    expect(m.total).toBe(m.cash + m.credit);
+  });
+
+  it("Manual cash entry appears in cockpit cash lane (Phase 397)", () => {
+    const c = ctxWithManualCash();
+    const b = getMonthlyObligationBreakdown({
+      rules: c.rules,
+      loans: c.loans,
+      entries: c.entries,
+      statuses: c.statuses,
+      monthKey: c.monthKey,
+    });
+    // Cash lane must include the new ₪10 manual cash entry.
+    const cashRows = b.explanationRows.filter((r) => r.lane === "cash");
+    const cashRowIds = cashRows.map((r) => r.id);
+    expect(cashRowIds).toContain("entry:e-cash-supermarket");
+    const cashRowAmt = cashRows.find(
+      (r) => r.id === "entry:e-cash-supermarket",
+    )?.amount;
+    expect(cashRowAmt).toBe(10);
+  });
+
+  it("Donut total === Σ manual transactions when only manual entries present", () => {
+    // Trim seed to manual-only so the comparison is direct.
+    const s = seedState();
+    s.rules = [];
+    s.statuses = [];
+    s.entries = [
+      {
+        id: "e-cash-1",
+        amount: 10,
+        category: "supermarket",
+        source: "manual",
+        paymentMethod: "cash",
+        installments: 1,
+        chargeDate: MONTH_DATE,
+        createdAt: MONTH_DATE,
+        merchant: "σόπer",
+      },
+      {
+        id: "e-credit-1",
+        amount: 200,
+        category: "food",
+        source: "manual",
+        paymentMethod: "credit",
+        installments: 1,
+        chargeDate: MONTH_DATE,
+        createdAt: MONTH_DATE,
+        merchant: "Wolt",
+        accountId: "card-htz",
+      },
+    ];
+    const c = buildEngineCtx({ ...s, now: NOW, monthKey: MONTH_KEY });
+    const donut = getCategoryBreakdown(c);
+    const manual = getManualTransactions(c);
+    expect(Math.abs(donut.total - manual.total)).toBeLessThanOrEqual(0.01);
   });
 });

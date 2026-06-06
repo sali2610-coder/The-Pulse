@@ -91,6 +91,36 @@ function withdrawalSliceFor(
   return slice ? Math.abs(slice.amount) : 0;
 }
 
+// Phase 397 — manual cash purchases (paymentMethod="cash" + not
+// withdrawal) belong in the cash lane. Previously they fell through
+// every lane: the credit-lane "תיעוד ידני" tile only saw credit
+// manuals, and the cash lane only saw withdrawals + cash-rules.
+// Result: a ₪10 σόπer cash entry was visible in the donut + "לאן
+// הולך הכסף" but invisible to the cockpit, producing the user-
+// reported ₪10 drift between the four surfaces.
+function isManualCashThisMonth(
+  entry: ExpenseEntry,
+  monthKey: MonthKey,
+): boolean {
+  if (entry.paymentMethod !== "cash") return false;
+  if (entry.transactionType === "withdrawal") return false;
+  if (entry.isRefund) return false;
+  if (entry.excludeFromBudget) return false;
+  if (entry.needsConfirmation && !entry.confirmedAt) return false;
+  if (entry.bankPending) return false;
+  if (entry.currency && entry.currency !== "ILS") return false;
+  const slice = sliceForMonth(entry, monthKey);
+  return slice !== null;
+}
+
+function manualCashSliceFor(
+  entry: ExpenseEntry,
+  monthKey: MonthKey,
+): number {
+  const slice = sliceForMonth(entry, monthKey);
+  return slice ? Math.abs(slice.amount) : 0;
+}
+
 export function getMonthlyObligationBreakdown(args: {
   rules: RecurringRule[];
   loans: Loan[];
@@ -218,6 +248,30 @@ export function getMonthlyObligationBreakdown(args: {
       label: e.merchant ?? e.note ?? "משיכה",
       amount,
       kind: "withdrawal",
+    });
+  }
+
+  // ─── Manual cash purchases dated this month (Phase 397) ────────
+  // Closes the data hole that produced the ₪10 cockpit ↔ donut
+  // mismatch. paymentMethod="cash" expenses now appear in the cash
+  // lane breakdown alongside withdrawals + cash-rules.
+  for (const e of args.entries) {
+    if (!isManualCashThisMonth(e, args.monthKey)) continue;
+    const id = `entry:${e.id}`;
+    if (seen.has(id)) {
+      duplicatesPrevented += 1;
+      continue;
+    }
+    seen.add(id);
+    const amount = manualCashSliceFor(e, args.monthKey);
+    cashTotal += amount;
+    cashCount += 1;
+    rows.push({
+      id,
+      lane: "cash",
+      label: e.merchant ?? e.note ?? "תיעוד מזומן",
+      amount,
+      kind: "entry",
     });
   }
 
