@@ -216,9 +216,13 @@ export function buildCashFlowBuckets(args: {
   }
 
   // 3. Future card-entry slices (installment plans + scheduled one-shots).
+  // Phase 400 — pass rules so a matched entry follows the rule's
+  // current linkedCardId (Settings edits cascade instantly to the
+  // 35-day curve).
   const stream = effectiveCashImpactStream({
     entries: args.entries,
     accounts: args.accounts,
+    rules: args.rules,
     now,
   });
   for (const impact of stream) {

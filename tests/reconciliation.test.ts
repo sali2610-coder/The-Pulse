@@ -500,6 +500,59 @@ describe("Phase 397 — manual cash zero-drift", () => {
     expect(cashRowAmt).toBe(10);
   });
 
+  it("Phase 400 — matched entry follows rule.linkedCardId override", () => {
+    // User edits a recurring rule's linkedCardId in Settings: every
+    // surface (statement, card folder, time curve) must follow the
+    // new card instantly. The matched entry's stale accountId is
+    // overridden by the rule's current linkedCardId.
+    const oldCard = card({ id: "card-old", label: "Bind Asmoret" });
+    const newCard = card({ id: "card-new", label: "Hi-Tech Zone" });
+    const rule: RecurringRule = {
+      id: "r-pango",
+      label: "פנגו",
+      category: "bills",
+      estimatedAmount: 250,
+      dayOfMonth: 1,
+      keywords: [],
+      paymentSource: "card",
+      linkedCardId: "card-new", // user just changed this
+      active: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const matchedEntry: ExpenseEntry = {
+      id: "e-pango-jun",
+      amount: 250,
+      category: "bills",
+      source: "manual",
+      paymentMethod: "credit",
+      installments: 1,
+      chargeDate: MONTH_DATE,
+      createdAt: MONTH_DATE,
+      accountId: "card-old", // STALE — from before rule edit
+      matchedRuleId: "r-pango",
+      merchant: "פנגו",
+    };
+    const c = buildEngineCtx({
+      accounts: [bank(), oldCard, newCard],
+      rules: [rule],
+      statuses: [],
+      entries: [matchedEntry],
+      loans: [],
+      incomes: [],
+      monthlyBudget: 0,
+      now: NOW,
+      monthKey: MONTH_KEY,
+    });
+    const stmt = getCreditExposureByCard(c);
+    // The pango entry must land under the NEW card, not the old one.
+    const newCardStmt = stmt.cards.find((x) => x.cardId === "card-new");
+    const oldCardStmt = stmt.cards.find((x) => x.cardId === "card-old");
+    expect(newCardStmt?.transactions.map((t) => t.id)).toContain(
+      "entry:e-pango-jun",
+    );
+    expect(oldCardStmt?.transactions ?? []).toEqual([]);
+  });
+
   it("getOrphanedEntries returns empty when manual cash entry exists (Phase 398)", () => {
     // Regression: before Phase 397/398 a manual cash entry produced
     // a non-empty orphan list because no cockpit lane caught it. Now

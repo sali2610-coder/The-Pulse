@@ -111,6 +111,7 @@ export function safeToSpendUntilNextSalary(args: {
   const cardImpacts = effectiveCashImpactStream({
     entries: args.entries,
     accounts: args.accounts,
+    rules: args.rules,
     now,
   });
   let expectedCardSettlements = 0;

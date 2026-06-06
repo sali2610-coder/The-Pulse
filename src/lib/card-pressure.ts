@@ -140,6 +140,7 @@ export function buildCardPressure(args: {
         for (const impact of effectiveCashImpacts({
           entry,
           accounts: args.accounts,
+          rules: args.rules,
         })) {
           if (impact.viaCardId !== card.id) continue;
           if (monthKeyOf(impact.effectiveCashDate) !== args.monthKey) continue;

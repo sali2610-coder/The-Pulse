@@ -210,6 +210,7 @@ export function buildBudgetControlBreakdown(args: {
   const cashImpacts = effectiveCashImpactStream({
     entries: args.entries,
     accounts: args.accounts,
+    rules: args.rules,
     now,
   });
   for (const impact of cashImpacts) {

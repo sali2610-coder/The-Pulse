@@ -30,6 +30,7 @@ import type {
   Account,
   ExpenseEntry,
   PaymentMethod,
+  RecurringRule,
 } from "@/types/finance";
 import {
   installmentProgress,
@@ -60,6 +61,10 @@ const DEFAULT_PAYMENT_DAY = 10;
 export function effectiveCashImpacts(args: {
   entry: ExpenseEntry;
   accounts: Account[];
+  /** Phase 400 — optional rules let findCard honor a matched rule's
+   *  linkedCardId override. Without this, the curve uses the entry's
+   *  stale accountId and lands on the wrong card's paymentDay. */
+  rules?: RecurringRule[];
   now?: Date;
 }): CashImpact[] {
   const out: CashImpact[] = [];
@@ -84,7 +89,8 @@ export function effectiveCashImpacts(args: {
   const kind: CashImpactKind = resolveKind({
     paymentMethod: args.entry.paymentMethod,
   });
-  const card = kind === "card" ? findCard(args.accounts, args.entry) : null;
+  const card =
+    kind === "card" ? findCard(args.accounts, args.entry, args.rules) : null;
 
   const sliceAmount =
     totalInstallments > 1
@@ -123,6 +129,9 @@ export function effectiveCashImpacts(args: {
 export function effectiveCashImpactStream(args: {
   entries: ExpenseEntry[];
   accounts: Account[];
+  /** Phase 400 — propagate rules so per-entry findCard can honor a
+   *  matched rule's linkedCardId. */
+  rules?: RecurringRule[];
   now?: Date;
 }): CashImpact[] {
   const all: CashImpact[] = [];
@@ -130,6 +139,7 @@ export function effectiveCashImpactStream(args: {
     for (const impact of effectiveCashImpacts({
       entry,
       accounts: args.accounts,
+      rules: args.rules,
       now: args.now,
     })) {
       all.push(impact);
@@ -174,7 +184,27 @@ function resolveKind(args: { paymentMethod: PaymentMethod }): CashImpactKind {
 function findCard(
   accounts: Account[],
   entry: ExpenseEntry,
+  rules?: RecurringRule[],
 ): Account | null {
+  // Phase 400 — rule's linkedCardId overrides entry.accountId for
+  // matched entries. Without this, editing a recurring rule's card
+  // link in Settings leaves the legacy entry pointing at the old
+  // card, and the Time-curve cash impact lands on the WRONG card's
+  // paymentDay.
+  if (entry.matchedRuleId && rules) {
+    const rule = rules.find((r) => r.id === entry.matchedRuleId);
+    if (rule && rule.linkedCardId) {
+      const isCardSettled =
+        rule.paymentSource === "card" ||
+        (rule.paymentSource !== "bank" && rule.paymentSource !== "cash");
+      if (isCardSettled) {
+        const matched = accounts.find(
+          (a) => a.id === rule.linkedCardId && a.kind === "card",
+        );
+        if (matched) return matched;
+      }
+    }
+  }
   if (entry.accountId) {
     const matched = accounts.find(
       (a) => a.id === entry.accountId && a.kind === "card",

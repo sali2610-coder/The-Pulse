@@ -76,7 +76,28 @@ function refToOrigin(refId: string): { kind: "rule" | "entry"; id: string } | nu
 function findCardForEntry(
   e: ExpenseEntry,
   accounts: Account[],
+  rules: RecurringRule[],
 ): Account | null {
+  // Phase 400 — when the entry is matched to a card-settled rule,
+  // the rule is the source of truth for the card link. Otherwise a
+  // user who edits the rule's linkedCardId in Settings sees Settings
+  // pointing at the NEW card while the cards-by-month screen still
+  // groups the legacy-accountId-carrying entry under the OLD card —
+  // exactly the desync reported on פנגו ₪250.
+  if (e.matchedRuleId) {
+    const rule = rules.find((r) => r.id === e.matchedRuleId);
+    if (rule && rule.linkedCardId) {
+      const isCardSettled =
+        rule.paymentSource === "card" ||
+        (rule.paymentSource !== "bank" && rule.paymentSource !== "cash");
+      if (isCardSettled) {
+        const matched = accounts.find(
+          (a) => a.id === rule.linkedCardId && a.kind === "card",
+        );
+        if (matched) return matched;
+      }
+    }
+  }
   if (e.accountId) {
     const matched = accounts.find(
       (a) => a.id === e.accountId && a.kind === "card",
@@ -173,7 +194,7 @@ export function getCreditCardStatement(args: {
     if (origin?.kind === "entry") {
       const e = entryById(args.entries, origin.id);
       if (e) {
-        card = findCardForEntry(e, args.accounts);
+        card = findCardForEntry(e, args.accounts, args.rules);
         category = e.category as CategoryId;
       }
     } else if (origin?.kind === "rule") {
