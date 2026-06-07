@@ -579,6 +579,18 @@ export function getActivityFeed(ctx: EngineCtx): ActivityFeed {
   const rows: ActivityFeedRow[] = [];
 
   for (const e of ctx.entries) {
+    // Phase 419 — activity feed is the user's real "what happened
+    // this month" log, NOT a cash-flow slice projection. A purchase
+    // made in April with 3 installments must surface in April's
+    // feed only; its May / June slices belong to the cash-flow
+    // forecast, not the activity log. Filter entries to those
+    // whose activity timestamp lives in the requested month.
+    const activityIso = e.occurredAt ?? e.chargeDate ?? e.createdAt;
+    if (!activityIso) continue;
+    const activityDate = new Date(activityIso);
+    if (Number.isNaN(activityDate.getTime())) continue;
+    if (monthKeyOf(activityDate) !== ctx.monthKey) continue;
+
     const slice = sliceForMonth(e, ctx.monthKey);
     // Same fallback strategy the legacy activity loop used: even
     // when the entry has no slice this month (Wallet partial without

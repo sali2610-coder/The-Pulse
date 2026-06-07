@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 import { useMemo } from "react";
-import { Banknote, ChevronDown, Home, Info, Receipt } from "lucide-react";
+import { Banknote, ChevronDown, Home, Info } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
@@ -41,7 +41,8 @@ export function MonthlyObligationsHeader() {
   }, [hydrated, loans, rules, accounts]);
 
   if (!hydrated || !overview) return null;
-  if (overview.monthlyTotal === 0) return null;
+  // Phase 419 — disjoint lanes: hide only when BOTH are empty.
+  if (overview.loansMonthly === 0 && overview.fixedMonthly === 0) return null;
 
   return (
     <section className="glass-card rounded-3xl p-4">
@@ -57,25 +58,23 @@ export function MonthlyObligationsHeader() {
           {overview.monthKey}
         </span>
       </header>
-      <div className="grid grid-cols-3 gap-2">
-        <Tile
-          icon={<Receipt className="size-3.5" />}
-          label="סה״כ החודש"
-          value={ILS.format(overview.monthlyTotal)}
-          tone="#F87171"
-          emphasis
-        />
+      {/* Phase 419 — two disjoint tiles. Loans and Fixed obligations
+         are tracked as separate lanes; no item appears in both, and
+         no combined "סה״כ" tile that would imply they overlap. */}
+      <div className="grid grid-cols-2 gap-2">
         <Tile
           icon={<Banknote className="size-3.5" />}
           label="הלוואות"
           value={ILS.format(overview.loansMonthly)}
           tone="#A78BFA"
+          emphasis
         />
         <Tile
           icon={<Home className="size-3.5" />}
           label="קבועים"
           value={ILS.format(overview.fixedMonthly)}
           tone="#D4AF37"
+          emphasis
         />
       </div>
 
@@ -107,32 +106,24 @@ export function MonthlyObligationsHeader() {
           dir="rtl"
         >
           <Row
-            tone="#F87171"
-            label="סה״כ החודש"
-            formula="הלוואות + חיובים קבועים בנקאיים"
-            note="לא כולל חיובי אשראי (שמופיעים ב-״כרטיסי אשראי לפי חודש״) ולא כולל הוצאות יומיומיות."
-            valueText={ILS.format(overview.monthlyTotal)}
-          />
-          <Row
             tone="#A78BFA"
             label="הלוואות"
             formula="Σ הלוואה פעילה לחודש הנוכחי × תשלום חודשי"
             note={`${overview.loans.length} ${
               overview.loans.length === 1 ? "הלוואה" : "הלוואות"
-            } בחישוב.`}
+            } בחישוב. הלוואות נספרות כאן בלבד ולא נכנסות לסכום ״קבועים״.`}
             valueText={ILS.format(overview.loansMonthly)}
           />
           <Row
             tone="#D4AF37"
             label="קבועים"
-            formula="Σ חיובים קבועים שאינם מחויבים בכרטיס אשראי"
-            note="לדוגמה הוראות קבע מהבנק, הוצאות שכר דירה, חשבונות מים/חשמל וכל מנוי שאינו על כרטיס. חיובים על כרטיס נכנסים ל-״כרטיסי אשראי לפי חודש״."
+            formula="Σ חיובים חוזרים פעילים החודש — בנק / אשראי / מזומן / מנויים"
+            note="כל הוראת קבע, חיוב מנוי, וחיוב חוזר בכרטיס אשראי. הלוואות לא נכנסות לסכום הזה — הן בלשונית ״הלוואות״ בלבד."
             valueText={ILS.format(overview.fixedMonthly)}
           />
           <p className="border-t border-white/8 pt-2 text-[10.5px] text-muted-foreground/80">
-            ההפרש מול ״סך התחייבויות החודש״ בלשונית הוצאות נובע מכך
-            שאותו מסך כולל גם את אשראי ומזומן. כאן אנחנו מתמקדים רק
-            במה שיורד אוטומטית מהבנק (קבועים + הלוואות).
+            שני המספרים נפרדים לחלוטין. אין פריט שמופיע גם כהלוואה
+            וגם כחיוב קבוע — לכן אין סכום ״כללי״ שמחבר אותם.
           </p>
         </div>
       ) : null}

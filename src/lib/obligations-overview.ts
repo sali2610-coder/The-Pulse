@@ -296,16 +296,17 @@ export function buildObligationsOverview(args: {
 
   const recurringMonthly = housing.reduce((s, r) => s + r.monthlyTotal, 0);
 
-  // Phase 369 — canonical "Fixed Obligations" total for the month.
-  // Σ every active rule scheduled for this month MINUS card-settled
-  // ones (those will land via the card billing day, not the bank).
-  // This is what the "קבועים" tile should show — not the housing
-  // subset that `recurringMonthly` measures.
+  // Phase 419 — canonical "Fixed Obligations" total for the month.
+  // Σ every active rule scheduled for this month REGARDLESS of
+  // settlement source (bank / card / cash / subscription). Loans
+  // live in their own lane (`loansMonthly`) and never overlap with
+  // rules. The Home obligations header treats the two as disjoint
+  // tiles per the canonical contract: loans are loans, fixed are
+  // recurring rules, no item appears in both.
   let fixedMonthly = 0;
   for (const r of args.rules) {
     if (!r.active) continue;
     if (!ruleSchedule(r, args.monthKey).active) continue;
-    if (isRuleCardSettled(r)) continue;
     fixedMonthly += r.estimatedAmount;
   }
 

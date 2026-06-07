@@ -83,7 +83,12 @@ describe("buildObligationsOverview.fixedMonthly", () => {
     expect(overview.recurringMonthly).toBeLessThanOrEqual(800);
   });
 
-  it("excludes card-settled rules — they live in the cards lane", () => {
+  it("Phase 419 — includes card / cash / subscription recurring rules", () => {
+    // Spec change: Fixed Obligations now treats EVERY active rule
+    // as part of the lane regardless of settlement source. Loans
+    // remain disjoint and never enter this sum. The cockpit on the
+    // Expenses tab still routes per-lane separately — the Home
+    // header just shows one honest "all recurring outflows" number.
     const overview = buildObligationsOverview({
       loans: [],
       rules: [
@@ -107,15 +112,13 @@ describe("buildObligationsOverview.fixedMonthly", () => {
           label: "ארנונה ישנה",
           category: "bills",
           estimatedAmount: 320,
-          // Legacy: linkedCardId only, no explicit paymentSource.
           linkedCardId: "card-1",
         }),
       ],
       accounts: [bank()],
       monthKey: MONTH_KEY,
     });
-    // Only the bank rule counts toward the "Fixed Obligations" tile.
-    expect(overview.fixedMonthly).toBe(800);
+    expect(overview.fixedMonthly).toBe(800 + 540 + 320);
   });
 
   it("monthlyTotal == loansMonthly + fixedMonthly (canonical headline)", () => {
