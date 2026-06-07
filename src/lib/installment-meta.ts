@@ -35,14 +35,24 @@ export function installmentMetaForRefId(args: {
   rules: RecurringRule[];
 }): InstallmentMeta | null {
   if (args.refId.startsWith("entry:")) {
+    // Phase 420 — single canonical decoder. Engine emits refIds as
+    // `entry:<id>` (no slice index segment); the index is derived
+    // here from the LIVE entry.chargeDate vs args.monthKey delta so
+    // any Settings edit to chargeDate / installments propagates to
+    // Credit Cards immediately. No cached snapshot.
     const parts = args.refId.split(":");
     const entryId = parts[1];
-    const sliceIndex = Number(parts[2]);
-    if (!entryId || !Number.isFinite(sliceIndex)) return null;
+    if (!entryId) return null;
     const entry = args.entries.find((e) => e.id === entryId);
     if (!entry) return null;
     if (!(entry.installments > 1)) return null;
     const total = entry.installments;
+    const chargeMonth = entry.chargeDate.slice(0, 7);
+    const [cy, cm] = chargeMonth.split("-").map(Number);
+    const [my, mm] = args.monthKey.split("-").map(Number);
+    if (!cy || !cm || !my || !mm) return null;
+    const sliceIndex = (my - cy) * 12 + (mm - cm);
+    if (sliceIndex < 0 || sliceIndex >= total) return null;
     const current = sliceIndex + 1;
     const monthly = entry.amount / total;
     return {
