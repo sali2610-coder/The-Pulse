@@ -460,6 +460,30 @@ export function getSnapshot(ctx: EngineCtx) {
 // 35-day liquidity curve + EOM snapshot.
 // endOfMonth === buildFinancialSnapshot.projectedBalanceOnFirstOfNextMonth.
 
+// ── 7b. getLiquidityCurve ──────────────────────────────────────────
+//
+// Phase 422 — canonical curve helper for the Time tab. Every Time
+// checkpoint (LIVE / 10 / סוף חודש / 2 / 10+ / מותאם) reads from the
+// SAME curve produced here. The screen no longer calls liquidityCurve
+// or buildFinancialSnapshot directly — both flow through the engine
+// so there is one place to fix when projection math changes.
+
+export function getLiquidityCurve(
+  ctx: EngineCtx,
+  windowDays = 60,
+): ReturnType<typeof liquidityCurve> {
+  return liquidityCurve({
+    accounts: ctx.accounts,
+    loans: ctx.loans,
+    incomes: ctx.incomes,
+    rules: ctx.rules,
+    statuses: ctx.statuses,
+    entries: ctx.entries,
+    now: ctx.now,
+    windowDays,
+  });
+}
+
 export function getTimelineProjection(ctx: EngineCtx): TimelineResult {
   const curve = liquidityCurve({
     accounts: ctx.accounts,

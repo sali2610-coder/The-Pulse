@@ -221,20 +221,6 @@ export function liquidityCurve(args: {
   let cursor = noonOfDay(now);
   const points: LiquidityPoint[] = [];
 
-  // Day 0 — today. Phase 407 — past bank impacts (manual withdrawals
-  // dated today after the anchor was last set) surface here so the
-  // "מה השתנה עד התאריך" path can explain the LIVE drop. The
-  // balance is unchanged (startingBalance already deducted them);
-  // events are listed for traceability.
-  points.push({
-    whenISO: cursor.toISOString(),
-    dayIndex: 0,
-    balance,
-    delta: pastBankEvents.reduce((s, e) => s + e.amount, 0),
-    events: pastBankEvents.slice(),
-  });
-  cursor = addDays(cursor, 1);
-
   // Pre-index events by local-day-of-month-key to avoid O(n*d) scans.
   const eventsByDayKey = new Map<string, LiquidityEvent[]>();
   for (const e of events) {
@@ -243,6 +229,33 @@ export function liquidityCurve(args: {
     arr.push(e);
     eventsByDayKey.set(key, arr);
   }
+
+  // Phase 422 — Day 0 (today) MUST include obligations scheduled for
+  // today. Previously the day-0 push only listed past-bank-debit
+  // events and the i=1..windowDays loop only walked tomorrow forward,
+  // so any loan / fixed obligation / card slice firing on today's
+  // date was silently dropped from the curve. Now we union pastBank
+  // events with today's scheduled events and let the balance reflect
+  // both (past debits already deducted from startingBalance, today's
+  // scheduled events recorded as delta).
+  const day0Key = dayKey(cursor);
+  const day0Scheduled = eventsByDayKey.get(day0Key) ?? [];
+  const day0Events: LiquidityEvent[] = [
+    ...pastBankEvents,
+    ...day0Scheduled,
+  ];
+  const day0Delta = day0Scheduled.reduce((s, e) => s + e.amount, 0);
+  balance = round2(balance + day0Delta);
+  points.push({
+    whenISO: cursor.toISOString(),
+    dayIndex: 0,
+    balance,
+    delta: round2(
+      pastBankEvents.reduce((s, e) => s + e.amount, 0) + day0Delta,
+    ),
+    events: day0Events,
+  });
+  cursor = addDays(cursor, 1);
 
   for (let i = 1; i <= windowDays; i++) {
     const key = dayKey(cursor);

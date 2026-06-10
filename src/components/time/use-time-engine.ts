@@ -16,7 +16,7 @@
 import { useMemo } from "react";
 
 import { useFinanceStore } from "@/lib/store";
-import { liquidityCurve, type LiquidityCurve } from "@/lib/liquidity-curve";
+import type { LiquidityCurve } from "@/lib/liquidity-curve";
 import { buildFinancialSnapshot } from "@/lib/financial-snapshot";
 import {
   forecastHealthScore,
@@ -24,6 +24,12 @@ import {
 } from "@/lib/forecast-health";
 import { currentMonthKey } from "@/lib/dates";
 import { todayPulse } from "@/lib/today-pulse";
+// Phase 422 — every Time-tab number routes through the engine. No
+// direct liquidityCurve / financial-snapshot calls in the hook.
+import {
+  buildEngineCtx,
+  getLiquidityCurve,
+} from "@/lib/financial-engine";
 
 export type CheckpointKind =
   | "now"
@@ -80,10 +86,15 @@ function daysBetween(target: Date, now: Date): number {
 }
 
 function offsetToDayOfMonth(now: Date, day: number): number {
-  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
-  if (thisMonth.getTime() > now.getTime()) return daysBetween(thisMonth, now);
+  // Phase 422 — compare day-of-month (not raw timestamps). When TODAY
+  // already is `day` (e.g., today is the 10th and the user taps "10"),
+  // the chip must mean TODAY → offset 0, not next month's 10th.
+  if (now.getDate() <= day) {
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
+    return Math.max(0, daysBetween(thisMonth, now));
+  }
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, day);
-  return daysBetween(nextMonth, now);
+  return Math.max(0, daysBetween(nextMonth, now));
 }
 
 function offsetToEom(now: Date): number {
@@ -106,32 +117,50 @@ export function useTimeEngine(offset: number | null): TimeFrame {
   const entries = useFinanceStore((s) => s.entries);
   const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
 
-  const curve = useMemo(() => {
+  // Phase 422 — single engine ctx feeds both curve + EOM snapshot so
+  // every Time chip resolves against the same canonical projection.
+  const ctx = useMemo(() => {
     if (!hydrated) return null;
-    return liquidityCurve({
+    return buildEngineCtx({
       accounts,
       loans,
       incomes,
       rules,
       statuses,
       entries,
-      windowDays: 60,
-    });
-  }, [hydrated, accounts, loans, incomes, rules, statuses, entries]);
-
-  const snapshotEom = useMemo(() => {
-    if (!hydrated) return null;
-    return buildFinancialSnapshot({
-      accounts,
-      loans,
-      incomes,
-      entries,
-      rules,
-      statuses,
       monthlyBudget,
       monthKey: currentMonthKey(),
     });
-  }, [hydrated, accounts, loans, incomes, entries, rules, statuses, monthlyBudget]);
+  }, [
+    hydrated,
+    accounts,
+    loans,
+    incomes,
+    rules,
+    statuses,
+    entries,
+    monthlyBudget,
+  ]);
+
+  const curve = useMemo<LiquidityCurve | null>(() => {
+    if (!ctx) return null;
+    return getLiquidityCurve(ctx, 60);
+  }, [ctx]);
+
+  const snapshotEom = useMemo(() => {
+    if (!ctx) return null;
+    return buildFinancialSnapshot({
+      accounts: ctx.accounts,
+      loans: ctx.loans,
+      incomes: ctx.incomes,
+      entries: ctx.entries,
+      rules: ctx.rules,
+      statuses: ctx.statuses,
+      monthlyBudget: ctx.monthlyBudget,
+      monthKey: ctx.monthKey,
+      now: ctx.now,
+    });
+  }, [ctx]);
 
   const pulse = useMemo(() => {
     if (!hydrated) return null;
