@@ -13,7 +13,13 @@ import {
   installmentMetaForSource,
 } from "@/lib/installment-meta";
 import { getCreditCardStatement } from "@/lib/credit-card-statement";
-import type { Account, ExpenseEntry } from "@/types/finance";
+import { buildCardCategoryBreakdown } from "@/lib/card-category-breakdown";
+import { buildCardMonthFolders } from "@/lib/card-month-folders";
+import type {
+  Account,
+  ExpenseEntry,
+  RecurringRule,
+} from "@/types/finance";
 
 const MONTH_KEY = "2026-06" as const;
 
@@ -184,5 +190,177 @@ describe("Credit Cards statement reflects installment chargeDate edits", () => {
       monthKey: MONTH_KEY,
     });
     expect(after.cards[0]!.transactions[0]!.amount).toBe(200);
+  });
+});
+
+describe("Rule installments — paymentNumber recomputes from live rule fields", () => {
+  function installmentRule(o: Partial<RecurringRule> = {}): RecurringRule {
+    return {
+      id: o.id ?? "r-installment",
+      label: "iPhone — 6 תשלומים",
+      category: "shopping",
+      estimatedAmount: 250,
+      dayOfMonth: 10,
+      keywords: [],
+      active: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      installmentTotal: 6,
+      startMonth: 3,
+      startYear: 2026,
+      paymentSource: "card",
+      linkedCardId: "card-1",
+      ...o,
+    };
+  }
+
+  it("returns 4/6 for June when startMonth=March", () => {
+    const rule = installmentRule();
+    const meta = installmentMetaForRefId({
+      refId: `rule:${rule.id}`,
+      monthKey: MONTH_KEY,
+      entries: [],
+      rules: [rule],
+    });
+    expect(meta).not.toBeNull();
+    expect(meta!.current).toBe(4);
+    expect(meta!.total).toBe(6);
+  });
+
+  it("returns 5/6 immediately after startMonth is shifted one month earlier", () => {
+    const before = installmentRule();
+    const metaBefore = installmentMetaForRefId({
+      refId: `rule:${before.id}`,
+      monthKey: MONTH_KEY,
+      entries: [],
+      rules: [before],
+    });
+    expect(metaBefore!.current).toBe(4);
+
+    const after: RecurringRule = { ...before, startMonth: 2, startYear: 2026 };
+    const metaAfter = installmentMetaForRefId({
+      refId: `rule:${after.id}`,
+      monthKey: MONTH_KEY,
+      entries: [],
+      rules: [after],
+    });
+    expect(metaAfter!.current).toBe(5);
+  });
+});
+
+describe("Full card-breakdown pipeline reflects installment edits end-to-end", () => {
+  it("entry installment 4/6 → 5/6 propagates through buildCardCategoryBreakdown and buildCardMonthFolders", () => {
+    const cards: Account[] = [card({ id: "card-1" })];
+    const entry: ExpenseEntry = installmentEntry({
+      amount: 600,
+      installments: 6,
+    });
+    const now = new Date(2026, 5, 15, 12, 0, 0);
+
+    const reportBefore = buildCardCategoryBreakdown({
+      accounts: cards,
+      loans: [],
+      rules: [],
+      statuses: [],
+      entries: [entry],
+      now,
+    });
+    const foldersBefore = buildCardMonthFolders(reportBefore, now);
+    const itemBefore = foldersBefore[0]?.categories[0]?.items[0];
+    expect(itemBefore).toBeDefined();
+    // Phase 421 — meta MUST be resolved against the purchase month,
+    // not the folder's cash-settle month, or every installment row
+    // displays an off-by-one index in cards-hierarchy.
+    const metaBefore = installmentMetaForRefId({
+      refId: itemBefore!.refId,
+      monthKey: itemBefore!.purchaseMonthKey,
+      entries: [entry],
+      rules: [],
+    });
+    expect(metaBefore!.current).toBe(4);
+    expect(itemBefore!.amount).toBe(100);
+
+    // User edits chargeDate one month earlier in Settings.
+    const edited: ExpenseEntry = {
+      ...entry,
+      chargeDate: new Date(2026, 1, 15, 12, 0, 0).toISOString(),
+    };
+    const reportAfter = buildCardCategoryBreakdown({
+      accounts: cards,
+      loans: [],
+      rules: [],
+      statuses: [],
+      entries: [edited],
+      now,
+    });
+    const foldersAfter = buildCardMonthFolders(reportAfter, now);
+    const itemAfter = foldersAfter[0]?.categories[0]?.items[0];
+    expect(itemAfter).toBeDefined();
+    const metaAfter = installmentMetaForRefId({
+      refId: itemAfter!.refId,
+      monthKey: itemAfter!.purchaseMonthKey,
+      entries: [edited],
+      rules: [],
+    });
+    expect(metaAfter!.current).toBe(5);
+    expect(itemAfter!.amount).toBe(100);
+  });
+
+  it("rule installment 4/6 → 5/6 propagates through buildCardCategoryBreakdown", () => {
+    const cards: Account[] = [card({ id: "card-1" })];
+    const rule: RecurringRule = {
+      id: "r-rule-install",
+      label: "iPad — 6 תשלומים",
+      category: "shopping",
+      estimatedAmount: 300,
+      dayOfMonth: 10,
+      keywords: [],
+      active: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      installmentTotal: 6,
+      startMonth: 3,
+      startYear: 2026,
+      paymentSource: "card",
+      linkedCardId: "card-1",
+    };
+    const now = new Date(2026, 5, 15, 12, 0, 0);
+
+    const reportBefore = buildCardCategoryBreakdown({
+      accounts: cards,
+      loans: [],
+      rules: [rule],
+      statuses: [],
+      entries: [],
+      now,
+    });
+    const foldersBefore = buildCardMonthFolders(reportBefore, now);
+    const itemBefore = foldersBefore[0]?.categories[0]?.items[0];
+    expect(itemBefore).toBeDefined();
+    const metaBefore = installmentMetaForRefId({
+      refId: itemBefore!.refId,
+      monthKey: itemBefore!.purchaseMonthKey,
+      entries: [],
+      rules: [rule],
+    });
+    expect(metaBefore!.current).toBe(4);
+
+    const edited: RecurringRule = { ...rule, startMonth: 2, startYear: 2026 };
+    const reportAfter = buildCardCategoryBreakdown({
+      accounts: cards,
+      loans: [],
+      rules: [edited],
+      statuses: [],
+      entries: [],
+      now,
+    });
+    const foldersAfter = buildCardMonthFolders(reportAfter, now);
+    const itemAfter = foldersAfter[0]?.categories[0]?.items[0];
+    expect(itemAfter).toBeDefined();
+    const metaAfter = installmentMetaForRefId({
+      refId: itemAfter!.refId,
+      monthKey: itemAfter!.purchaseMonthKey,
+      entries: [],
+      rules: [edited],
+    });
+    expect(metaAfter!.current).toBe(5);
   });
 });

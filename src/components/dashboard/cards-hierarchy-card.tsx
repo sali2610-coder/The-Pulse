@@ -534,10 +534,16 @@ function CategoryRow({
                     : "חד-פעמי";
               // Phase 269 — pull installment progress for stronger
               // visual identity. null for recurring + oneTime rows.
+              // Phase 421 — installment metadata MUST resolve against the
+              // purchase month of the slice (the month the engine assigned
+              // when bucketing into the credit-card exposure), not the
+              // folder's cash-settle month. Otherwise the displayed
+              // paymentNumber drifts by +1 for every card because
+              // effectiveCashAt maps to next month.
               const installmentMeta = isInstallment
                 ? installmentMetaForRefId({
                     refId: it.refId,
-                    monthKey,
+                    monthKey: it.purchaseMonthKey ?? monthKey,
                     entries,
                     rules,
                   })

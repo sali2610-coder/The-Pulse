@@ -36,6 +36,14 @@ function group(o: {
       effectiveCashAt: `${it.iso}T12:00:00.000Z`,
       kind: it.kind,
       refId: it.refId ?? `entry:e${i}:0`,
+      // Phase 421 — purchase month = month BEFORE the cash-settle
+      // date, per effectiveDateFor's next-month mapping.
+      purchaseMonthKey: (() => {
+        const [y, m] = it.iso.split("-").map(Number);
+        const prevMonth = m === 1 ? 12 : m! - 1;
+        const prevYear = m === 1 ? y! - 1 : y!;
+        return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+      })(),
     };
   });
   return {

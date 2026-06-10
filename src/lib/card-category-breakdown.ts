@@ -39,6 +39,12 @@ export type CategoryGroup = {
     effectiveCashAt: string;
     kind: ChargeKind;
     refId: string;
+    /** Phase 421 — purchase-month-key of the slice that produced
+     *  this row. Distinct from effectiveCashAt's month (which is the
+     *  bank-debit month). installmentMetaForRefId reads this so the
+     *  paymentNumber stays aligned with sliceForMonth's offset
+     *  rather than the next-month cash-settle window. */
+    purchaseMonthKey: string;
   }>;
 };
 
@@ -220,7 +226,7 @@ export function buildCardCategoryBreakdown(args: {
         if (kind === "recurring") grp.recurring += tx.amount;
         else if (kind === "installments") grp.installments += tx.amount;
         else grp.oneTime += tx.amount;
-        grp.items.push(itemFromRow(tx, kind, effectiveCashAt));
+        grp.items.push(itemFromRow(tx, kind, effectiveCashAt, monthKey));
         acc.categories.set(category, grp);
         acc.total += tx.amount;
         if (kind === "recurring") acc.recurringTotal += tx.amount;
@@ -265,6 +271,7 @@ function itemFromRow(
   tx: CreditExposureRow & { category?: CategoryId },
   kind: ChargeKind,
   effectiveCashAt: string,
+  purchaseMonthKey: string,
 ): CategoryGroup["items"][number] {
   return {
     label: tx.label,
@@ -272,5 +279,6 @@ function itemFromRow(
     effectiveCashAt,
     kind,
     refId: tx.id,
+    purchaseMonthKey,
   };
 }
