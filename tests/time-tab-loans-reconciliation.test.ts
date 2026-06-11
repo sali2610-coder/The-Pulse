@@ -122,14 +122,14 @@ describe("Phase 424 — past loan installment surfaces even when anchor was refr
 
     // Balance stays at the typed anchor — no double-deduction.
     expect(curve.startingBalance).toBe(17_300);
-    // Event still surfaces on day 0 so the user reads "Studies fired".
+    expect(curve.points[0].balance).toBe(17_300);
+    // Event still surfaces on day 0 so the user reads "Studies fired",
+    // marked informational so the balance walk skips it.
     const studiesDay0 = curve.points[0].events.find(
       (e) => e.kind === "loan" && Math.abs(e.amount) === 2_700,
     );
-    expect(
-      studiesDay0,
-      "Studies past installment must be visible on day 0 even when anchor was set after",
-    ).toBeDefined();
+    expect(studiesDay0).toBeDefined();
+    expect(studiesDay0!.informational).toBe(true);
   });
 
   it("anchorUpdatedAt BEFORE studies debit subtracts AND shows", () => {
@@ -147,9 +147,13 @@ describe("Phase 424 — past loan installment surfaces even when anchor was refr
       now: TODAY_AFTER,
     });
     const curve = getLiquidityCurve(ctx, 60);
-    expect(curve.startingBalance).toBe(20_000 - 2_700);
+    expect(curve.startingBalance).toBe(20_000);
+    expect(curve.points[0].balance).toBe(20_000 - 2_700);
     const studiesDay0 = curve.points[0].events.find(
-      (e) => e.kind === "loan" && Math.abs(e.amount) === 2_700,
+      (e) =>
+        e.kind === "loan" &&
+        Math.abs(e.amount) === 2_700 &&
+        e.informational !== true,
     );
     expect(studiesDay0).toBeDefined();
   });
@@ -159,9 +163,16 @@ describe("Phase 423 — loan impact in every Time chip projection", () => {
   it("LIVE deducts past-month installment (Car) + lists it as day-0 event", () => {
     const ctx = buildCtx();
     const curve = getLiquidityCurve(ctx, 60);
-    expect(curve.startingBalance).toBe(20_000 - 870); // Car already debited.
+    // Phase 425 — startingBalance is the raw typed anchor. The
+    // past-Car installment is folded into the day-0 walk, so
+    // curve.points[0].balance reflects the post-deduction LIVE total.
+    expect(curve.startingBalance).toBe(20_000);
+    expect(curve.points[0].balance).toBe(20_000 - 870);
     const loanEvent = curve.points[0].events.find(
-      (e) => e.kind === "loan" && Math.abs(e.amount) === 870,
+      (e) =>
+        e.kind === "loan" &&
+        Math.abs(e.amount) === 870 &&
+        e.informational !== true,
     );
     expect(
       loanEvent,

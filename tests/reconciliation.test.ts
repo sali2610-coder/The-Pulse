@@ -626,9 +626,12 @@ describe("Phase 397 — manual cash zero-drift", () => {
       now: NOW,
       windowDays: 35,
     });
-    // LIVE = day 0 balance = adjusted starting balance.
+    // Phase 425 — startingBalance is now the raw typed anchor;
+    // past-debit adjustment lives in the day-0 walk so the events
+    // list is the single source of truth for both UI traceability
+    // and the running balance invariant.
+    expect(curve.startingBalance).toBe(12_000);
     expect(curve.points[0].balance).toBe(11_999);
-    expect(curve.startingBalance).toBe(11_999);
   });
 
   it("Phase 403 — credit charges in current month roll to next-cycle paymentDay (never past)", () => {

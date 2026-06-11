@@ -77,6 +77,11 @@ export type LiquidityEvent = {
   kind: LiquidityEventKind;
   /** Optional card label so the UI can surface "Visa ****1234". */
   cardLabel?: string;
+  /** Phase 425 — true when the event is shown for traceability but
+   *  the running balance is NOT to walk it (the anchor the user typed
+   *  already reflects this debit). Lets LIVE display "Studies ירד
+   *  אתמול" without double-deducting from the displayed balance. */
+  informational?: boolean;
 };
 
 export type LiquidityPoint = {
@@ -167,6 +172,10 @@ export function liquidityCurve(args: {
           : "חיוב מהבנק"),
       amount: -impact.amount,
       kind: "bank_debit",
+      // Phase 425 — this debit landed AFTER the anchor was last set,
+      // so it has NOT yet been folded into the typed balance. The
+      // running-balance walk must subtract it.
+      informational: false,
     });
   }
 
@@ -196,18 +205,25 @@ export function liquidityCurve(args: {
       // reflects the debit and skip the subtraction to avoid
       // double-counting. The event is informational only in that case.
       const alreadyInAnchor = maxAnchorAt > 0 && ts <= maxAnchorAt;
-      if (!alreadyInAnchor) pastBankDebits += loan.monthlyInstallment;
       pastBankEvents.push({
         whenISO: date.toISOString(),
         transactionISO: date.toISOString(),
         label: loan.label,
         amount: -loan.monthlyInstallment,
         kind: "loan",
+        informational: alreadyInAnchor,
       });
     }
   }
 
-  const startingBalance = rawAnchors - pastBankDebits;
+  // Phase 425 — startingBalance is now the user's raw typed anchor.
+  // The day-0 walk subtracts every NON-informational past event so
+  // the running balance is internally consistent: at any offset,
+  //   balance = startingBalance + Σ(events.amount where !informational).
+  // Informational events surface for UI traceability but never
+  // change the displayed balance (the anchor already reflects them).
+  const startingBalance = rawAnchors;
+  void pastBankDebits;
 
   // 1. Gather every liquidity event in the window.
   const events: LiquidityEvent[] = [];
@@ -310,15 +326,19 @@ export function liquidityCurve(args: {
     ...pastBankEvents,
     ...day0Scheduled,
   ];
-  const day0Delta = day0Scheduled.reduce((s, e) => s + e.amount, 0);
-  balance = round2(balance + day0Delta);
+  // Phase 425 — balance walk includes ONLY non-informational events.
+  // Informational events list past debits the anchor already reflects;
+  // adding them again would double-deduct.
+  const day0BalanceDelta = day0Events.reduce(
+    (s, e) => (e.informational ? s : s + e.amount),
+    0,
+  );
+  balance = round2(balance + day0BalanceDelta);
   points.push({
     whenISO: cursor.toISOString(),
     dayIndex: 0,
     balance,
-    delta: round2(
-      pastBankEvents.reduce((s, e) => s + e.amount, 0) + day0Delta,
-    ),
+    delta: round2(day0BalanceDelta),
     events: day0Events,
   });
   cursor = addDays(cursor, 1);
@@ -326,7 +346,10 @@ export function liquidityCurve(args: {
   for (let i = 1; i <= windowDays; i++) {
     const key = dayKey(cursor);
     const dayEvents = eventsByDayKey.get(key) ?? [];
-    const delta = dayEvents.reduce((acc, e) => acc + e.amount, 0);
+    const delta = dayEvents.reduce(
+      (acc, e) => (e.informational ? acc : acc + e.amount),
+      0,
+    );
     balance = round2(balance + delta);
     points.push({
       whenISO: cursor.toISOString(),
