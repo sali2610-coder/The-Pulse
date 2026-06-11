@@ -219,7 +219,17 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
       dir="rtl"
     >
       <RiverHeader cursorOffset={frame.cursorOffset} />
-      <ChangeSummary diff={diff} itemized={itemized} tone={tone.glow} />
+      <ChangeSummary
+        diff={diff}
+        itemized={itemized}
+        /* Phase 427 — LIVE stays itemized so each past loan / rule is
+           visible by name. Future chips (10 / EOM / 2 next / 10 next /
+           custom) collapse into three group lines (bank / loans /
+           credit) because itemizing 20+ future events overwhelms the
+           strip and the user can't see "what hits this card". */
+        groupOnly={frame.cursorOffset > 0}
+        tone={tone.glow}
+      />
       <RiverList
         nodes={nodes}
         tone={tone.glow}
@@ -232,13 +242,20 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
 function ChangeSummary({
   diff,
   itemized,
+  groupOnly,
   tone,
 }: {
   diff: CurveTotals;
   /** Phase 426 — per-event breakdown so each loan/rule line is
    *  visible by name + amount instead of being collapsed into a
-   *  single "תשלומי הלוואות" aggregate. */
+   *  single "תשלומי הלוואות" aggregate. Used only when groupOnly is
+   *  false (LIVE chip). */
   itemized: Array<{ label: string; amount: number; kind: "income" | "loan" | "card" | "bank_debit"; informational?: boolean }>;
+  /** Phase 427 — when true, render aggregated group lines only
+   *  (Bank / Loans / Credit / Income). Future chips (10 / EOM /
+   *  2 next / 10 next / custom) set this so the strip stays
+   *  scannable instead of listing dozens of events. */
+  groupOnly: boolean;
   tone: string;
 }) {
   type DiffLine = {
@@ -248,10 +265,10 @@ function ChangeSummary({
     informational?: boolean;
   };
   const lines: DiffLine[] = [];
-  if (itemized.length > 0) {
-    // Prefer per-event itemized rendering when we have it. Each loan /
-    // rule shows on its own line so "Car -870" and "Studies -2,700"
-    // are both visible — never collapsed into a single number.
+  if (!groupOnly && itemized.length > 0) {
+    // LIVE — per-event rendering. Each loan / rule on its own line
+    // so "Car -870" and "Studies -2,700" are both visible — never
+    // collapsed into a single number.
     for (const it of itemized) {
       lines.push({
         sign: it.kind === "income" ? 1 : -1,
@@ -261,19 +278,21 @@ function ChangeSummary({
       });
     }
   } else {
+    // Future chips — collapse into Bank / Loans / Credit / Income
+    // groups so the user reads what hits each lane at a glance.
     if (diff.income > 0) {
-      lines.push({ sign: 1, amount: diff.income, label: "התקבלו הכנסות" });
+      lines.push({ sign: 1, amount: diff.income, label: "הכנסות" });
     } else if (diff.income < 0) {
       lines.push({ sign: -1, amount: Math.abs(diff.income), label: "הוסרה הכנסה" });
     }
     if (diff.fixed > 0) {
-      lines.push({ sign: -1, amount: diff.fixed, label: "הוצאות קבועות חויבו" });
+      lines.push({ sign: -1, amount: diff.fixed, label: "בנק — חיובים קבועים" });
     }
     if (diff.loans > 0) {
-      lines.push({ sign: -1, amount: diff.loans, label: "תשלומי הלוואות" });
+      lines.push({ sign: -1, amount: diff.loans, label: "הלוואות" });
     }
     if (diff.cards > 0) {
-      lines.push({ sign: -1, amount: diff.cards, label: "חיובי כרטיסי אשראי" });
+      lines.push({ sign: -1, amount: diff.cards, label: "אשראי" });
     }
   }
   return (
