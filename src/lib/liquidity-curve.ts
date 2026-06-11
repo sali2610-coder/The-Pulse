@@ -27,6 +27,34 @@ import type {
 import { buildCashFlowBuckets } from "@/lib/cash-flow-bucket";
 import { effectiveCashImpactStream } from "@/lib/effective-cash-date";
 import { incomeForMonth } from "@/lib/income-month";
+import { loanSchedule } from "@/lib/installment-schedule";
+import { monthKeyOf as monthKeyOfDate } from "@/lib/dates";
+import type { MonthKey } from "@/types/finance";
+
+function* monthsInWindow(from: Date, to: Date): Generator<MonthKey> {
+  const seen = new Set<MonthKey>();
+  let cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+  while (cursor.getTime() <= to.getTime() + 32 * 86_400_000) {
+    const mk = monthKeyOfDate(cursor);
+    if (!seen.has(mk)) {
+      seen.add(mk);
+      yield mk;
+    }
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+}
+
+function horizonForLoanScan(now: Date): Date {
+  // Scan only the CURRENT month for past-loan debits. Anything older
+  // is presumed already reflected in the anchor balance the user
+  // typed in.
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+}
+
+function monthKeyAsDate(monthKey: MonthKey): Date {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(y, m - 1, 1, 12, 0, 0);
+}
 
 export type LiquidityEventKind =
   | "income"
@@ -141,6 +169,37 @@ export function liquidityCurve(args: {
       kind: "bank_debit",
     });
   }
+
+  // Phase 423 — past-month LOAN installments. The effectiveCashImpact
+  // stream only sees entries + rules; loans were silently dropped, so
+  // a car loan that debited on the 5th when today is the 11th never
+  // appeared in any Time chip (LIVE balance overstated; no event row).
+  // Treat past loan installments identically to past bank debits:
+  // adjust startingBalance + surface as day-0 traceability events.
+  // Future installments stay in the main events stream (already
+  // emitted by buildCashFlowBuckets below).
+  for (const loan of args.loans) {
+    if (!loan.active) continue;
+    for (const monthKey of monthsInWindow(now, horizonForLoanScan(now))) {
+      if (!loanSchedule(loan, monthKey).active) continue;
+      const date = dateOfDayOfMonth({
+        ref: monthKeyAsDate(monthKey),
+        dayOfMonth: loan.dayOfMonth,
+      });
+      const ts = date.getTime();
+      if (ts > now.getTime()) continue; // future handled by cashflow buckets
+      if (maxAnchorAt > 0 && ts <= maxAnchorAt) continue;
+      pastBankDebits += loan.monthlyInstallment;
+      pastBankEvents.push({
+        whenISO: date.toISOString(),
+        transactionISO: date.toISOString(),
+        label: loan.label,
+        amount: -loan.monthlyInstallment,
+        kind: "loan",
+      });
+    }
+  }
+
   const startingBalance = rawAnchors - pastBankDebits;
 
   // 1. Gather every liquidity event in the window.
