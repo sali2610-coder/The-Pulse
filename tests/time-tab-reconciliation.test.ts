@@ -172,7 +172,10 @@ describe("Phase 422 — liquidityCurve includes today's events in day 0", () => 
       (e) => e.kind === "loan" && Math.abs(e.amount) === 1_500,
     );
     expect(loanEvent, "loan should fire on day 0").toBeDefined();
-    expect(day0.balance).toBe(10_000 - 1_500);
+    // Phase 426 — past-month rent rule (dayOfMonth=1, 4,000 ILS) is
+    // now also folded into the day-0 walk because anchor is dated
+    // 2026-06-01 and rent fired the same day.
+    expect(day0.balance).toBe(10_000 - 1_500 - 4_000);
   });
 
   it("FinancialEngine.getLiquidityCurve === legacy liquidityCurve (canonical path)", () => {

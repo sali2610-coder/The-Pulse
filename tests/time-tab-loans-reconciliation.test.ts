@@ -98,6 +98,122 @@ describe("Phase 423 — activeLoans roster", () => {
   });
 });
 
+describe("Phase 426 — user's exact LIVE complaint: 3 loans, today after car+studies but before mortgage", () => {
+  const CAR: Loan = {
+    id: "l-car",
+    label: "הלוואת רכב",
+    monthlyInstallment: 870,
+    dayOfMonth: 2,
+    active: true,
+    createdAt: "2024-01-01T00:00:00.000Z",
+  };
+  const STUDIES: Loan = {
+    id: "l-studies",
+    label: "הלוואת לימודים",
+    monthlyInstallment: 2_700,
+    dayOfMonth: 20,
+    active: true,
+    createdAt: "2024-01-01T00:00:00.000Z",
+  };
+  const MORTGAGE: Loan = {
+    id: "l-mort",
+    label: "משכנתא",
+    monthlyInstallment: 1_400,
+    dayOfMonth: 25,
+    active: true,
+    createdAt: "2024-01-01T00:00:00.000Z",
+  };
+  // 22 June 2026 — Car (day 2) + Studies (day 20) already fired,
+  // Mortgage (day 25) still upcoming.
+  const NOW = new Date(2026, 5, 22, 9, 0, 0);
+
+  it("LIVE day-0 events list BOTH Car (-870) and Studies (-2,700) as past", () => {
+    const ctx = buildEngineCtx({
+      accounts: [
+        bank({
+          anchorBalance: 22_000,
+          anchorUpdatedAt: new Date(2026, 5, 1, 0, 0, 0).toISOString(),
+        }),
+      ],
+      loans: [CAR, STUDIES, MORTGAGE],
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [],
+      monthlyBudget: 0,
+      monthKey: "2026-06",
+      now: NOW,
+    });
+    const curve = getLiquidityCurve(ctx, 60);
+    const day0 = curve.points[0];
+    const carEv = day0.events.find(
+      (e) => e.kind === "loan" && Math.abs(e.amount) === 870,
+    );
+    const studiesEv = day0.events.find(
+      (e) => e.kind === "loan" && Math.abs(e.amount) === 2_700,
+    );
+    expect(carEv, "Car loan past installment must be on day 0").toBeDefined();
+    expect(
+      studiesEv,
+      "Studies loan past installment must be on day 0",
+    ).toBeDefined();
+    // Mortgage hasn't fired yet — should be in a future point.
+    const mortgageFuture = curve.points
+      .flatMap((p) => p.events)
+      .find(
+        (e) => e.kind === "loan" && Math.abs(e.amount) === 1_400,
+      );
+    expect(mortgageFuture, "Mortgage must surface as future event").toBeDefined();
+    expect(mortgageFuture!.whenISO.startsWith("2026-06-25")).toBe(true);
+  });
+
+  it("LIVE balance = anchor − (Car + Studies); Mortgage NOT yet deducted", () => {
+    const ctx = buildEngineCtx({
+      accounts: [
+        bank({
+          anchorBalance: 22_000,
+          anchorUpdatedAt: new Date(2026, 5, 1, 0, 0, 0).toISOString(),
+        }),
+      ],
+      loans: [CAR, STUDIES, MORTGAGE],
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [],
+      monthlyBudget: 0,
+      monthKey: "2026-06",
+      now: NOW,
+    });
+    const curve = getLiquidityCurve(ctx, 60);
+    // LIVE = startingBalance − Car − Studies (anchor predates both).
+    expect(curve.points[0].balance).toBe(22_000 - 870 - 2_700);
+  });
+
+  it("EOM continues past LIVE — Mortgage 25th + next-month installments propagate", () => {
+    const ctx = buildEngineCtx({
+      accounts: [
+        bank({
+          anchorBalance: 22_000,
+          anchorUpdatedAt: new Date(2026, 5, 1, 0, 0, 0).toISOString(),
+        }),
+      ],
+      loans: [CAR, STUDIES, MORTGAGE],
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [],
+      monthlyBudget: 0,
+      monthKey: "2026-06",
+      now: NOW,
+    });
+    const curve = getLiquidityCurve(ctx, 60);
+    // Day index from June 22 to June 30 = 8.
+    const eomBal = curve.points[8].balance;
+    // Mortgage June 25 must have fired by EOM.
+    expect(eomBal).toBe(22_000 - 870 - 2_700 - 1_400);
+  });
+});
+
 describe("Phase 424 — past loan installment surfaces even when anchor was refreshed after the debit", () => {
   it("anchorUpdatedAt AFTER studies debit still shows the event (no balance double-deduction)", () => {
     // User refreshed the anchor on the 21st AFTER the studies loan

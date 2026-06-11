@@ -216,6 +216,35 @@ export function liquidityCurve(args: {
     }
   }
 
+  // Phase 426 — past-month bank-RULE installments. Mirrors the loan
+  // loop above. Without this, a recurring bill (e.g., Studies tuition
+  // structured as a rule with paymentSource="bank") that fired on the
+  // 20th never surfaced on LIVE — only loans were folded in. Rules
+  // with paymentSource="card" or matched to a card route through the
+  // card-billing path and are NOT emitted here.
+  for (const rule of args.rules) {
+    if (!rule.active) continue;
+    if (rule.paymentSource === "card" || rule.paymentSource === "cash") continue;
+    if (rule.linkedCardId) continue; // legacy card-linked rule
+    for (const monthKey of monthsInWindow(now, horizonForLoanScan(now))) {
+      const ts = dateOfDayOfMonth({
+        ref: monthKeyAsDate(monthKey),
+        dayOfMonth: rule.dayOfMonth,
+      }).getTime();
+      if (ts > now.getTime()) continue;
+      const date = new Date(ts);
+      const alreadyInAnchor = maxAnchorAt > 0 && ts <= maxAnchorAt;
+      pastBankEvents.push({
+        whenISO: date.toISOString(),
+        transactionISO: date.toISOString(),
+        label: rule.label,
+        amount: -rule.estimatedAmount,
+        kind: "bank_debit",
+        informational: alreadyInAnchor,
+      });
+    }
+  }
+
   // Phase 425 — startingBalance is now the user's raw typed anchor.
   // The day-0 walk subtracts every NON-informational past event so
   // the running balance is internally consistent: at any offset,

@@ -117,6 +117,33 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
   // exactly the way the balance does.
   const totals = useMemo(() => totalsUpToCursor(frame), [frame]);
 
+  // Phase 426 — itemized per-event list so the diff strip shows
+  // each loan / rule / income individually instead of collapsing
+  // them into a single "תשלומי הלוואות -3,570" aggregate. Walks
+  // events from day 0 up to and including the cursor day.
+  const itemized = useMemo(() => {
+    const curve = frame.curve;
+    if (!curve) return [] as Array<{ label: string; amount: number; kind: "income" | "loan" | "card" | "bank_debit"; informational?: boolean; whenISO: string }>;
+    const cap = Math.max(0, Math.min(curve.points.length - 1, frame.cursorOffset));
+    const out: Array<{ label: string; amount: number; kind: "income" | "loan" | "card" | "bank_debit"; informational?: boolean; whenISO: string }> = [];
+    for (let i = 0; i <= cap; i++) {
+      for (const ev of curve.points[i].events) {
+        if (ev.kind !== "income" && ev.kind !== "loan" && ev.kind !== "card" && ev.kind !== "bank_debit") continue;
+        out.push({
+          label: ev.label,
+          amount: ev.amount,
+          kind: ev.kind,
+          informational: ev.informational,
+          whenISO: ev.whenISO,
+        });
+      }
+    }
+    out.sort(
+      (a, b) => new Date(a.whenISO).getTime() - new Date(b.whenISO).getTime(),
+    );
+    return out;
+  }, [frame.curve, frame.cursorOffset]);
+
   // Track previous totals so the change-summary strip can describe
   // the diff between the last cursor and this one.
   const prevTotalsRef = useRef<CurveTotals>(EMPTY);
@@ -192,7 +219,7 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
       dir="rtl"
     >
       <RiverHeader cursorOffset={frame.cursorOffset} />
-      <ChangeSummary diff={diff} tone={tone.glow} />
+      <ChangeSummary diff={diff} itemized={itemized} tone={tone.glow} />
       <RiverList
         nodes={nodes}
         tone={tone.glow}
@@ -204,26 +231,50 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
 
 function ChangeSummary({
   diff,
+  itemized,
   tone,
 }: {
   diff: CurveTotals;
+  /** Phase 426 — per-event breakdown so each loan/rule line is
+   *  visible by name + amount instead of being collapsed into a
+   *  single "תשלומי הלוואות" aggregate. */
+  itemized: Array<{ label: string; amount: number; kind: "income" | "loan" | "card" | "bank_debit"; informational?: boolean }>;
   tone: string;
 }) {
-  type DiffLine = { sign: 1 | -1; amount: number; label: string };
+  type DiffLine = {
+    sign: 1 | -1;
+    amount: number;
+    label: string;
+    informational?: boolean;
+  };
   const lines: DiffLine[] = [];
-  if (diff.income > 0) {
-    lines.push({ sign: 1, amount: diff.income, label: "התקבלו הכנסות" });
-  } else if (diff.income < 0) {
-    lines.push({ sign: -1, amount: Math.abs(diff.income), label: "הוסרה הכנסה" });
-  }
-  if (diff.fixed > 0) {
-    lines.push({ sign: -1, amount: diff.fixed, label: "הוצאות קבועות חויבו" });
-  }
-  if (diff.loans > 0) {
-    lines.push({ sign: -1, amount: diff.loans, label: "תשלומי הלוואות" });
-  }
-  if (diff.cards > 0) {
-    lines.push({ sign: -1, amount: diff.cards, label: "חיובי כרטיסי אשראי" });
+  if (itemized.length > 0) {
+    // Prefer per-event itemized rendering when we have it. Each loan /
+    // rule shows on its own line so "Car -870" and "Studies -2,700"
+    // are both visible — never collapsed into a single number.
+    for (const it of itemized) {
+      lines.push({
+        sign: it.kind === "income" ? 1 : -1,
+        amount: Math.abs(it.amount),
+        label: it.label,
+        informational: it.informational,
+      });
+    }
+  } else {
+    if (diff.income > 0) {
+      lines.push({ sign: 1, amount: diff.income, label: "התקבלו הכנסות" });
+    } else if (diff.income < 0) {
+      lines.push({ sign: -1, amount: Math.abs(diff.income), label: "הוסרה הכנסה" });
+    }
+    if (diff.fixed > 0) {
+      lines.push({ sign: -1, amount: diff.fixed, label: "הוצאות קבועות חויבו" });
+    }
+    if (diff.loans > 0) {
+      lines.push({ sign: -1, amount: diff.loans, label: "תשלומי הלוואות" });
+    }
+    if (diff.cards > 0) {
+      lines.push({ sign: -1, amount: diff.cards, label: "חיובי כרטיסי אשראי" });
+    }
   }
   return (
     <div
@@ -262,7 +313,17 @@ function ChangeSummary({
                 key={`${i}-${l.label}`}
                 className="flex items-center justify-between text-[12.5px]"
               >
-                <span className="text-foreground/80">{l.label}</span>
+                <span
+                  className="text-foreground/80"
+                  style={l.informational ? { opacity: 0.75 } : undefined}
+                >
+                  {l.label}
+                  {l.informational ? (
+                    <span className="ms-1 text-[10px] text-muted-foreground/80">
+                      · כבר ביתרה
+                    </span>
+                  ) : null}
+                </span>
                 <span
                   data-mono="true"
                   dir="ltr"
