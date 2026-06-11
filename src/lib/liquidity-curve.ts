@@ -188,8 +188,15 @@ export function liquidityCurve(args: {
       });
       const ts = date.getTime();
       if (ts > now.getTime()) continue; // future handled by cashflow buckets
-      if (maxAnchorAt > 0 && ts <= maxAnchorAt) continue;
-      pastBankDebits += loan.monthlyInstallment;
+      // Phase 424 — ALWAYS surface the past-month loan event in the
+      // day-0 trail so the user sees "Studies 2,700 ירד אתמול"
+      // regardless of when they last refreshed the anchor. Balance
+      // adjustment is gated by maxAnchorAt: if the anchor was set
+      // AFTER the installment, we presume the typed balance already
+      // reflects the debit and skip the subtraction to avoid
+      // double-counting. The event is informational only in that case.
+      const alreadyInAnchor = maxAnchorAt > 0 && ts <= maxAnchorAt;
+      if (!alreadyInAnchor) pastBankDebits += loan.monthlyInstallment;
       pastBankEvents.push({
         whenISO: date.toISOString(),
         transactionISO: date.toISOString(),

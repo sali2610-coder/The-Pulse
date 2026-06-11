@@ -98,6 +98,63 @@ describe("Phase 423 — activeLoans roster", () => {
   });
 });
 
+describe("Phase 424 — past loan installment surfaces even when anchor was refreshed after the debit", () => {
+  it("anchorUpdatedAt AFTER studies debit still shows the event (no balance double-deduction)", () => {
+    // User refreshed the anchor on the 21st AFTER the studies loan
+    // fired on the 20th. Their typed balance already reflects the
+    // debit — we must NOT subtract again, but the event MUST still
+    // appear in the day-0 trail so the user sees "Studies -2,700
+    // ירד אתמול" on LIVE.
+    const anchorAfterDebit = new Date(2026, 5, 21, 8, 0, 0);
+    const TODAY_LATE = new Date(2026, 5, 21, 18, 0, 0);
+    const ctx = buildEngineCtx({
+      accounts: [bank({ anchorBalance: 17_300, anchorUpdatedAt: anchorAfterDebit.toISOString() })],
+      loans: [STUDIES_LOAN], // dayOfMonth=20
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [],
+      monthlyBudget: 0,
+      monthKey: "2026-06",
+      now: TODAY_LATE,
+    });
+    const curve = getLiquidityCurve(ctx, 60);
+
+    // Balance stays at the typed anchor — no double-deduction.
+    expect(curve.startingBalance).toBe(17_300);
+    // Event still surfaces on day 0 so the user reads "Studies fired".
+    const studiesDay0 = curve.points[0].events.find(
+      (e) => e.kind === "loan" && Math.abs(e.amount) === 2_700,
+    );
+    expect(
+      studiesDay0,
+      "Studies past installment must be visible on day 0 even when anchor was set after",
+    ).toBeDefined();
+  });
+
+  it("anchorUpdatedAt BEFORE studies debit subtracts AND shows", () => {
+    const anchorBeforeDebit = new Date(2026, 5, 1, 8, 0, 0);
+    const TODAY_AFTER = new Date(2026, 5, 21, 18, 0, 0);
+    const ctx = buildEngineCtx({
+      accounts: [bank({ anchorBalance: 20_000, anchorUpdatedAt: anchorBeforeDebit.toISOString() })],
+      loans: [STUDIES_LOAN],
+      incomes: [],
+      rules: [],
+      statuses: [],
+      entries: [],
+      monthlyBudget: 0,
+      monthKey: "2026-06",
+      now: TODAY_AFTER,
+    });
+    const curve = getLiquidityCurve(ctx, 60);
+    expect(curve.startingBalance).toBe(20_000 - 2_700);
+    const studiesDay0 = curve.points[0].events.find(
+      (e) => e.kind === "loan" && Math.abs(e.amount) === 2_700,
+    );
+    expect(studiesDay0).toBeDefined();
+  });
+});
+
 describe("Phase 423 — loan impact in every Time chip projection", () => {
   it("LIVE deducts past-month installment (Car) + lists it as day-0 event", () => {
     const ctx = buildCtx();
