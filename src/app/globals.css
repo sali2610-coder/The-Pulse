@@ -4085,3 +4085,236 @@ main[data-danger="true"] [data-tone="accent"] {
   display: flex;
   gap: var(--aurora-space-3);
 }
+
+/* ── Aurora Checkpoints Workspace — Phase 441 ───────────────── */
+
+.aurora-checkpoints-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-5);
+}
+.aurora-checkpoints-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aurora-checkpoints-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: pan-y;
+  user-select: none;
+}
+.aurora-checkpoint-ring-large {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1;
+  margin-inline: auto;
+}
+.aurora-checkpoint-center-large {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.aurora-checkpoint-eyebrow {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-checkpoint-balance {
+  font-size: 56px;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--aurora-tracking-display);
+  line-height: 1;
+}
+.aurora-checkpoint-when {
+  font-size: var(--aurora-type-body);
+  color: var(--aurora-ink-3);
+}
+.aurora-checkpoint-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: 4px;
+  border-radius: 9999px;
+  border: 1px solid;
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  margin-block-start: var(--aurora-space-2);
+}
+
+.aurora-checkpoint-chips-large {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-glass-elev-1);
+  border: 1px solid var(--aurora-hairline-quiet);
+}
+.aurora-checkpoint-chip-large {
+  position: relative;
+  appearance: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 56px;
+  padding-inline: var(--aurora-space-2);
+  border-radius: 14px;
+  background: transparent;
+  border: 0;
+  color: var(--aurora-ink-3);
+  font-family: inherit;
+  font-size: var(--aurora-type-body);
+  font-weight: var(--aurora-weight-strong);
+  cursor: pointer;
+  z-index: 0;
+  overflow: hidden;
+}
+.aurora-checkpoint-chip-large[data-aurora-active="true"] {
+  color: var(--aurora-brand-charcoal);
+}
+.aurora-checkpoint-pill-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: var(--aurora-accent-gold-loud);
+  z-index: -1;
+}
+.aurora-checkpoint-chip-text { position: relative; z-index: 1; }
+.aurora-checkpoint-chip-meta {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  opacity: 0.75;
+}
+
+/* Breakdown grid */
+.aurora-cp-breakdown {
+  margin-block-start: var(--aurora-space-4);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-cp-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+  border: 1px solid;
+  transition: background-color var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-cp-cell[data-aurora-highlight="true"] {
+  background: var(--aurora-glass-elev-2);
+}
+.aurora-cp-cell-eyebrow {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-cp-cell-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-cp-disposable {
+  margin-block-start: var(--aurora-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  border-radius: var(--aurora-radius-input);
+  background: linear-gradient(135deg, var(--aurora-glass-elev-2), transparent);
+  border: 1px solid var(--aurora-hairline-quiet);
+}
+.aurora-cp-disposable[data-aurora-tone="danger"] {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+.aurora-cp-disposable[data-aurora-tone="watch"] {
+  border-color: rgba(250, 204, 21, 0.4);
+}
+.aurora-cp-disposable[data-aurora-tone="safe"] {
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.aurora-cp-disposable-eyebrow {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-cp-disposable-amount {
+  font-size: var(--aurora-type-title-l, 28px);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  color: var(--aurora-ink-1);
+}
+.aurora-cp-disposable-note {
+  font-size: var(--aurora-type-body);
+  color: var(--aurora-ink-3);
+}
+
+/* Event lane (horizontal pills) */
+.aurora-cp-event-lane {
+  margin-block-start: var(--aurora-space-3);
+  display: flex;
+  gap: var(--aurora-space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 4px;
+}
+.aurora-cp-event-lane::-webkit-scrollbar { display: none; }
+.aurora-cp-event-pill {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-glass-elev-1);
+  border: 1px solid var(--aurora-hairline-quiet);
+  min-width: 168px;
+}
+.aurora-cp-event-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  align-self: flex-start;
+}
+.aurora-cp-event-label {
+  font-size: var(--aurora-type-body);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+}
+.aurora-cp-event-amount {
+  font-size: var(--aurora-type-body-l);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-cp-event-when {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+}

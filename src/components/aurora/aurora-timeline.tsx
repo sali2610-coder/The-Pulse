@@ -27,6 +27,7 @@ import { CATEGORIES, getCategory, type CategoryId } from "@/lib/categories";
 import { useFinanceStore } from "@/lib/store";
 import type { ExpenseEntry } from "@/types/finance";
 
+import { AuroraCheckpointsWorkspace } from "./aurora-checkpoints-workspace";
 import {
   filterTimeline,
   useAuroraTimeline,
@@ -209,6 +210,8 @@ export function AuroraTimeline() {
   return (
     <div className="aurora-timeline-stack">
       <h1 className="sr-only">ציר זמן פיננסי</h1>
+
+      <AuroraCheckpointsWorkspace />
 
       <TimelineSummary
         monthLabel={data.monthLabel}
