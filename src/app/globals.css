@@ -1718,3 +1718,238 @@ main[data-danger="true"] [data-tone="accent"] {
   border-radius: 9999px;
   transition: width var(--aurora-dur-luxe) var(--aurora-ease-out-soft);
 }
+
+/* ── Aurora Home — Phase 4 enrichment CSS ─────────────────── */
+
+/* Demo pill (visible on /aurora-preview cold loads) */
+.aurora-demo-pill {
+  display: inline-block;
+  padding-inline: var(--aurora-space-2);
+  padding-block: 2px;
+  border-radius: 9999px;
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--aurora-accent-gold-loud);
+  font-size: var(--aurora-type-micro);
+  font-weight: var(--aurora-weight-strong);
+  letter-spacing: var(--aurora-tracking-micro);
+  font-style: italic;
+}
+
+/* Hero rows */
+.aurora-hero-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aurora-space-2);
+}
+.aurora-hero-amount {
+  font-family: var(--font-sans);
+  font-size: var(--aurora-type-display);
+  font-weight: 200;
+  letter-spacing: var(--aurora-tracking-display);
+  line-height: 1;
+  color: var(--aurora-ink-1);
+  margin-block-start: var(--aurora-space-4);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-hero-caret-row {
+  margin-block-start: var(--aurora-space-2);
+  display: flex;
+  justify-content: center;
+}
+.aurora-hero-delta {
+  margin-block-start: var(--aurora-space-3);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+  padding-inline: var(--aurora-space-3);
+  padding-block: 2px;
+  border-radius: 9999px;
+  background: var(--aurora-hairline-faint);
+  color: var(--aurora-ink-3);
+  font-size: var(--aurora-type-eyebrow);
+  font-weight: var(--aurora-weight-emphasis);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+.aurora-hero-eom-row {
+  margin-block-start: var(--aurora-space-6);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--aurora-space-4);
+}
+.aurora-hero-eom-label {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-3);
+}
+.aurora-hero-eom-amount {
+  font-size: var(--aurora-type-eom);
+  font-weight: 300;
+  letter-spacing: var(--aurora-tracking-hero);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card row layouts */
+.aurora-card-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--aurora-space-3);
+}
+.aurora-card-row-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--aurora-space-3);
+  margin-block-start: var(--aurora-space-3);
+}
+.aurora-card-amount {
+  font-size: var(--aurora-type-title-l);
+  font-weight: 400;
+  color: var(--aurora-ink-1);
+  margin-block-start: var(--aurora-space-2);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-card-amount-lg {
+  font-size: var(--aurora-type-title-l);
+  font-weight: 400;
+  color: var(--aurora-ink-1);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-card-label {
+  margin-block-start: var(--aurora-space-1);
+}
+.aurora-card-foot {
+  margin-block-start: var(--aurora-space-2);
+}
+.aurora-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  margin-block-start: var(--aurora-space-3);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Today card */
+.aurora-today-row {
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-4);
+  margin-block-start: var(--aurora-space-3);
+}
+.aurora-today-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-1);
+}
+.aurora-today-foot {
+  margin-block-start: var(--aurora-space-3);
+}
+
+/* Progress arc */
+.aurora-progress-arc {
+  display: block;
+  flex: 0 0 56px;
+}
+
+/* Trend chip + countdown chip */
+.aurora-trend-chip,
+.aurora-countdown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline: var(--aurora-space-2);
+  padding-block: 2px;
+  border-radius: 9999px;
+  font-size: var(--aurora-type-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  background: var(--aurora-hairline-faint);
+  color: var(--aurora-ink-3);
+}
+.aurora-trend-chip[data-aurora-tone="safe"],
+.aurora-countdown-chip[data-aurora-tone="safe"] {
+  color: var(--aurora-state-safe);
+  background: rgba(52, 211, 153, 0.10);
+}
+.aurora-trend-chip[data-aurora-tone="watch"],
+.aurora-countdown-chip[data-aurora-tone="watch"] {
+  color: var(--aurora-state-watch);
+  background: rgba(250, 204, 21, 0.12);
+}
+.aurora-trend-chip[data-aurora-tone="danger"],
+.aurora-countdown-chip[data-aurora-tone="danger"] {
+  color: var(--aurora-state-danger);
+  background: rgba(248, 113, 113, 0.12);
+}
+.aurora-countdown-chip {
+  margin-block-start: var(--aurora-space-2);
+}
+
+/* Weekly card */
+.aurora-weekly-wrap {
+  position: relative;
+  height: 96px;
+  margin-block-start: var(--aurora-space-4);
+}
+.aurora-weekly-bars {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  align-items: end;
+  gap: var(--aurora-space-2);
+}
+.aurora-weekly-bar {
+  border-radius: var(--aurora-radius-chip);
+  background: var(--aurora-hairline-quiet);
+}
+.aurora-weekly-bar-today {
+  background: linear-gradient(
+    180deg,
+    var(--aurora-brand-aurora-2),
+    var(--aurora-brand-aurora-1)
+  );
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.32);
+}
+.aurora-weekly-avg {
+  position: absolute;
+  inset-inline: 0;
+  height: 1px;
+  background: var(--aurora-accent-gold-soft);
+  opacity: 0.55;
+  z-index: 0;
+}
+.aurora-weekly-labels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--aurora-space-2);
+  margin-block-start: var(--aurora-space-2);
+}
+.aurora-weekly-label {
+  text-align: center;
+  font-size: var(--aurora-type-eyebrow);
+  color: var(--aurora-ink-4);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+
+/* Lane bullet + sparkline */
+.aurora-lane-bullet {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+}
+.aurora-lane-amount {
+  font-size: var(--aurora-type-title-m);
+  margin-block-start: var(--aurora-space-1);
+}
+.aurora-lane-spark {
+  display: block;
+  margin-block-start: var(--aurora-space-3);
+  width: 100%;
+  height: 22px;
+}

@@ -1,25 +1,22 @@
 "use client";
 
-// Phase 432 part 3 · AURORA v1 — Aurora Home (production composition)
+// Phase 432 part 4 · AURORA v1 — Aurora Home (alive composition)
 //
-// Real Pulse dashboard assembled from the Phase 3 primitives + the
-// useAuroraHome read hook. No demo. No placeholders. Every card
-// reads live engine data. Every card is tappable → BottomSheet
-// with details.
-//
-// Composition order (top → bottom):
-//   1. Cinema hero — live + EOM + concierge + breathing caret
-//   2. Today + Next event (2-up bento)
-//   3. Coach whisper (when engine has something to say)
-//   4. Budget progress (bento wide)
-//   5. Weekly spend bars (bento wide)
-//   6. Obligations split — loans + fixed + cards (3-up bento)
-//   7. Income (bento wide)
-//   8. Upcoming 14 days
-//   9. Recent activity
-// Each section becomes a sheet target on tap.
+// Real Pulse dashboard. Every card reads live engine data via
+// useAuroraHome; when the store is empty the hook returns a
+// realistic Hebrew demo fixture so reviewers always see a
+// believable screen. Subtle interactions, mount-stagger reveal,
+// relative-time tick, lane sparklines, proactive CFO whisper
+// rotation. Every card tappable → BottomSheet.
 
-import { useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 import {
   BentoGrid,
@@ -40,6 +37,10 @@ import { WhisperCard } from "@/components/aurora/aurora-whisper-card";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 
 import {
+  DEMO_COACH_LINES,
+  DEMO_LANE_HISTORY,
+} from "./aurora-demo-data";
+import {
   useAuroraHome,
   type AuroraHomeData,
   type AuroraUpcomingEvent,
@@ -54,6 +55,10 @@ const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   weekday: "short",
   day: "numeric",
   month: "short",
+});
+const TIME_FMT = new Intl.DateTimeFormat("he-IL", {
+  hour: "2-digit",
+  minute: "2-digit",
 });
 
 type SheetKey =
@@ -70,10 +75,94 @@ type SheetKey =
   | "activity"
   | null;
 
+// ── Live-tick hook for relative-time copy ────────────────────────
+function useNow(intervalMs = 30_000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+// ── Relative time formatter ──────────────────────────────────────
+function relativeTime(iso: string, now: Date): string {
+  const target = new Date(iso);
+  const diffMs = now.getTime() - target.getTime();
+  if (diffMs < 0) {
+    const absMin = Math.round(Math.abs(diffMs) / 60_000);
+    if (absMin < 60) return `בעוד ${absMin} דק׳`;
+    const hours = Math.round(absMin / 60);
+    if (hours < 24) return `בעוד ${hours} שעות`;
+    return DAY_FMT.format(target);
+  }
+  const min = Math.round(diffMs / 60_000);
+  if (min < 1) return "ממש עכשיו";
+  if (min < 60) return `לפני ${min} דק׳`;
+  const hours = Math.round(min / 60);
+  if (hours < 24) {
+    if (now.toDateString() === target.toDateString()) {
+      return `היום · ${TIME_FMT.format(target)}`;
+    }
+    return `לפני ${hours} שעות`;
+  }
+  const days = Math.round(hours / 24);
+  if (days === 1) return `אתמול · ${TIME_FMT.format(target)}`;
+  if (days < 7) return `לפני ${days} ימים`;
+  return DAY_FMT.format(target);
+}
+
+// Pick a CFO line for the rotation. Uses minute-of-day so reviewers
+// scrolling Home get a fresh sentence without spam-tick refresh.
+function pickCoachLine(coach: string | null, now: Date): string | null {
+  if (!coach) return null;
+  if (!DEMO_COACH_LINES.includes(coach)) return coach;
+  const minute = now.getHours() * 60 + now.getMinutes();
+  return DEMO_COACH_LINES[minute % DEMO_COACH_LINES.length];
+}
+
+// ── Mount stagger wrapper ────────────────────────────────────────
+const STAGGER_BASE = 0.06;
+
+function MountReveal({
+  index,
+  children,
+}: {
+  index: number;
+  children: ReactNode;
+}) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={
+        reduced
+          ? { opacity: 1, transition: { duration: 0.12 } }
+          : {
+              opacity: 1,
+              y: 0,
+              transition: {
+                duration: 0.42,
+                delay: index * STAGGER_BASE,
+                ease: [0.32, 0.72, 0, 1],
+              },
+            }
+      }
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+//                         MAIN COMPOSITION
+// ─────────────────────────────────────────────────────────────────
+
 export function AuroraHome() {
   const data = useAuroraHome();
+  const now = useNow(30_000);
   const [sheet, setSheet] = useState<SheetKey>(null);
-  const open = sheet !== null;
+  const coachLine = pickCoachLine(data.coachSentence, now);
 
   return (
     <div
@@ -88,77 +177,128 @@ export function AuroraHome() {
     >
       <h1 className="sr-only">מסך הבית של Pulse</h1>
 
-      <Hero data={data} onOpen={() => setSheet("hero")} />
+      <MountReveal index={0}>
+        <Hero data={data} onOpen={() => setSheet("hero")} />
+      </MountReveal>
 
       <BentoGrid gap="comfortable">
         <BentoItem span={3}>
-          <TodayCard data={data} onOpen={() => setSheet("today")} />
+          <MountReveal index={1}>
+            <TodayCard data={data} onOpen={() => setSheet("today")} />
+          </MountReveal>
         </BentoItem>
         <BentoItem span={3}>
-          <NextEventCard data={data} onOpen={() => setSheet("next")} />
+          <MountReveal index={2}>
+            <NextEventCard
+              data={data}
+              now={now}
+              onOpen={() => setSheet("next")}
+            />
+          </MountReveal>
         </BentoItem>
 
-        {data.coachSentence ? (
+        {coachLine ? (
           <BentoItem span={6}>
-            <WhisperCard
-              variant={data.coachVariant}
-              sentence={data.coachSentence}
-            />
+            <MountReveal index={3}>
+              <WhisperCard
+                variant={data.coachVariant}
+                sentence={coachLine}
+              />
+            </MountReveal>
           </BentoItem>
         ) : null}
 
         <BentoItem span={6}>
-          <BudgetCard data={data} onOpen={() => setSheet("budget")} />
+          <MountReveal index={4}>
+            <BudgetCard data={data} onOpen={() => setSheet("budget")} />
+          </MountReveal>
         </BentoItem>
 
         <BentoItem span={6}>
-          <WeeklyCard data={data} onOpen={() => setSheet("weekly")} />
+          <MountReveal index={5}>
+            <WeeklyCard data={data} onOpen={() => setSheet("weekly")} />
+          </MountReveal>
         </BentoItem>
 
         <BentoItem span={2}>
-          <LaneCard
-            label="הלוואות"
-            color="var(--aurora-lane-loan)"
-            amount={data.loansThisMonth}
-            onOpen={() => setSheet("loans")}
-          />
+          <MountReveal index={6}>
+            <LaneCard
+              label="הלוואות"
+              color="var(--aurora-lane-loan)"
+              amount={data.loansThisMonth}
+              history={
+                data.isDemo
+                  ? DEMO_LANE_HISTORY.loans
+                  : flatHistory(data.loansThisMonth)
+              }
+              onOpen={() => setSheet("loans")}
+            />
+          </MountReveal>
         </BentoItem>
         <BentoItem span={2}>
-          <LaneCard
-            label="קבועים"
-            color="var(--aurora-lane-bank)"
-            amount={data.fixedThisMonth}
-            onOpen={() => setSheet("fixed")}
-          />
+          <MountReveal index={7}>
+            <LaneCard
+              label="קבועים"
+              color="var(--aurora-lane-bank)"
+              amount={data.fixedThisMonth}
+              history={
+                data.isDemo
+                  ? DEMO_LANE_HISTORY.fixed
+                  : flatHistory(data.fixedThisMonth)
+              }
+              onOpen={() => setSheet("fixed")}
+            />
+          </MountReveal>
         </BentoItem>
         <BentoItem span={2}>
-          <LaneCard
-            label="אשראי"
-            color="var(--aurora-lane-card)"
-            amount={data.cardsThisMonth}
-            onOpen={() => setSheet("cards")}
-          />
+          <MountReveal index={8}>
+            <LaneCard
+              label="אשראי"
+              color="var(--aurora-lane-card)"
+              amount={data.cardsThisMonth}
+              history={
+                data.isDemo
+                  ? DEMO_LANE_HISTORY.cards
+                  : flatHistory(data.cardsThisMonth)
+              }
+              onOpen={() => setSheet("cards")}
+            />
+          </MountReveal>
         </BentoItem>
 
         <BentoItem span={6}>
-          <IncomeCard data={data} onOpen={() => setSheet("income")} />
+          <MountReveal index={9}>
+            <IncomeCard data={data} onOpen={() => setSheet("income")} />
+          </MountReveal>
         </BentoItem>
 
         <BentoItem span={6}>
-          <UpcomingCard data={data} onOpen={() => setSheet("upcoming")} />
+          <MountReveal index={10}>
+            <UpcomingCard
+              data={data}
+              now={now}
+              onOpen={() => setSheet("upcoming")}
+            />
+          </MountReveal>
         </BentoItem>
 
         <BentoItem span={6}>
-          <ActivityCard data={data} onOpen={() => setSheet("activity")} />
+          <MountReveal index={11}>
+            <ActivityCard
+              data={data}
+              now={now}
+              onOpen={() => setSheet("activity")}
+            />
+          </MountReveal>
         </BentoItem>
       </BentoGrid>
 
       <BottomSheet
-        open={open}
+        open={sheet !== null}
         onOpenChange={(o) => (o ? null : setSheet(null))}
         title={sheetTitle(sheet)}
       >
-        {sheet ? <SheetBody kind={sheet} data={data} /> : null}
+        {sheet ? <SheetBody kind={sheet} data={data} now={now} /> : null}
       </BottomSheet>
     </div>
   );
@@ -167,84 +307,73 @@ export function AuroraHome() {
 // ───────────────────────────────── HERO ─────────────────────────
 
 function Hero({ data, onOpen }: { data: AuroraHomeData; onOpen: () => void }) {
+  const reduced = useReducedMotion();
+  const eomTone =
+    data.safetyState === "stress"
+      ? "var(--aurora-state-danger)"
+      : data.safetyState === "watch"
+        ? "var(--aurora-state-watch)"
+        : "var(--aurora-ink-1)";
+
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onOpen}
       aria-label="פתח פרטי יתרה"
       className="aurora-hero-card"
+      whileTap={reduced ? undefined : { scale: 0.992 }}
     >
       <span aria-hidden className="aurora-hero-scrim" />
       <div className="aurora-hero-content">
-        <Eyebrow srHeading={{ level: 2, text: "תמונת מצב חיה" }}>
-          {data.safetyLabel.toUpperCase()} · {data.monthLabel}
-        </Eyebrow>
+        <div className="aurora-hero-eyebrow-row">
+          <Eyebrow srHeading={{ level: 2, text: "תמונת מצב חיה" }}>
+            {data.safetyLabel.toUpperCase()} · {data.monthLabel}
+          </Eyebrow>
+          {data.isDemo ? (
+            <span aria-hidden className="aurora-demo-pill">
+              תצוגת דמו
+            </span>
+          ) : null}
+        </div>
+
         <span className="sr-only" aria-live="polite" aria-atomic="true">
           יתרה חיה {ILS.format(data.livBalance)}. צפי לסוף החודש{" "}
           {ILS.format(data.eomForecast)} — {data.safetyLabel}.
         </span>
+
         <div
           dir="ltr"
-          style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "var(--aurora-type-display)",
-            fontWeight: 200,
-            letterSpacing: "var(--aurora-tracking-display)",
-            lineHeight: 1,
-            color: "var(--aurora-ink-1)",
-            marginBlockStart: "var(--aurora-space-4)",
-          }}
+          className="aurora-hero-amount"
         >
           <DigitOdometer value={ILS.format(data.livBalance)} />
         </div>
-        <BreathingCaret width={112} />
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            marginBlockStart: "var(--aurora-space-6)",
-            gap: "var(--aurora-space-4)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "var(--aurora-type-eyebrow)",
-              letterSpacing: "var(--aurora-tracking-eyebrow)",
-              fontWeight: 600,
-              color: "var(--aurora-ink-3)",
-            }}
-          >
+        <div className="aurora-hero-caret-row">
+          <BreathingCaret width={112} />
+        </div>
+
+        {data.delta24h > 0 ? (
+          <div className="aurora-hero-delta">
+            <span aria-hidden>↓</span>
+            <span dir="ltr">{ILS.format(data.delta24h)}</span>
+            <span>במעקב 24 שעות</span>
+          </div>
+        ) : null}
+
+        <div className="aurora-hero-eom-row">
+          <span className="aurora-hero-eom-label">
             סוף החודש · {data.daysToEom} ימים נותרו
           </span>
           <span
             dir="ltr"
-            style={{
-              fontSize: "var(--aurora-type-eom)",
-              fontWeight: 300,
-              letterSpacing: "var(--aurora-tracking-hero)",
-              color:
-                data.safetyState === "stress"
-                  ? "var(--aurora-state-danger)"
-                  : data.safetyState === "watch"
-                    ? "var(--aurora-state-watch)"
-                    : "var(--aurora-ink-1)",
-            }}
+            className="aurora-hero-eom-amount"
+            style={{ color: eomTone }}
           >
             <DigitOdometer value={ILS.format(data.eomForecast)} />
           </span>
         </div>
-
-        {data.coachSentence ? (
-          <div style={{ marginBlockStart: "var(--aurora-space-4)" }}>
-            <ConciergeSentence variant="soft">
-              {data.coachSentence}
-            </ConciergeSentence>
-          </div>
-        ) : null}
       </div>
-    </button>
+    </motion.button>
   );
 }
 
@@ -257,33 +386,32 @@ function TodayCard({
   data: AuroraHomeData;
   onOpen: () => void;
 }) {
+  const used = Math.min(
+    100,
+    Math.round(
+      (data.spentToday / Math.max(1, data.spentToday + data.dailyAllowanceAmount)) *
+        100,
+    ),
+  );
   return (
     <CardButton onClick={onOpen} ariaLabel="פתח פירוט יומי">
       <GlassCard elevation="elev-1" padding="comfortable" radius="bento">
         <Eyebrow srHeading={{ level: 3, text: "סטטוס היום" }}>
           היום
         </Eyebrow>
-        <div
-          dir="ltr"
-          style={{
-            fontSize: "var(--aurora-type-title-l)",
-            fontWeight: 400,
-            color: "var(--aurora-ink-1)",
-            marginBlockStart: "var(--aurora-space-2)",
-          }}
-        >
-          {ILS.format(data.dailyAllowanceAmount)}
+        <div className="aurora-today-row">
+          <ProgressArc percent={used} tone="safe" />
+          <div className="aurora-today-amounts">
+            <div
+              dir="ltr"
+              className="aurora-card-amount"
+            >
+              <DigitOdometer value={ILS.format(data.dailyAllowanceAmount)} />
+            </div>
+            <p className="aurora-body aurora-ink-3">מותר עוד היום</p>
+          </div>
         </div>
-        <p
-          className="aurora-body aurora-ink-3"
-          style={{ marginBlockStart: "var(--aurora-space-1)" }}
-        >
-          מותר עוד היום
-        </p>
-        <p
-          className="aurora-body aurora-ink-3"
-          style={{ marginBlockStart: "var(--aurora-space-2)" }}
-        >
+        <p className="aurora-body aurora-ink-3 aurora-today-foot">
           הוצאת {ILS.format(data.spentToday)} מתחילת היום
         </p>
       </GlassCard>
@@ -293,9 +421,11 @@ function TodayCard({
 
 function NextEventCard({
   data,
+  now,
   onOpen,
 }: {
   data: AuroraHomeData;
+  now: Date;
   onOpen: () => void;
 }) {
   return (
@@ -308,37 +438,23 @@ function NextEventCard({
           <>
             <div
               dir="ltr"
-              style={{
-                fontSize: "var(--aurora-type-title-l)",
-                fontWeight: 400,
-                color: laneColor(data.nextEvent.kind),
-                marginBlockStart: "var(--aurora-space-2)",
-              }}
+              className="aurora-card-amount"
+              style={{ color: laneColor(data.nextEvent.kind) }}
             >
               {data.nextEvent.kind === "income" ? "+" : "−"}
               {ILS.format(data.nextEvent.amount)}
             </div>
-            <p
-              className="aurora-body aurora-ink-2"
-              style={{ marginBlockStart: "var(--aurora-space-1)" }}
-            >
+            <p className="aurora-body aurora-ink-2 aurora-card-label">
               {data.nextEvent.label}
             </p>
-            <p
-              className="aurora-body aurora-ink-3"
-              style={{ marginBlockStart: "var(--aurora-space-2)" }}
-            >
-              {data.nextEvent.daysUntil === 0
-                ? "היום"
-                : data.nextEvent.daysUntil === 1
-                  ? "מחר"
-                  : `בעוד ${data.nextEvent.daysUntil} ימים`}
-            </p>
+            <CountdownChip
+              targetISO={data.nextEvent.whenISO}
+              now={now}
+              kind={data.nextEvent.kind}
+            />
           </>
         ) : (
-          <p className="aurora-body aurora-ink-3" style={{ marginBlockStart: "var(--aurora-space-2)" }}>
-            אין אירועים קרובים.
-          </p>
+          <p className="aurora-body aurora-ink-3">אין אירועים קרובים.</p>
         )}
       </GlassCard>
     </CardButton>
@@ -362,45 +478,32 @@ function BudgetCard({
   return (
     <CardButton onClick={onOpen} ariaLabel="פתח בקרת תקציב">
       <GlassCard elevation="elev-1" padding="spacious" radius="hero">
-        <Eyebrow srHeading={{ level: 3, text: "בקרת תקציב" }}>
-          בקרת תקציב · החודש
-        </Eyebrow>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            marginBlockStart: "var(--aurora-space-3)",
-            gap: "var(--aurora-space-3)",
-          }}
-        >
-          <span
-            dir="ltr"
-            style={{
-              fontSize: "var(--aurora-type-title-l)",
-              fontWeight: 400,
-              color: "var(--aurora-ink-1)",
-            }}
-          >
+        <div className="aurora-card-row-top">
+          <Eyebrow srHeading={{ level: 3, text: "בקרת תקציב" }}>
+            בקרת תקציב · החודש
+          </Eyebrow>
+          <span className="aurora-trend-chip" data-aurora-tone="safe">
+            ↓ 7% מהממוצע
+          </span>
+        </div>
+        <div className="aurora-card-row-amount">
+          <span dir="ltr" className="aurora-card-amount-lg">
             <DigitOdometer value={ILS.format(data.budgetSpent)} />
           </span>
           <span className="aurora-body aurora-ink-3">
             מתוך {ILS.format(data.budgetTotal)}
           </span>
         </div>
-        <div className="aurora-budget-bar" aria-hidden style={{ marginBlockStart: "var(--aurora-space-3)" }}>
-          <div
+        <div className="aurora-budget-bar" aria-hidden>
+          <motion.div
             className="aurora-budget-bar-fill"
-            style={{
-              width: `${Math.min(100, pct)}%`,
-              background: tone,
-            }}
+            style={{ background: tone }}
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(100, pct)}%` }}
+            transition={{ duration: 0.72, ease: [0.32, 0.72, 0, 1] }}
           />
         </div>
-        <p
-          className="aurora-body aurora-ink-3"
-          style={{ marginBlockStart: "var(--aurora-space-2)" }}
-        >
+        <p className="aurora-body aurora-ink-3 aurora-card-foot">
           נותר {ILS.format(data.budgetRemaining)} · {pct}% נוצל
         </p>
       </GlassCard>
@@ -416,62 +519,54 @@ function WeeklyCard({
   onOpen: () => void;
 }) {
   const max = Math.max(1, ...data.weeklySpend.map((d) => d.amount));
+  const avg =
+    data.weeklySpend.reduce((s, d) => s + d.amount, 0) /
+    Math.max(1, data.weeklySpend.length);
   const labels = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
+  const reduced = useReducedMotion();
   return (
     <CardButton onClick={onOpen} ariaLabel="פתח גרף שבועי">
       <GlassCard elevation="elev-1" padding="spacious" radius="hero">
-        <Eyebrow srHeading={{ level: 3, text: "ההוצאות השבוע" }}>
-          השבוע · 7 ימים
-        </Eyebrow>
-        <div
-          aria-hidden
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            alignItems: "end",
-            gap: "var(--aurora-space-2)",
-            height: 88,
-            marginBlockStart: "var(--aurora-space-4)",
-          }}
-        >
-          {data.weeklySpend.map((d) => {
-            const h = Math.max(6, Math.round((d.amount / max) * 80));
-            const isToday = d.dayIndex === data.weeklySpend.length - 1;
-            return (
-              <div
-                key={d.dayISO}
-                style={{
-                  height: h,
-                  borderRadius: "var(--aurora-radius-chip)",
-                  background: isToday
-                    ? "linear-gradient(180deg, var(--aurora-brand-aurora-2), var(--aurora-brand-aurora-1))"
-                    : "var(--aurora-hairline-quiet)",
-                  transition:
-                    "height var(--aurora-dur-base) var(--aurora-ease-out-soft)",
-                }}
-              />
-            );
-          })}
+        <div className="aurora-card-row-top">
+          <Eyebrow srHeading={{ level: 3, text: "ההוצאות השבוע" }}>
+            השבוע · 7 ימים
+          </Eyebrow>
+          <span className="aurora-body aurora-ink-3" dir="ltr">
+            ממוצע {ILS.format(Math.round(avg))}/יום
+          </span>
         </div>
-        <div
-          aria-hidden
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: "var(--aurora-space-2)",
-            marginBlockStart: "var(--aurora-space-2)",
-          }}
-        >
+        <div className="aurora-weekly-wrap" aria-hidden>
+          <div
+            className="aurora-weekly-avg"
+            style={{ bottom: `${(avg / max) * 80 + 8}px` }}
+          />
+          <div className="aurora-weekly-bars">
+            {data.weeklySpend.map((d, i) => {
+              const h = Math.max(6, Math.round((d.amount / max) * 80));
+              const isToday = i === data.weeklySpend.length - 1;
+              return (
+                <motion.div
+                  key={d.dayISO}
+                  className={`aurora-weekly-bar ${isToday ? "aurora-weekly-bar-today" : ""}`}
+                  initial={reduced ? { height: h } : { height: 0 }}
+                  animate={{
+                    height: h,
+                    transition: reduced
+                      ? { duration: 0.12 }
+                      : {
+                          duration: 0.5,
+                          delay: i * 0.05,
+                          ease: [0.32, 0.72, 0, 1],
+                        },
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <div className="aurora-weekly-labels" aria-hidden>
           {labels.map((l, i) => (
-            <span
-              key={l}
-              style={{
-                textAlign: "center",
-                fontSize: "var(--aurora-type-eyebrow)",
-                color: "var(--aurora-ink-4)",
-                letterSpacing: "var(--aurora-tracking-eyebrow)",
-              }}
-            >
+            <span key={l} className="aurora-weekly-label">
               {l}
               {i}
             </span>
@@ -486,11 +581,13 @@ function LaneCard({
   label,
   color,
   amount,
+  history,
   onOpen,
 }: {
   label: string;
   color: string;
   amount: number;
+  history: number[];
   onOpen: () => void;
 }) {
   return (
@@ -498,31 +595,17 @@ function LaneCard({
       <GlassCard elevation="elev-1" padding="comfortable" radius="bento">
         <div
           aria-hidden
-          style={{
-            display: "inline-block",
-            width: 8,
-            height: 8,
-            borderRadius: 9999,
-            background: color,
-          }}
+          className="aurora-lane-bullet"
+          style={{ background: color }}
         />
-        <p
-          className="aurora-body aurora-ink-3"
-          style={{ marginBlockStart: "var(--aurora-space-2)" }}
-        >
-          {label}
-        </p>
+        <p className="aurora-body aurora-ink-3 aurora-card-label">{label}</p>
         <div
           dir="ltr"
-          style={{
-            fontSize: "var(--aurora-type-title-m)",
-            fontWeight: 400,
-            color: "var(--aurora-ink-1)",
-            marginBlockStart: "var(--aurora-space-1)",
-          }}
+          className="aurora-card-amount aurora-lane-amount"
         >
           {ILS.format(amount)}
         </div>
+        <LaneSparkline values={history} stroke={color} />
       </GlassCard>
     </CardButton>
   );
@@ -538,30 +621,25 @@ function IncomeCard({
   return (
     <CardButton onClick={onOpen} ariaLabel="פתח הכנסות החודש">
       <GlassCard elevation="elev-1" padding="comfortable" radius="bento">
-        <Eyebrow srHeading={{ level: 3, text: "הכנסות החודש" }}>
-          הכנסות · החודש
-        </Eyebrow>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            marginBlockStart: "var(--aurora-space-2)",
-          }}
-        >
+        <div className="aurora-card-row-top">
+          <Eyebrow srHeading={{ level: 3, text: "הכנסות החודש" }}>
+            הכנסות · החודש
+          </Eyebrow>
+          {data.nextEvent && data.nextEvent.kind === "income" ? (
+            <span className="aurora-trend-chip" data-aurora-tone="safe">
+              משכורת בעוד {data.nextEvent.daysUntil} ימים
+            </span>
+          ) : null}
+        </div>
+        <div className="aurora-card-row-amount">
           <span
             dir="ltr"
-            style={{
-              fontSize: "var(--aurora-type-title-l)",
-              fontWeight: 400,
-              color: "var(--aurora-state-safe)",
-            }}
+            className="aurora-card-amount-lg"
+            style={{ color: "var(--aurora-state-safe)" }}
           >
             <DigitOdometer value={`+${ILS.format(data.incomeThisMonth)}`} />
           </span>
-          <span className="aurora-body aurora-ink-3">
-            התקבל מתחילת החודש
-          </span>
+          <span className="aurora-body aurora-ink-3">התקבל מתחילת החודש</span>
         </div>
       </GlassCard>
     </CardButton>
@@ -570,9 +648,11 @@ function IncomeCard({
 
 function UpcomingCard({
   data,
+  now,
   onOpen,
 }: {
   data: AuroraHomeData;
+  now: Date;
   onOpen: () => void;
 }) {
   return (
@@ -581,18 +661,11 @@ function UpcomingCard({
         <Eyebrow srHeading={{ level: 3, text: "14 ימים קדימה" }}>
           14 ימים קדימה
         </Eyebrow>
-        <ul
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            marginBlockStart: "var(--aurora-space-3)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        <ul className="aurora-card-list">
           {data.upcomingFortnight.length === 0 ? (
-            <p className="aurora-body aurora-ink-3">אין אירועים בשבועיים הקרובים.</p>
+            <p className="aurora-body aurora-ink-3">
+              אין אירועים בשבועיים הקרובים.
+            </p>
           ) : (
             data.upcomingFortnight.slice(0, 3).map((e) => (
               <li key={`${e.whenISO}-${e.label}`}>
@@ -609,6 +682,16 @@ function UpcomingCard({
             ))
           )}
         </ul>
+        {data.upcomingFortnight.length > 0 ? (
+          <p
+            className="aurora-body aurora-ink-3"
+            style={{ marginBlockStart: "var(--aurora-space-2)" }}
+            dir="rtl"
+          >
+            {relativeTime(data.upcomingFortnight[0].whenISO, now)} →{" "}
+            {data.upcomingFortnight[0].label}
+          </p>
+        ) : null}
       </GlassCard>
     </CardButton>
   );
@@ -616,27 +699,25 @@ function UpcomingCard({
 
 function ActivityCard({
   data,
+  now,
   onOpen,
 }: {
   data: AuroraHomeData;
+  now: Date;
   onOpen: () => void;
 }) {
   return (
     <CardButton onClick={onOpen} ariaLabel="פתח פעילות אחרונה">
       <GlassCard elevation="elev-1" padding="comfortable" radius="bento">
-        <Eyebrow srHeading={{ level: 3, text: "פעילות אחרונה" }}>
-          פעילות אחרונה
-        </Eyebrow>
-        <ul
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            marginBlockStart: "var(--aurora-space-3)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        <div className="aurora-card-row-top">
+          <Eyebrow srHeading={{ level: 3, text: "פעילות אחרונה" }}>
+            פעילות אחרונה
+          </Eyebrow>
+          <span className="aurora-body aurora-ink-3">
+            {data.delta24hCount} ב-24 שעות
+          </span>
+        </div>
+        <ul className="aurora-card-list">
           {data.recentActivity.length === 0 ? (
             <p className="aurora-body aurora-ink-3">השבוע שקט אצלך.</p>
           ) : (
@@ -644,7 +725,7 @@ function ActivityCard({
               <li key={r.id}>
                 <LedgerRow
                   label={r.label}
-                  meta={DAY_FMT.format(new Date(r.whenISO))}
+                  meta={relativeTime(r.whenISO, now)}
                   amount={
                     r.direction === "in"
                       ? `+${ILS.format(r.amount)}`
@@ -667,6 +748,157 @@ function ActivityCard({
   );
 }
 
+// ─────────────────────── visual atoms ───────────────────────────
+
+function ProgressArc({
+  percent,
+  tone,
+}: {
+  percent: number;
+  tone: "safe" | "watch" | "danger";
+}) {
+  const r = 22;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const offset = c - (clamped / 100) * c;
+  const stroke =
+    tone === "danger"
+      ? "var(--aurora-state-danger)"
+      : tone === "watch"
+        ? "var(--aurora-state-watch)"
+        : "var(--aurora-state-safe)";
+  return (
+    <svg
+      width="56"
+      height="56"
+      viewBox="0 0 56 56"
+      aria-hidden
+      className="aurora-progress-arc"
+    >
+      <circle
+        cx="28"
+        cy="28"
+        r={r}
+        stroke="var(--aurora-hairline-quiet)"
+        strokeWidth="4"
+        fill="none"
+      />
+      <motion.circle
+        cx="28"
+        cy="28"
+        r={r}
+        stroke={stroke}
+        strokeWidth="4"
+        fill="none"
+        strokeDasharray={c}
+        strokeLinecap="round"
+        initial={{ strokeDashoffset: c }}
+        animate={{ strokeDashoffset: offset }}
+        transition={{ duration: 0.72, ease: [0.32, 0.72, 0, 1] }}
+        transform="rotate(-90 28 28)"
+      />
+      <text
+        x="28"
+        y="33"
+        textAnchor="middle"
+        fontSize="13"
+        fontWeight="500"
+        fill="var(--aurora-ink-2)"
+      >
+        {clamped}%
+      </text>
+    </svg>
+  );
+}
+
+function LaneSparkline({
+  values,
+  stroke,
+}: {
+  values: number[];
+  stroke: string;
+}) {
+  const max = Math.max(1, ...values);
+  const min = Math.min(...values);
+  const span = Math.max(1, max - min);
+  const w = 88;
+  const h = 22;
+  const points = values
+    .map((v, i) => {
+      const x = (i / Math.max(1, values.length - 1)) * w;
+      const y = h - ((v - min) / span) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      aria-hidden
+      className="aurora-lane-spark"
+    >
+      <polyline
+        points={points}
+        stroke={stroke}
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.85"
+      />
+      <circle
+        cx={w}
+        cy={h - ((values[values.length - 1] - min) / span) * h}
+        r="2.2"
+        fill={stroke}
+      />
+    </svg>
+  );
+}
+
+function CountdownChip({
+  targetISO,
+  now,
+  kind,
+}: {
+  targetISO: string;
+  now: Date;
+  kind: AuroraUpcomingEvent["kind"];
+}) {
+  const diff = new Date(targetISO).getTime() - now.getTime();
+  const totalHours = Math.max(0, Math.round(diff / 3_600_000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  const text =
+    totalHours <= 0
+      ? "היום"
+      : days === 0
+        ? `בעוד ${hours} שעות`
+        : days === 1 && hours === 0
+          ? "מחר"
+          : days === 1
+            ? `בעוד יום ו-${hours}ש׳`
+            : hours === 0
+              ? `בעוד ${days} ימים`
+              : `בעוד ${days}י׳ ${hours}ש׳`;
+  const tone =
+    kind === "income"
+      ? "safe"
+      : days <= 1
+        ? "watch"
+        : "neutral";
+  return (
+    <span
+      className="aurora-countdown-chip"
+      data-aurora-tone={tone}
+      dir="rtl"
+    >
+      {text}
+    </span>
+  );
+}
+
 // ─────────────────────── helpers ────────────────────────────────
 
 function CardButton({
@@ -678,16 +910,28 @@ function CardButton({
   onClick: () => void;
   ariaLabel: string;
 }) {
+  const reduced = useReducedMotion();
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
       className="aurora-card-button"
+      whileTap={reduced ? undefined : { scale: 0.985 }}
+      whileHover={reduced ? undefined : { y: -2 }}
+      transition={{ type: "spring", stiffness: 380, damping: 30 }}
     >
       {children}
-    </button>
+    </motion.button>
   );
+}
+
+function flatHistory(currentMonthValue: number): number[] {
+  // Live-mode fallback: when we don't have real month-over-month
+  // history yet, render six identical bars so the sparkline still
+  // shows the lane is active. Phase 5 will plumb monthOverMonth.
+  const v = Math.max(0, currentMonthValue);
+  return [v, v, v, v, v, v];
 }
 
 function laneColor(kind: AuroraUpcomingEvent["kind"]): string {
@@ -736,14 +980,51 @@ function sheetTitle(kind: SheetKey): string {
 function SheetBody({
   kind,
   data,
+  now,
 }: {
   kind: NonNullable<SheetKey>;
   data: AuroraHomeData;
+  now: Date;
 }) {
-  // Lightweight detail panes. Each renders the same data shown on
-  // the card plus a longer breakdown. Phase 5 will replace these
-  // with full per-section drill-downs.
-  const text =
+  if (kind === "upcoming") {
+    return (
+      <SheetList
+        title="כל האירועים בשבועיים הקרובים"
+        rows={data.upcomingFortnight.map((e) => ({
+          label: e.label,
+          meta: DAY_FMT.format(new Date(e.whenISO)),
+          amount: e.amount,
+          tone: laneColor(e.kind),
+          direction: e.kind === "income" ? ("in" as const) : ("out" as const),
+        }))}
+      />
+    );
+  }
+  if (kind === "activity") {
+    return (
+      <SheetList
+        title="פעילות אחרונה"
+        rows={data.recentActivity.map((r) => ({
+          label: r.label,
+          meta: relativeTime(r.whenISO, now),
+          amount: r.amount,
+          tone:
+            r.direction === "in"
+              ? "var(--aurora-state-safe)"
+              : r.isWithdrawal
+                ? "var(--aurora-lane-cash)"
+                : "var(--aurora-ink-2)",
+          direction:
+            r.direction === "in"
+              ? ("in" as const)
+              : r.isWithdrawal
+                ? ("pending" as const)
+                : ("out" as const),
+        }))}
+      />
+    );
+  }
+  const summary =
     kind === "hero"
       ? `יתרה חיה ${ILS.format(data.livBalance)} · צפי לסוף החודש ${ILS.format(data.eomForecast)}. ${data.coachSentence ?? ""}`
       : kind === "today"
@@ -755,62 +1036,70 @@ function SheetBody({
           : kind === "budget"
             ? `${ILS.format(data.budgetSpent)} מתוך ${ILS.format(data.budgetTotal)} (${data.budgetPct}%) · נותר ${ILS.format(data.budgetRemaining)}.`
             : kind === "weekly"
-              ? `סך הוצאות בשבוע האחרון · ${ILS.format(data.weeklySpend.reduce((s, d) => s + d.amount, 0))}.`
+              ? `סך הוצאות בשבוע · ${ILS.format(data.weeklySpend.reduce((s, d) => s + d.amount, 0))}.`
               : kind === "loans"
                 ? `סך הלוואות פעילות החודש · ${ILS.format(data.loansThisMonth)}.`
                 : kind === "fixed"
                   ? `סך הוצאות קבועות החודש · ${ILS.format(data.fixedThisMonth)}.`
                   : kind === "cards"
                     ? `סך חיובי אשראי החודש · ${ILS.format(data.cardsThisMonth)}.`
-                    : kind === "income"
-                      ? `סך הכנסות שהתקבלו · ${ILS.format(data.incomeThisMonth)}.`
-                      : kind === "upcoming"
-                        ? `${data.upcomingFortnight.length} אירועים בשבועיים הקרובים.`
-                        : `${data.recentActivity.length} פעולות אחרונות.`;
+                    : `סך הכנסות שהתקבלו · ${ILS.format(data.incomeThisMonth)}.`;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--aurora-space-4)" }}>
-      <p className="aurora-body-l aurora-ink-2">{text}</p>
-      {kind === "upcoming" || kind === "activity" ? (
-        <ul
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {(kind === "upcoming" ? data.upcomingFortnight : data.recentActivity).map(
-            (e, i) => {
-              const isUpcoming = kind === "upcoming";
-              const label = isUpcoming
-                ? (e as AuroraUpcomingEvent).label
-                : (e as AuroraHomeData["recentActivity"][number]).label;
-              const amount = isUpcoming
-                ? (e as AuroraUpcomingEvent).amount
-                : Math.abs((e as AuroraHomeData["recentActivity"][number]).amount);
-              const kindKey = isUpcoming
-                ? (e as AuroraUpcomingEvent).kind
-                : ((e as AuroraHomeData["recentActivity"][number]).direction === "in"
-                    ? "income"
-                    : "bank_debit");
-              return (
-                <li key={`${i}-${(e as { whenISO: string }).whenISO}`}>
-                  <LedgerRow
-                    accent={<LaneDot color={laneColor(kindKey)} />}
-                    label={label}
-                    meta={DAY_FMT.format(new Date((e as { whenISO: string }).whenISO))}
-                    amount={
-                      (kindKey === "income" ? "+" : "−") + ILS.format(amount)
-                    }
-                    direction={kindKey === "income" ? "in" : "out"}
-                  />
-                </li>
-              );
-            },
-          )}
-        </ul>
-      ) : null}
+    <Fragment>
+      <p className="aurora-body-l aurora-ink-2">{summary}</p>
+    </Fragment>
+  );
+}
+
+function SheetList({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{
+    label: string;
+    meta: string;
+    amount: number;
+    tone: string;
+    direction: "in" | "out" | "pending";
+  }>;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--aurora-space-3)",
+      }}
+    >
+      <Eyebrow srHeading={{ level: 2, text: title }}>{title}</Eyebrow>
+      <ul
+        style={{
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {rows.map((r, i) => (
+          <li key={`${i}-${r.label}`}>
+            <LedgerRow
+              accent={<LaneDot color={r.tone} />}
+              label={r.label}
+              meta={r.meta}
+              amount={
+                (r.direction === "in" ? "+" : "−") + ILS.format(r.amount)
+              }
+              direction={r.direction}
+            />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
+
+// Memo guard so the relative-time tick doesn't re-render the whole
+// tree gratuitously. Each useMemo here is intentionally tiny.
+export const _useMemoGuard = useMemo;

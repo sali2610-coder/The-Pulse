@@ -34,6 +34,7 @@ import {
   forecastMonthEnd,
 } from "@/lib/forecast";
 import { currentMonthKey } from "@/lib/dates";
+import { DEMO_AURORA_HOME } from "./aurora-demo-data";
 
 function daysInMonth(monthKey: string): number {
   const [y, m] = monthKey.split("-").map(Number);
@@ -69,6 +70,11 @@ export type AuroraActivityRow = {
 export type AuroraHomeData = {
   ready: boolean;
   hasAnchors: boolean;
+  /** Phase 432 part 4 — true when the hook returned its baked-in
+   *  demo fixture (used on /aurora-preview reviews + cold loads
+   *  with no anchors). The composition surfaces a subtle "תצוגת דמו"
+   *  eyebrow so the reviewer knows the numbers are illustrative. */
+  isDemo?: boolean;
   // ── Hero
   livBalance: number;
   eomForecast: number;
@@ -176,6 +182,18 @@ export function useAuroraHome(): AuroraHomeData {
 
   return useMemo<AuroraHomeData>(() => {
     if (!hydrated) return EMPTY;
+
+    // Phase 432 part 4 — when the store has no bank anchors
+    // (cold /aurora-preview review, freshly cloned repo, anonymous
+    // visitor), fall through to the demo fixture so the Home feels
+    // alive instead of presenting an empty dashboard. Real users
+    // with anchors ALWAYS see live data.
+    const hasAnyAnchor = accounts.some(
+      (a) => a.active && a.kind === "bank" && typeof a.anchorBalance === "number",
+    );
+    if (!hasAnyAnchor && entries.length === 0 && loans.length === 0) {
+      return DEMO_AURORA_HOME;
+    }
 
     const monthKey = currentMonthKey();
     const ctx = buildEngineCtx({
