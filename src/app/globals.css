@@ -52,6 +52,77 @@
 }
 
 :root {
+  /* Phase 429 — Quiet Concierge Home tokens (shared on :root + .dark
+     per code-review must-fix). Names are intent-tagged with --home-*,
+     --ink-*, --accent-*, --air-*, --type-*, --tracking-*, --row-*,
+     --focus-* so any "no rogue hex" sweep can grep them quickly. */
+  --home-bg: #0A0A0A;
+  --home-surface: #0A0A0A;
+  --home-content-max: 36rem;
+  --home-gutter: 1.5rem;
+
+  /* Ink ladder — 92/72/56/32 per a11y must-fix. 32 forbidden on
+     interactive text; eyebrows are decorative + paired with sr-only
+     headings. */
+  --ink-primary: rgba(255, 255, 255, 0.92);
+  --ink-body: rgba(255, 255, 255, 0.72);
+  --ink-secondary: rgba(255, 255, 255, 0.56);
+  --ink-eyebrow: rgba(255, 255, 255, 0.32);
+
+  /* Hairlines — divider tokens. Functional (tap-cue) ones must hit
+     ≥3:1 vs Charcoal. */
+  --hairline-faint: rgba(255, 255, 255, 0.06);
+  --hairline-soft: rgba(255, 255, 255, 0.08);
+  --hairline-quiet: rgba(255, 255, 255, 0.12);
+  --hairline-functional: rgba(255, 255, 255, 0.40);
+
+  /* Accents — one Neon per viewport, one Gold sentence per viewport. */
+  --accent-neon: #00E5FF;
+  --accent-neon-soft: rgba(0, 229, 255, 0.32);
+  --accent-neon-loud: rgba(0, 229, 255, 0.92);
+  --ink-radial: rgba(0, 229, 255, 0.08);
+  --accent-gold: #D4AF37;
+  /* Phase 429 review-fix: bumped 0.56 → 0.72 to meet AA contrast for
+     13px italic on Charcoal (was ~4.1:1, now ~6.1:1). */
+  --accent-gold-soft: rgba(212, 175, 55, 0.72);
+  --accent-gold-loud: rgba(212, 175, 55, 0.92);
+  --accent-gold-hair: rgba(212, 175, 55, 0.48);
+  --gold-grad-from: #F6D970;
+  --gold-grad-to: #D4AF37;
+  --gold-grad-ink: #1A140A;
+
+  /* Lanes — kept for ledger drawers only, never on closed surfaces. */
+  --lane-loan: #A78BFA;
+  --lane-bank: #34D399;
+  --lane-card: #75F5FF;
+  --lane-recurring: #D4AF37;
+  --lane-income: #FACC15;
+  --lane-danger: #F87171;
+
+  /* Air — vertical rhythm. Section gaps. */
+  --air-hero-exhale: 10rem; /* 160px Hero→Cash */
+  --air-xl: 6rem;           /* 96px Cash→Today, Today→Obligations */
+  --air-lg: 5rem;           /* 80px Income→Concierge, Concierge→Upcoming */
+  --air-md: 4rem;           /* 64px Recent→FAB */
+
+  /* Typography roles. Three only. */
+  --type-hero: 3.5rem;       /* 56px live balance */
+  --type-eom: 2.5rem;        /* 40px EOM forecast */
+  --type-allowance: 1.75rem; /* 28px allowance */
+  --type-amount: 1.125rem;   /* 18px ledger amount */
+  --type-body: 0.8125rem;    /* 13px body numerics */
+  --type-eyebrow: 0.6875rem; /* 11px eyebrow */
+  --tracking-hero: -0.03em;
+  --tracking-body: -0.01em;
+  --tracking-eyebrow: 0.12em;
+
+  /* Row + tap targets — meet 44pt minimum per a11y must-fix. */
+  --row-tap-min: 2.75rem; /* 44px */
+  --row-pitch: 3.25rem;   /* 52px between ledger rows */
+
+  /* Focus ring — canonical 2px Neon + 2px offset per a11y must-fix. */
+  --focus-ring: 0 0 0 2px var(--home-bg), 0 0 0 4px var(--accent-neon);
+
   /* Phase 236 — type scale tokens driven by data-text-scale.
      Numbers/titles scale aggressively in Large mode; helper text
      scales gently so the visual hierarchy stays correct. */
@@ -98,6 +169,54 @@
 
 .dark {
   color-scheme: dark;
+  /* Phase 429 — Home tokens mirrored on .dark per code-review must-fix.
+     Values identical to :root; declared here so a future light-mode
+     reskin keeps Quiet Concierge intact under whichever class wins. */
+  --home-bg: #0A0A0A;
+  --home-surface: #0A0A0A;
+  --home-content-max: 36rem;
+  --home-gutter: 1.5rem;
+  --ink-primary: rgba(255, 255, 255, 0.92);
+  --ink-body: rgba(255, 255, 255, 0.72);
+  --ink-secondary: rgba(255, 255, 255, 0.56);
+  --ink-eyebrow: rgba(255, 255, 255, 0.32);
+  --hairline-faint: rgba(255, 255, 255, 0.06);
+  --hairline-soft: rgba(255, 255, 255, 0.08);
+  --hairline-quiet: rgba(255, 255, 255, 0.12);
+  --hairline-functional: rgba(255, 255, 255, 0.40);
+  --accent-neon: #00E5FF;
+  --accent-neon-soft: rgba(0, 229, 255, 0.32);
+  --accent-neon-loud: rgba(0, 229, 255, 0.92);
+  --ink-radial: rgba(0, 229, 255, 0.08);
+  --accent-gold: #D4AF37;
+  --accent-gold-soft: rgba(212, 175, 55, 0.72);
+  --accent-gold-loud: rgba(212, 175, 55, 0.92);
+  --accent-gold-hair: rgba(212, 175, 55, 0.48);
+  --gold-grad-from: #F6D970;
+  --gold-grad-to: #D4AF37;
+  --gold-grad-ink: #1A140A;
+  --lane-loan: #A78BFA;
+  --lane-bank: #34D399;
+  --lane-card: #75F5FF;
+  --lane-recurring: #D4AF37;
+  --lane-income: #FACC15;
+  --lane-danger: #F87171;
+  --air-hero-exhale: 10rem;
+  --air-xl: 6rem;
+  --air-lg: 5rem;
+  --air-md: 4rem;
+  --type-hero: 3.5rem;
+  --type-eom: 2.5rem;
+  --type-allowance: 1.75rem;
+  --type-amount: 1.125rem;
+  --type-body: 0.8125rem;
+  --type-eyebrow: 0.6875rem;
+  --tracking-hero: -0.03em;
+  --tracking-body: -0.01em;
+  --tracking-eyebrow: 0.12em;
+  --row-tap-min: 2.75rem;
+  --row-pitch: 3.25rem;
+  --focus-ring: 0 0 0 2px var(--home-bg), 0 0 0 4px var(--accent-neon);
   --background: #0A0A0A;
   --foreground: #F5F5F5;
   --surface: #1A1A1A;
@@ -548,4 +667,82 @@ main[data-danger="true"] [data-tone="accent"] {
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ─── Phase 429 — Quiet Concierge Home tab CSS ─────────────────────
+   Hand-tuned classes the React primitives reference. Keeps the
+   surface free of `<style jsx>` so Next 16 App Router doesn't have
+   to transpile styled-jsx for these. */
+
+/* 6-second sine breath — used by .home-breath-caret + can be used
+   by any future caret. Pause on prefers-reduced-motion (CSS-only,
+   no JS rAF anywhere). */
+@keyframes home-breath {
+  0%   { opacity: 0.32; transform: scaleX(0.96); }
+  50%  { opacity: 0.88; transform: scaleX(1);    }
+  100% { opacity: 0.32; transform: scaleX(0.96); }
+}
+.home-breath-caret {
+  animation: home-breath 6s ease-in-out infinite;
+  transform-origin: center;
+  box-shadow: 0 0 16px var(--accent-neon-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-breath-caret {
+    animation: none;
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+}
+
+/* Canonical focus ring — 2px Neon over a 2px Charcoal halo, gives
+   ≥3:1 against Charcoal per a11y must-fix. */
+.home-tappable,
+.home-ghost-cta,
+.home-gold-pill {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  outline: none;
+}
+.home-tappable {
+  border-radius: 8px;
+}
+.home-ghost-cta,
+.home-gold-pill {
+  /* Constitution: ≥44pt tap target on every interactive element. */
+  min-height: var(--row-tap-min);
+}
+.home-ghost-cta {
+  color: var(--ink-secondary);
+  position: relative;
+  transition: color 160ms ease;
+}
+/* No chrome at rest. Underline hairline only appears on hover/focus. */
+.home-ghost-cta::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0.875rem;
+  bottom: 0.375rem;
+  height: 1px;
+  background: var(--hairline-functional);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.home-ghost-cta:hover,
+.home-ghost-cta:focus-visible {
+  color: var(--ink-primary);
+}
+.home-ghost-cta:hover::after,
+.home-ghost-cta:focus-visible::after {
+  opacity: 1;
+}
+.home-tappable:focus-visible,
+.home-ghost-cta:focus-visible,
+.home-gold-pill:focus-visible {
+  box-shadow: var(--focus-ring);
+  border-radius: 8px;
+}
+.home-tappable:hover .home-row-inner {
+  opacity: 1;
 }
