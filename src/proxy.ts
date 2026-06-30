@@ -57,6 +57,23 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   const { pathname, search } = req.nextUrl;
   const hostname = req.nextUrl.hostname;
 
+  // 0) Supabase OAuth fallback. When the Supabase project's
+  //    "Redirect URLs" allow list does not include the requesting
+  //    host (typical local-dev miss: http://localhost:3000/api/auth/callback),
+  //    Supabase ignores our redirectTo and 302s the user to the
+  //    project's Site URL root with `?code=…` attached. Forward
+  //    that landing to /api/auth/callback so exchangeCodeForSession
+  //    still runs on whichever host the user is currently on.
+  //
+  //    Runs BEFORE host canonicalization so a local-dev landing
+  //    on http://localhost:3000/?code=… is rewritten in place
+  //    instead of being bounced to the production canonical host.
+  if (pathname === "/" && req.nextUrl.searchParams.has("code")) {
+    const callback = req.nextUrl.clone();
+    callback.pathname = "/api/auth/callback";
+    return NextResponse.redirect(callback);
+  }
+
   // 1) Host canonicalization.
   if (shouldCanonicalize(hostname, pathname)) {
     const target = new URL(req.nextUrl.toString());

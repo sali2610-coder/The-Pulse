@@ -78,15 +78,33 @@ export async function signUpWithPassword(
  *  side cookie session — this is what lets server components +
  *  middleware see the same user without any token-passing. After
  *  the round-trip, the user has a Supabase session whose
- *  `auth.uid()` satisfies the RLS policies on every entity table. */
+ *  `auth.uid()` satisfies the RLS policies on every entity table.
+ *
+ *  ⚠ Supabase dashboard requirement (per environment):
+ *     Authentication → URL Configuration → "Redirect URLs"
+ *     must include EVERY host the app runs on. If a host is
+ *     missing, Supabase silently ignores our `redirectTo` and
+ *     302s to the project Site URL root with `?code=` attached.
+ *     The middleware in src/proxy.ts catches that root-landing
+ *     case and forwards to /api/auth/callback as a safety net.
+ *
+ *     For local dev: add `http://localhost:3000/api/auth/callback`.
+ *     For production: add `https://the-pulse-sooty.vercel.app/api/auth/callback`.
+ *     Leave the Site URL pointed at the production canonical host.
+ */
 export async function signInWithGoogle(redirectTo?: string): Promise<AuthResult> {
   const client = supabase();
   if (!client) return { ok: false, reason: "not_configured" };
+  // Resolution order: explicit arg → live window origin → env
+  // override (server-rendered fallback). Always prefers the host
+  // the user is actually browsing so local dev never leaks to
+  // the production origin.
+  const liveOrigin =
+    typeof window !== "undefined" ? window.location.origin : undefined;
+  const envOrigin = process.env.NEXT_PUBLIC_SITE_URL;
+  const origin = liveOrigin ?? envOrigin;
   const target =
-    redirectTo ??
-    (typeof window !== "undefined"
-      ? `${window.location.origin}/api/auth/callback`
-      : undefined);
+    redirectTo ?? (origin ? `${origin}/api/auth/callback` : undefined);
   const { error } = await client.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: target },
