@@ -3130,3 +3130,89 @@ main[data-danger="true"] [data-tone="accent"] {
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--aurora-radius-hero-glass);
 }
+
+/* ── Aurora Timeline — Phase 436 ────────────────────────────── */
+.aurora-timeline-stack {
+  padding-block-start: calc(var(--aurora-top-bar-h) + var(--aurora-space-6));
+  padding-block-end: var(--aurora-space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-5);
+}
+
+.aurora-timeline-summary-grid {
+  margin-block-start: var(--aurora-space-4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--aurora-space-3);
+}
+.aurora-timeline-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-timeline-summary-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-timeline-net {
+  font-size: var(--aurora-type-eyebrow);
+  font-variant-numeric: tabular-nums;
+  margin-block-start: 4px;
+}
+
+.aurora-timeline-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-3);
+}
+.aurora-timeline-filter-label {
+  flex: 0 0 auto;
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-3);
+  min-width: 76px;
+}
+
+.aurora-timeline-flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-6);
+}
+.aurora-timeline-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+}
+.aurora-timeline-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-2);
+  padding-block: var(--aurora-space-2);
+  border-bottom: 1px dashed var(--aurora-hairline-quiet);
+}
+.aurora-timeline-section-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+}
+.aurora-timeline-section-dot[data-aurora-tone="future"] {
+  background: var(--aurora-brand-aurora-2);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
+}
+.aurora-timeline-section-dot[data-aurora-tone="past"] {
+  background: var(--aurora-ink-3);
+}
+.aurora-timeline-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-5);
+}

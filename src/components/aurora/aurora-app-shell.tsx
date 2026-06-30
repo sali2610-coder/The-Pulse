@@ -20,6 +20,7 @@ import { ComingSoonScreen } from "@/components/aurora/aurora-coming-soon";
 import { AuroraHome } from "@/components/aurora/aurora-home";
 import { Screen } from "@/components/aurora/aurora-screen";
 import { AuroraShell } from "@/components/aurora/aurora-shell";
+import { AuroraTimeline } from "@/components/aurora/aurora-timeline";
 import { TopBar } from "@/components/aurora/aurora-top-bar";
 
 const TABS: BottomNavTab[] = [
@@ -71,18 +72,7 @@ export function AuroraAppShell({
       >
         {tab === "home" ? <AuroraHome /> : null}
         {tab === "activity" ? <AuroraActivity /> : null}
-        {tab === "timeline" ? (
-          <ComingSoonScreen
-            eyebrow="ציר זמן · בפיתוח"
-            title="ציר זמן פיננסי"
-            body="כאן תופיע ציר אנכי של כל ההכנסות, החיובים והאירועים הצפויים — עם דחיסות, סינון לפי לוח שנה והצצה לעתיד. עובד במסך הבית כבר עכשיו דרך הכרטיס 14 ימים קדימה."
-            items={[
-              { key: "next", label: "האירוע הבא בחזית הבית", hint: "כרטיס משכורת / הלוואה / חיוב" },
-              { key: "fortnight", label: "14 ימים קדימה", hint: "ציר אופקי מונפש עם נקודות אירוע" },
-              { key: "forecast", label: "חיזוי 30 ימים", hint: "גרף קווי תזרים מונפש" },
-            ]}
-          />
-        ) : null}
+        {tab === "timeline" ? <AuroraTimeline /> : null}
         {tab === "settings" ? (
           <ComingSoonScreen
             eyebrow="הגדרות · בפיתוח"
