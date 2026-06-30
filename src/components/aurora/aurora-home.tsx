@@ -50,9 +50,9 @@ import {
   MonthProgressBar,
 } from "@/components/aurora/aurora-charts";
 import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spend-card";
+import { AuroraCreditCenter } from "@/components/aurora/aurora-credit-center";
 import { PendingPulseCard } from "@/components/aurora/aurora-pending-center";
 import {
-  CardsByMonthCard,
   CheckpointRingCard,
   CommitmentsBreakdownCard,
 } from "@/components/aurora/aurora-recovery-cards";
@@ -234,7 +234,7 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={4}>
-              <CardsByMonthCard data={recovery} />
+              <AuroraCreditCenter data={recovery} />
             </MountReveal>
           </BentoItem>
         ) : null}

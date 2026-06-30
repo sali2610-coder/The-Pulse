@@ -4318,3 +4318,229 @@ main[data-danger="true"] [data-tone="accent"] {
   letter-spacing: var(--aurora-tracking-eyebrow);
   color: var(--aurora-ink-3);
 }
+
+/* ── Aurora Credit Center — Phase 442 ───────────────────────── */
+
+.aurora-credit-sum {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--aurora-type-body);
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-strong);
+}
+
+.aurora-credit-summary-grid {
+  margin-block-start: var(--aurora-space-4);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-credit-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-credit-summary-amount {
+  font-size: var(--aurora-type-body-l);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-credit-list {
+  list-style: none;
+  margin: 0;
+  margin-block-start: var(--aurora-space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+}
+.aurora-credit-card-li {
+  border-radius: var(--aurora-radius-bento);
+  overflow: hidden;
+}
+.aurora-credit-card-button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-3);
+  width: 100%;
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  border: 1px solid;
+  border-radius: var(--aurora-radius-bento);
+  background: var(--aurora-glass-elev-1);
+  color: var(--aurora-ink-1);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.aurora-credit-card-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: var(--aurora-brand-charcoal);
+  flex: 0 0 auto;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.2);
+}
+.aurora-credit-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.aurora-credit-card-title {
+  font-size: var(--aurora-type-body-l);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+}
+.aurora-credit-card-meta {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-credit-card-headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+  margin-block-start: 4px;
+}
+.aurora-credit-card-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-credit-card-next {
+  font-size: var(--aurora-type-eyebrow);
+  color: var(--aurora-ink-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+.aurora-credit-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-block-start: 6px;
+}
+.aurora-credit-pill {
+  display: inline-flex;
+  padding-inline: 8px;
+  padding-block: 2px;
+  border-radius: 9999px;
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  border: 1px solid var(--aurora-hairline-quiet);
+  background: var(--aurora-hairline-faint);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+
+.aurora-credit-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-4);
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  background: var(--aurora-glass-elev-1);
+  border: 1px solid var(--aurora-hairline-quiet);
+  border-top: 0;
+  border-radius: 0 0 var(--aurora-radius-bento) var(--aurora-radius-bento);
+  overflow: hidden;
+}
+
+.aurora-credit-util {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-credit-util-missing { gap: 4px; }
+.aurora-credit-util-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.aurora-credit-util-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+  font-size: var(--aurora-type-body-l);
+}
+.aurora-credit-util-bar {
+  position: relative;
+  height: 6px;
+  width: 100%;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.aurora-credit-util-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+}
+.aurora-credit-util-foot {
+  display: flex;
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-credit-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-credit-mini-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aurora-credit-mini-list li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+  padding-block: 4px;
+  border-bottom: 1px solid var(--aurora-hairline-quiet);
+}
+
+.aurora-credit-merchants {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aurora-credit-merchants li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+  padding-block: 4px;
+  border-bottom: 1px solid var(--aurora-hairline-quiet);
+}
+.aurora-credit-merchant-rank {
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-credit-merchant-label {
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-emphasis);
+}
+.aurora-credit-merchant-amount {
+  color: var(--aurora-ink-1);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+}

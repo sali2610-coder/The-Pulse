@@ -47,6 +47,8 @@ export type AuroraCardMonth = {
   cardId: string;
   cardLabel: string;
   cardLast4?: string;
+  cardColor?: string;
+  cardIssuer?: string;
   currentTotal: number;
   nextTotal: number;
   /** Items grouped by category for the CURRENT month statement. */
@@ -58,6 +60,26 @@ export type AuroraCardMonth = {
     fixedAmount: number;
     oneOffAmount: number;
   }>;
+  byCategoryNext: Array<{
+    category: CategoryId | "other";
+    label: string;
+    accent: string;
+    amount: number;
+  }>;
+  topMerchants: Array<{ label: string; amount: number }>;
+  installmentsRemaining: number;
+  /** Sum of estimatedAmount across active installment-plan rules
+   *  that fall on this card and stretch beyond this month. */
+  installmentsAmount: number;
+  fixedTotal: number;
+  oneOffTotal: number;
+  transactionCount: number;
+  creditLimit?: number;
+  currentDebt?: number;
+  utilisation?: number;
+  remainingCredit?: number;
+  billingDay?: number;
+  paymentDay?: number;
 };
 
 export type AuroraRecoveryData = {
@@ -141,17 +163,29 @@ function categoryLabelOf(id: CategoryId | "other"): string {
 function statementToCardMonth(
   current: CardStatement,
   next: CardStatement | undefined,
+  account: { creditLimit?: number; currentDebt?: number; billingDay?: number; paymentDay?: number; color?: string; issuer?: string } | undefined,
 ): AuroraCardMonth {
-  // Split each category into fixed (rule:) vs one-off (entry:) so the
-  // expandable shows the same 3-bucket totals the legacy UI surfaced.
+  // Split each category into fixed (rule:) vs one-off (entry:).
   const fixedByCat = new Map<string, number>();
   const oneOffByCat = new Map<string, number>();
+  const merchantSum = new Map<string, number>();
+  let fixedTotal = 0;
+  let oneOffTotal = 0;
+  let installmentsAmount = 0;
+  const installmentRuleIds = new Set<string>();
   for (const row of current.transactions) {
     const catKey = (row.category as CategoryId | undefined) ?? "other";
     if (row.id.startsWith("rule:")) {
       fixedByCat.set(catKey, (fixedByCat.get(catKey) ?? 0) + row.amount);
+      fixedTotal += row.amount;
     } else {
       oneOffByCat.set(catKey, (oneOffByCat.get(catKey) ?? 0) + row.amount);
+      oneOffTotal += row.amount;
+    }
+    merchantSum.set(row.label, (merchantSum.get(row.label) ?? 0) + row.amount);
+    if (row.bucket === "existingInstallments") {
+      installmentsAmount += row.amount;
+      installmentRuleIds.add(row.id);
     }
   }
   const cats = new Set<string>([...fixedByCat.keys(), ...oneOffByCat.keys()]);
@@ -171,13 +205,62 @@ function statementToCardMonth(
     })
     .sort((a, b) => b.amount - a.amount);
 
+  // Next-month preview categories (single bucket).
+  const nextCats = new Map<string, number>();
+  for (const row of next?.transactions ?? []) {
+    const catKey = (row.category as CategoryId | undefined) ?? "other";
+    nextCats.set(catKey, (nextCats.get(catKey) ?? 0) + row.amount);
+  }
+  const byCategoryNext = Array.from(nextCats.entries())
+    .map(([c, amount]) => {
+      const id = c as CategoryId | "other";
+      return {
+        category: id,
+        label: categoryLabelOf(id),
+        accent: categoryAccent(id),
+        amount,
+      };
+    })
+    .sort((a, b) => b.amount - a.amount);
+
+  const topMerchants = Array.from(merchantSum.entries())
+    .map(([label, amount]) => ({ label, amount: Math.round(amount) }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 6);
+
+  const creditLimit = account?.creditLimit;
+  const currentDebt = account?.currentDebt;
+  const utilisation =
+    creditLimit && creditLimit > 0
+      ? Math.min(1, (currentDebt ?? current.total) / creditLimit)
+      : undefined;
+  const remainingCredit =
+    creditLimit !== undefined
+      ? Math.max(0, creditLimit - (currentDebt ?? current.total))
+      : undefined;
+
   return {
     cardId: current.cardId,
     cardLabel: current.cardLabel,
     cardLast4: current.cardLast4,
+    cardColor: account?.color,
+    cardIssuer: account?.issuer,
     currentTotal: current.total,
     nextTotal: next?.total ?? 0,
     byCategory,
+    byCategoryNext,
+    topMerchants,
+    installmentsRemaining: installmentRuleIds.size,
+    installmentsAmount: Math.round(installmentsAmount),
+    fixedTotal: Math.round(fixedTotal),
+    oneOffTotal: Math.round(oneOffTotal),
+    transactionCount: current.transactions.length,
+    creditLimit,
+    currentDebt,
+    utilisation,
+    remainingCredit,
+    billingDay: account?.billingDay,
+    paymentDay: account?.paymentDay,
   };
 }
 
@@ -326,21 +409,48 @@ export function useAuroraRecovery(): AuroraRecoveryData {
     const stmtNext = getCreditCardStatement({
       accounts, rules, entries, statuses, monthKey: nextMonthKey,
     });
+    const accountById = (id: string) => accounts.find((a) => a.id === id);
     const cardsByMonth: AuroraCardMonth[] = stmtNow.cards.map((c) =>
-      statementToCardMonth(c, stmtNext.cards.find((x) => x.cardId === c.cardId)),
+      statementToCardMonth(
+        c,
+        stmtNext.cards.find((x) => x.cardId === c.cardId),
+        accountById(c.cardId),
+      ),
     );
     // Surface any next-month-only cards too so the recovery view
     // doesn't lose visibility on charges that start next billing
     // cycle.
     for (const nx of stmtNext.cards) {
       if (cardsByMonth.some((c) => c.cardId === nx.cardId)) continue;
+      const acc = accountById(nx.cardId);
       cardsByMonth.push({
         cardId: nx.cardId,
         cardLabel: nx.cardLabel,
         cardLast4: nx.cardLast4,
+        cardColor: acc?.color,
+        cardIssuer: acc?.issuer,
         currentTotal: 0,
         nextTotal: nx.total,
         byCategory: [],
+        byCategoryNext: [],
+        topMerchants: [],
+        installmentsRemaining: 0,
+        installmentsAmount: 0,
+        fixedTotal: 0,
+        oneOffTotal: 0,
+        transactionCount: 0,
+        creditLimit: acc?.creditLimit,
+        currentDebt: acc?.currentDebt,
+        utilisation:
+          acc?.creditLimit && acc.creditLimit > 0
+            ? Math.min(1, (acc.currentDebt ?? nx.total) / acc.creditLimit)
+            : undefined,
+        remainingCredit:
+          acc?.creditLimit !== undefined
+            ? Math.max(0, acc.creditLimit - (acc.currentDebt ?? nx.total))
+            : undefined,
+        billingDay: acc?.billingDay,
+        paymentDay: acc?.paymentDay,
       });
     }
     cardsByMonth.sort((a, b) => b.currentTotal + b.nextTotal - (a.currentTotal + a.nextTotal));
