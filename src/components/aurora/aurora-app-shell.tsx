@@ -10,6 +10,7 @@
 import { useRef, useState, type ReactNode } from "react";
 
 import { AuroraActivity } from "@/components/aurora/aurora-activity";
+import { AuroraAddFlow } from "@/components/aurora/aurora-add-flow";
 import {
   BottomNav,
   type BottomNavTab,
@@ -20,7 +21,6 @@ import { AuroraHome } from "@/components/aurora/aurora-home";
 import { Screen } from "@/components/aurora/aurora-screen";
 import { AuroraShell } from "@/components/aurora/aurora-shell";
 import { TopBar } from "@/components/aurora/aurora-top-bar";
-import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 
 const TABS: BottomNavTab[] = [
   { key: "home", label: "בית", icon: <HomeGlyph /> },
@@ -97,7 +97,7 @@ export function AuroraAppShell({
         ) : null}
       </Screen>
 
-      <ExpenseDialog open={addOpen} onOpenChange={setAddOpen} />
+      <AuroraAddFlow open={addOpen} onOpenChange={setAddOpen} />
     </AuroraShell>
   );
 }
