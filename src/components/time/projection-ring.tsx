@@ -26,8 +26,8 @@ import {
   type BalanceVibe,
   type StateTone,
 } from "./state-tone";
-import { tap as hapticTap, success as hapticSuccess } from "@/lib/haptics";
-import { playCheckpointTone } from "@/lib/time-chime";
+// Phase 428 — Time tab is sound-free. All haptic / chime calls
+// stripped so the surface is fully silent.
 import { useFinanceStore } from "@/lib/store";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -66,7 +66,8 @@ export function ProjectionRing({
   checkpoints: Checkpoint[];
   onPickCheckpoint: (c: Checkpoint) => void;
 }) {
-  const audioEnabled = useFinanceStore((s) => s.audioEnabled);
+  // Phase 428 — audioEnabled no longer read here; Time tab is silent.
+  void useFinanceStore;
 
   // ── Number morph ──────────────────────────────────────────────
   const value = useMotionValue(balance);
@@ -285,8 +286,6 @@ export function ProjectionRing({
   }, [checkpoints, maxOffset]);
 
   const handlePick = (cp: Checkpoint) => {
-    hapticSuccess();
-    if (audioEnabled) playCheckpointTone();
     onPickCheckpoint(cp);
   };
 
@@ -478,7 +477,6 @@ export function ProjectionRing({
             key={cp.kind}
             type="button"
             onClick={() => {
-              hapticTap();
               handlePick(cp);
             }}
             aria-label={`קפיצה ל${cp.label}`}

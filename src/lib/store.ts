@@ -1030,22 +1030,45 @@ export const useFinanceStore = create<State & Actions>()(
 
       updateIncome: (id, patch) => {
         set((state) => ({
-          incomes: state.incomes.map((i) =>
-            i.id === id
-              ? {
-                  ...i,
-                  ...("label" in patch && patch.label !== undefined
-                    ? { label: patch.label.trim() }
-                    : {}),
-                  ...("amount" in patch && patch.amount !== undefined
-                    ? { amount: safeNumber(patch.amount) }
-                    : {}),
-                  ...("dayOfMonth" in patch && patch.dayOfMonth !== undefined
-                    ? { dayOfMonth: clampDay(patch.dayOfMonth) }
-                    : {}),
-                }
-              : i,
-          ),
+          incomes: state.incomes.map((i) => {
+            if (i.id !== id) return i;
+            // Phase 428 — when the user updates the baseline amount,
+            // strip every CURRENT-and-FUTURE `actualByMonth` override.
+            // Otherwise a stale override (e.g., a 26,000 "mark as
+            // received" from a previous month) keeps shadowing the
+            // new baseline in every downstream engine. Past months
+            // stay locked so historical records don't rewrite
+            // themselves.
+            let nextActuals = i.actualByMonth;
+            if (
+              "amount" in patch &&
+              patch.amount !== undefined &&
+              nextActuals
+            ) {
+              const now = new Date();
+              const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+              const trimmed: Record<string, number> = {};
+              for (const [mk, v] of Object.entries(nextActuals)) {
+                if (mk < currentKey) trimmed[mk] = v;
+              }
+              nextActuals = trimmed;
+            }
+            return {
+              ...i,
+              ...("label" in patch && patch.label !== undefined
+                ? { label: patch.label.trim() }
+                : {}),
+              ...("amount" in patch && patch.amount !== undefined
+                ? { amount: safeNumber(patch.amount) }
+                : {}),
+              ...("dayOfMonth" in patch && patch.dayOfMonth !== undefined
+                ? { dayOfMonth: clampDay(patch.dayOfMonth) }
+                : {}),
+              ...(nextActuals !== i.actualByMonth
+                ? { actualByMonth: nextActuals }
+                : {}),
+            };
+          }),
         }));
       },
 

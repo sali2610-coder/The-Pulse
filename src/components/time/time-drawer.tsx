@@ -23,7 +23,7 @@ import {
   type TimelineMissingEntry,
 } from "@/lib/financial-engine";
 import { useFinanceStore } from "@/lib/store";
-import { tap } from "@/lib/haptics";
+// Phase 428 — Time tab silent.
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -72,7 +72,6 @@ export function TimeDrawer({ offset }: { offset: number }) {
       <button
         type="button"
         onClick={() => {
-          tap();
           setOpen((v) => !v);
         }}
         aria-expanded={open}

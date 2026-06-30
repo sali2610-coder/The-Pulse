@@ -13,9 +13,7 @@
 import { useRef, useState, type ReactNode, type PointerEvent } from "react";
 
 import type { Checkpoint } from "./use-time-engine";
-import { success as hapticSuccess } from "@/lib/haptics";
-import { useFinanceStore } from "@/lib/store";
-import { playCheckpointTone } from "@/lib/time-chime";
+// Phase 428 — Time tab silent.
 
 const GRAVITY_PCT = 0.06; // snap if release within 6% of viewport width
 const DRAG_DAY_PX = 12; // 12px = 1 day of curve travel
@@ -38,7 +36,6 @@ export function ScrubSurface({
   const startXRef = useRef(0);
   const startOffsetRef = useRef(0);
   const lastEmittedRef = useRef(cursorOffset);
-  const audioEnabled = useFinanceStore((s) => s.audioEnabled);
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -86,8 +83,6 @@ export function ScrubSurface({
       }
     }
     if (best && bestDist <= gravityDays) {
-      hapticSuccess();
-      if (audioEnabled) playCheckpointTone();
       onOffset(best.offset);
     }
   };

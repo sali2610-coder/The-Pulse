@@ -45,7 +45,7 @@ import {
 
 import type { TimeFrame } from "./use-time-engine";
 import { VIBE_TONE, vibeFromBalance } from "./state-tone";
-import { tap as hapticTap } from "@/lib/haptics";
+// Phase 428 — Time tab silent.
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -75,25 +75,26 @@ type CurveTotals = {
 
 const EMPTY: CurveTotals = { income: 0, fixed: 0, loans: 0, cards: 0 };
 
-/** Phase 368 — per-cursor aggregation. Walks the curve points
- *  inclusive of the cursor offset and buckets every signed event by
- *  its kind. Reads the same engine output the ring + voice line
- *  already read; no new math, just a window over events. */
+/** Phase 428 — per-month aggregation scoped to the cursor's calendar
+ *  month. Previous behavior accumulated from day 0 to cursor, so the
+ *  "10 next month" chip showed June + July loans cumulatively; the
+ *  user reads that as "loans paid twice". New behavior: sum every
+ *  curve event whose whenISO sits in the SAME calendar month as the
+ *  cursor's selected date. Result: each chip shows the obligations
+ *  for ITS month only, matching the credit-card lane semantics. */
 function totalsUpToCursor(frame: TimeFrame): CurveTotals {
   const curve = frame.curve;
   if (!curve) return { ...EMPTY };
   const cap = Math.max(0, Math.min(curve.points.length - 1, frame.cursorOffset));
+  const cursorMonth = curve.points[cap]?.whenISO.slice(0, 7);
+  if (!cursorMonth) return { ...EMPTY };
   let income = 0;
   let fixed = 0;
   let loans = 0;
   let cards = 0;
-  // Phase 407 — start at i=0 so LIVE / day-0 events (manual bank
-  // withdrawals dated today after the anchor) surface in the "מה
-  // השתנה" totals. Pre-Phase-407 the loop started at i=1 so day-0
-  // bank impacts were invisible to the explanation path even
-  // though the balance correctly reflected them.
-  for (let i = 0; i <= cap; i++) {
-    for (const ev of curve.points[i].events) {
+  for (const p of curve.points) {
+    for (const ev of p.events) {
+      if (ev.whenISO.slice(0, 7) !== cursorMonth) continue;
       if (ev.kind === "income") income += ev.amount;
       else if (ev.kind === "loan") loans += Math.abs(ev.amount);
       else if (ev.kind === "card") cards += Math.abs(ev.amount);
@@ -125,9 +126,15 @@ export function CashflowRiver({ frame }: { frame: TimeFrame }) {
     const curve = frame.curve;
     if (!curve) return [] as Array<{ label: string; amount: number; kind: "income" | "loan" | "card" | "bank_debit"; informational?: boolean; whenISO: string }>;
     const cap = Math.max(0, Math.min(curve.points.length - 1, frame.cursorOffset));
+    // Phase 428 — itemized list scoped to the cursor's calendar
+    // month so the LIVE strip shows only THIS month's events and
+    // future chips show only their own month's events.
+    const cursorMonth = curve.points[cap]?.whenISO.slice(0, 7);
+    if (!cursorMonth) return [];
     const out: Array<{ label: string; amount: number; kind: "income" | "loan" | "card" | "bank_debit"; informational?: boolean; whenISO: string }> = [];
-    for (let i = 0; i <= cap; i++) {
-      for (const ev of curve.points[i].events) {
+    for (const p of curve.points) {
+      for (const ev of p.events) {
+        if (ev.whenISO.slice(0, 7) !== cursorMonth) continue;
         if (ev.kind !== "income" && ev.kind !== "loan" && ev.kind !== "card" && ev.kind !== "bank_debit") continue;
         out.push({
           label: ev.label,
@@ -506,7 +513,6 @@ function RiverList({
             open={open}
             arrivalKey={isDest ? waveKey : 0}
             onToggle={() => {
-              hapticTap();
               setOpenKey((prev) => (prev === n.key ? null : n.key));
             }}
           />

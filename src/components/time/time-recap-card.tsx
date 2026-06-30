@@ -11,7 +11,7 @@ import { ChevronLeft, Sparkles } from "lucide-react";
 
 import { useTimeEngine } from "@/components/time/use-time-engine";
 import { navigateToTab } from "@/lib/tab-nav";
-import { tap as hapticTap } from "@/lib/haptics";
+// Phase 428 — Time tab is sound-free; no haptic on tap.
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -37,7 +37,6 @@ export function TimeRecapCard() {
     <motion.button
       type="button"
       onClick={() => {
-        hapticTap();
         navigateToTab("history");
       }}
       whileTap={{ scale: 0.985 }}

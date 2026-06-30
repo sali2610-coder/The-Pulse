@@ -14,7 +14,9 @@ import { Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { Checkpoint } from "./use-time-engine";
-import { tap as hapticTap } from "@/lib/haptics";
+// Phase 428 — Time tab is sound-free. No haptic / chime / vibration
+// calls from any Time-tab surface (rail, ring, river, drawer,
+// recap). User-explicit requirement: zero feedback noise here.
 
 export function HorizonRail({
   checkpoints,
@@ -140,7 +142,6 @@ export function HorizonRail({
                 key={c.kind}
                 type="button"
                 onClick={() => {
-                  hapticTap();
                   if (c.kind === "custom") {
                     setCustomMode(true);
                     onCustomOffset(cursorOffset);
@@ -249,7 +250,6 @@ function CustomStepper({
       <button
         type="button"
         onClick={() => {
-          hapticTap();
           onChange(Math.max(0, clamped - 1));
         }}
         className="inline-flex size-7 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-colors hover:border-white/20"
@@ -269,7 +269,6 @@ function CustomStepper({
       <button
         type="button"
         onClick={() => {
-          hapticTap();
           onChange(Math.min(max, clamped + 1));
         }}
         className="inline-flex size-7 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-colors hover:border-white/20"
