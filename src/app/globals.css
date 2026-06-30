@@ -165,6 +165,113 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* ═══════════════════════════════════════════════════════════════
+     Phase 430 — AURORA v1 design tokens (shared across modes).
+     Theme-specific palettes live on .dark and .light blocks below.
+     Naming follows the approved AURORA system: --brand-* / --state-*
+     / --ink-* / --glass-* / --space-* / --radius-* / --shadow-* /
+     --dur-* / --ease-* / --lane-*. Backward compat with Phase 429
+     home tokens (--home-* / --air-* / --type-* / --tracking-* /
+     --row-tap-min / --focus-ring) preserved.
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Typography roles (font-size) ─────────────────────────────── */
+  --aurora-type-display:    4.5rem;     /* 72pt Cinema hero only */
+  --aurora-type-hero:       3.5rem;     /* 56pt live balance */
+  --aurora-type-eom:        2.5rem;     /* 40pt EOM forecast */
+  --aurora-type-title-l:    1.75rem;    /* 28pt section headers, sub-hero */
+  --aurora-type-title-m:    1.375rem;   /* 22pt section anchors */
+  --aurora-type-body-l:     1.0625rem;  /* 17pt sentences (CFO brief) */
+  --aurora-type-amount:     1.125rem;   /* 18pt ledger amount */
+  --aurora-type-body:       0.875rem;   /* 14pt default body */
+  --aurora-type-body-mono:  0.875rem;   /* 14pt ledger mono */
+  --aurora-type-caption:    0.8125rem;  /* 13pt helper */
+  --aurora-type-eyebrow:    0.6875rem;  /* 11pt tracked label */
+  --aurora-type-micro:      0.625rem;   /* 10pt chip labels */
+
+  /* ── Typography weights ───────────────────────────────────────── */
+  --aurora-weight-display:  200;
+  --aurora-weight-hero:     300;
+  --aurora-weight-title:    400;
+  --aurora-weight-body:     400;
+  --aurora-weight-emphasis: 500;
+  --aurora-weight-strong:   600;
+
+  /* ── Typography tracking (HIG critique: no uppercase; weight + */
+  /*    tracking carries eyebrow rhythm in Hebrew + Latin) ──────── */
+  --aurora-tracking-display: -0.03em;
+  --aurora-tracking-hero:    -0.025em;
+  --aurora-tracking-title-l: -0.015em;
+  --aurora-tracking-title-m: -0.01em;
+  --aurora-tracking-body:    -0.005em;
+  --aurora-tracking-default: -0.0025em;
+  --aurora-tracking-eyebrow: 0.14em;
+  --aurora-tracking-micro:   0.20em;
+
+  /* ── Typography line-heights (HIG critique: Heebo tighter) ────── */
+  --aurora-leading-display: 1.0;
+  --aurora-leading-hero:    1.05;
+  --aurora-leading-title:   1.15;
+  --aurora-leading-body:    1.4;     /* was 1.5; Heebo descenders minimal */
+  --aurora-leading-caption: 1.4;
+  --aurora-leading-eyebrow: 1.0;
+
+  /* ── Spacing scale (8pt base + 7-5 for inter-section gaps) ───── */
+  --aurora-space-0:   0;
+  --aurora-space-1:   0.25rem;   /* 4pt */
+  --aurora-space-2:   0.5rem;    /* 8pt */
+  --aurora-space-3:   0.75rem;   /* 12pt */
+  --aurora-space-4:   1rem;      /* 16pt */
+  --aurora-space-5:   1.25rem;   /* 20pt */
+  --aurora-space-6:   1.5rem;    /* 24pt */
+  --aurora-space-7:   2rem;      /* 32pt */
+  --aurora-space-7-5: 2.5rem;    /* 40pt — HIG critique fill */
+  --aurora-space-8:   3rem;      /* 48pt */
+  --aurora-space-9:   4rem;      /* 64pt */
+  --aurora-space-10:  6rem;      /* 96pt */
+
+  /* ── Layout ───────────────────────────────────────────────────── */
+  --aurora-gutter:        1.5rem;  /* 24pt screen gutter */
+  --aurora-content-max:   36rem;   /* 576px content column */
+  --aurora-safe-top:      env(safe-area-inset-top, 0px);
+  --aurora-safe-bottom:   env(safe-area-inset-bottom, 0px);
+  --aurora-top-bar-h:     3.5rem;  /* 56pt */
+  --aurora-bottom-nav-h:  5.25rem; /* 84pt incl. safe-area pad */
+  --aurora-tap-min:       2.75rem; /* 44pt minimum tap target */
+
+  /* ── Radius (semantic names per AURORA spec) ─────────────────── */
+  --aurora-radius-chip:        6px;
+  --aurora-radius-pill:        12px;
+  --aurora-radius-input:       16px;
+  --aurora-radius-bento:       20px;
+  --aurora-radius-hero-glass:  24px;
+  --aurora-radius-modal:       28px;
+  --aurora-radius-cinema:      32px;
+  --aurora-radius-art:         36px;
+  --aurora-radius-full:        9999px;
+
+  /* ── Motion · curves ──────────────────────────────────────────── */
+  --aurora-ease-out-soft:    cubic-bezier(0.32, 0.72, 0, 1);
+  --aurora-ease-out-default: cubic-bezier(0.22, 1, 0.36, 1);
+  --aurora-ease-in-out:      cubic-bezier(0.45, 0, 0.55, 1);
+  --aurora-ease-linear:      linear;
+
+  /* ── Motion · springs (config exposed as paired tokens; React */
+  /*    consumers compose via Framer Motion's spring helper) ────── */
+  --aurora-spring-gentle-stiffness: 380;
+  --aurora-spring-gentle-damping:   38;
+  --aurora-spring-snap-stiffness:   520;
+  --aurora-spring-snap-damping:     30;
+
+  /* ── Motion · durations ───────────────────────────────────────── */
+  --aurora-dur-instant: 80ms;     /* color tone shift */
+  --aurora-dur-quick:   160ms;    /* chip flip, focus ring */
+  --aurora-dur-base:    240ms;    /* standard transition */
+  --aurora-dur-luxe:    400ms;    /* hero recalc odometer */
+  --aurora-dur-cinema:  600ms;    /* cinema bg morph */
+  --aurora-dur-ambient: 6000ms;   /* pulse caret breath */
+  --aurora-dur-aurora:  18000ms;  /* aurora blob drift */
 }
 
 .dark {
@@ -259,6 +366,102 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* ═══════════════════════════════════════════════════════════════
+     Phase 430 — AURORA v1 · DARK theme palette.
+     Shared (typography / space / radius / motion) live on :root.
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Brand ────────────────────────────────────────────────────── */
+  --aurora-brand-charcoal:  #0A0A0F;
+  --aurora-brand-cream:     #F6F2EA;
+  --aurora-brand-aurora-1:  #7B5FFF;  /* violet */
+  --aurora-brand-aurora-2:  #00E5FF;  /* cyan */
+  --aurora-brand-aurora-3:  #FF6BCB;  /* magenta */
+  --aurora-brand-gold:      #D4AF37;
+
+  /* ── Semantic state (color = meaning) ─────────────────────────── */
+  --aurora-state-safe:        #34D399;
+  --aurora-state-safe-deep:   #10B981;
+  --aurora-state-watch:       #FACC15;
+  --aurora-state-watch-deep:  #EAB308;
+  --aurora-state-danger:      #F87171;
+  --aurora-state-danger-deep: #EF4444;
+  --aurora-state-info:        #7BA9FF;
+  --aurora-state-info-deep:   #3B82F6;
+  --aurora-state-insight:     #D4AF37;
+
+  /* ── Ink ladder (HIG critique: 4-tier; never below 0.40 for text) */
+  --aurora-ink-1: rgba(255, 255, 255, 0.92);  /* hero numbers */
+  --aurora-ink-2: rgba(255, 255, 255, 0.72);  /* body, ledger amounts */
+  --aurora-ink-3: rgba(255, 255, 255, 0.56);  /* subtitles, dates */
+  --aurora-ink-4: rgba(255, 255, 255, 0.40);  /* eyebrows (decorative) */
+  --aurora-ink-disabled: rgba(255, 255, 255, 0.24);
+
+  /* ── Row directional colors (HIG critique #7) ────────────────── */
+  --aurora-row-out:     var(--aurora-ink-1);
+  --aurora-row-in:      var(--aurora-state-safe);
+  --aurora-row-pending: var(--aurora-ink-3);
+
+  /* ── Glass surfaces (recipe: bg + blur + 1px border + shadow) ── */
+  --aurora-glass-base:         rgba(20, 20, 28, 0.50);
+  --aurora-glass-elev-1:       rgba(26, 26, 36, 0.62);
+  --aurora-glass-elev-2:       rgba(34, 34, 46, 0.72);
+  --aurora-glass-border:       rgba(255, 255, 255, 0.10);
+  --aurora-glass-stroke-inset: rgba(255, 255, 255, 0.06);
+  --aurora-blur-soft:          blur(24px) saturate(160%);
+  --aurora-blur-deep:          blur(48px) saturate(180%);
+
+  /* ── Lane colors (drawer interiors / ledger only) ─────────────── */
+  --aurora-lane-bank:   #34D399;
+  --aurora-lane-loan:   #A78BFA;
+  --aurora-lane-card:   #75F5FF;
+  --aurora-lane-income: #FACC15;
+  --aurora-lane-cash:   #F6BD60;
+
+  /* ── Aurora canvas blobs + scrim ──────────────────────────────── */
+  --aurora-blob-1: rgba(123,  95, 255, 0.20);  /* violet */
+  --aurora-blob-2: rgba(  0, 229, 255, 0.14);  /* cyan */
+  --aurora-blob-3: rgba(255, 107, 203, 0.08);  /* magenta */
+  --aurora-scrim:  linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 60%);
+
+  /* ── Hairlines ────────────────────────────────────────────────── */
+  --aurora-hairline-faint:      rgba(255, 255, 255, 0.06);
+  --aurora-hairline-soft:       rgba(255, 255, 255, 0.08);
+  --aurora-hairline-quiet:      rgba(255, 255, 255, 0.12);
+  --aurora-hairline-functional: rgba(255, 255, 255, 0.40);
+
+  /* ── Shadows (rest, lift, press, cinema, edge-danger) ──────── */
+  --aurora-shadow-rest:
+    0 1px 0 var(--aurora-glass-stroke-inset) inset,
+    0 8px 24px -4px rgba(0, 0, 0, 0.45);
+  --aurora-shadow-lift:
+    0 2px 0 var(--aurora-glass-stroke-inset) inset,
+    0 16px 40px -8px rgba(0, 0, 0, 0.55);
+  --aurora-shadow-press:
+    0 0 0 var(--aurora-glass-stroke-inset) inset,
+    0 4px 12px -4px rgba(0, 0, 0, 0.40);
+  --aurora-shadow-cinema:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 24px 64px -12px rgba(123,  95, 255, 0.32),
+    0 32px 96px -24px rgba(  0, 229, 255, 0.28);
+  --aurora-shadow-edge-danger:
+    0 0 0 1px var(--aurora-state-danger) inset,
+    0 16px 40px -8px rgba(248, 113, 113, 0.32);
+  --aurora-shadow-cinema-scrim:
+    inset 0 0 0 1px var(--aurora-glass-stroke-inset);
+
+  /* ── Cinema text safety overlay (HIG critique #3) ─────────────── */
+  --aurora-cinema-text-scrim:
+    linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 60%);
+
+  /* ── Focus ring (2pt charcoal halo + 2pt cyan) ────────────────── */
+  --aurora-focus-ring:
+    0 0 0 2px var(--aurora-brand-charcoal),
+    0 0 0 4px var(--aurora-brand-aurora-2);
+
+  /* ── Whisper inner glow (HIG critique #6) ─────────────────────── */
+  --aurora-whisper-glow: inset 0 0 24px rgba(212, 175, 55, 0.10);
 }
 
 /* Phase 334 — Day Mode.
@@ -296,6 +499,98 @@
   --glass-border: rgba(15, 17, 25, 0.08);
   --glass-shadow-inset: rgba(255, 255, 255, 0.6);
   --glass-shadow-drop: rgba(15, 17, 25, 0.10);
+
+  /* ═══════════════════════════════════════════════════════════════
+     Phase 430 — AURORA v1 · LIGHT theme palette.
+     Cream canvas, deeper-saturation state colors for AA contrast,
+     softer aurora blobs.
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Brand (charcoal stays as focus halo color) ─────────────── */
+  --aurora-brand-charcoal:  #0A0A0F;
+  --aurora-brand-cream:     #F6F2EA;
+  --aurora-brand-aurora-1:  #7B5FFF;
+  --aurora-brand-aurora-2:  #00E5FF;
+  --aurora-brand-aurora-3:  #FF6BCB;
+  --aurora-brand-gold:      #B8860B;
+
+  /* ── Semantic state (deeper saturation; ≥4.5:1 vs cream) ──── */
+  --aurora-state-safe:        #0E9F6E;
+  --aurora-state-safe-deep:   #047857;
+  --aurora-state-watch:       #B7791F;
+  --aurora-state-watch-deep:  #92400E;
+  --aurora-state-danger:      #C8341C;
+  --aurora-state-danger-deep: #991B1B;
+  --aurora-state-info:        #1E5BB0;
+  --aurora-state-info-deep:   #1E40AF;
+  --aurora-state-insight:     #8B6F1F;
+
+  /* ── Ink ladder (inverted: dark ink on cream) ───────────────── */
+  --aurora-ink-1: rgba(10, 10, 15, 0.92);
+  --aurora-ink-2: rgba(10, 10, 15, 0.72);
+  --aurora-ink-3: rgba(10, 10, 15, 0.56);
+  --aurora-ink-4: rgba(10, 10, 15, 0.40);
+  --aurora-ink-disabled: rgba(10, 10, 15, 0.24);
+
+  --aurora-row-out:     var(--aurora-ink-1);
+  --aurora-row-in:      var(--aurora-state-safe);
+  --aurora-row-pending: var(--aurora-ink-3);
+
+  /* ── Glass surfaces (white on cream) ──────────────────────── */
+  --aurora-glass-base:         rgba(255, 255, 255, 0.62);
+  --aurora-glass-elev-1:       rgba(255, 255, 255, 0.74);
+  --aurora-glass-elev-2:       rgba(255, 255, 255, 0.86);
+  --aurora-glass-border:       rgba(15, 15, 30, 0.06);
+  --aurora-glass-stroke-inset: rgba(255, 255, 255, 0.85);
+  --aurora-blur-soft:          blur(24px) saturate(160%);
+  --aurora-blur-deep:          blur(48px) saturate(180%);
+
+  /* ── Lanes (deeper for contrast on cream) ─────────────────── */
+  --aurora-lane-bank:   #0E9F6E;
+  --aurora-lane-loan:   #7A5BE0;
+  --aurora-lane-card:   #2563EB;
+  --aurora-lane-income: #B7791F;
+  --aurora-lane-cash:   #92400E;
+
+  /* ── Aurora canvas blobs (softer in light) ─────────────────── */
+  --aurora-blob-1: rgba(123,  95, 255, 0.10);
+  --aurora-blob-2: rgba(  0, 229, 255, 0.08);
+  --aurora-blob-3: rgba(255, 107, 203, 0.04);
+  --aurora-scrim:  linear-gradient(180deg, rgba(15,15,30,0.15) 0%, transparent 60%);
+
+  /* ── Hairlines (dark on cream) ────────────────────────────── */
+  --aurora-hairline-faint:      rgba(15, 15, 30, 0.04);
+  --aurora-hairline-soft:       rgba(15, 15, 30, 0.06);
+  --aurora-hairline-quiet:      rgba(15, 15, 30, 0.10);
+  --aurora-hairline-functional: rgba(15, 15, 30, 0.40);
+
+  /* ── Shadows (charcoal-toned for cream backdrop) ──────────── */
+  --aurora-shadow-rest:
+    0 1px 0 var(--aurora-glass-stroke-inset) inset,
+    0 8px 24px -4px rgba(15, 15, 30, 0.10);
+  --aurora-shadow-lift:
+    0 2px 0 var(--aurora-glass-stroke-inset) inset,
+    0 16px 40px -8px rgba(15, 15, 30, 0.15);
+  --aurora-shadow-press:
+    0 0 0 var(--aurora-glass-stroke-inset) inset,
+    0 4px 12px -4px rgba(15, 15, 30, 0.08);
+  --aurora-shadow-cinema:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 24px 64px -12px rgba(123,  95, 255, 0.16),
+    0 32px 96px -24px rgba(  0, 229, 255, 0.12);
+  --aurora-shadow-edge-danger:
+    0 0 0 1px var(--aurora-state-danger) inset,
+    0 16px 40px -8px rgba(200,  52,  28, 0.20);
+
+  --aurora-cinema-text-scrim:
+    linear-gradient(180deg, rgba(15,15,30,0.15) 0%, transparent 60%);
+
+  /* ── Focus ring (2pt cream halo + 2pt info-blue) ──────────── */
+  --aurora-focus-ring:
+    0 0 0 2px var(--aurora-brand-cream),
+    0 0 0 4px var(--aurora-state-info);
+
+  --aurora-whisper-glow: inset 0 0 24px rgba(184, 134, 11, 0.10);
 }
 
 @layer base {
@@ -745,4 +1040,26 @@ main[data-danger="true"] [data-tone="accent"] {
 }
 .home-tappable:hover .home-row-inner {
   opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 430 — AURORA v1 · prefers-reduced-motion overrides.
+
+   When the user opts out of motion in OS settings, every
+   duration token collapses to ≤120ms opacity timing. The
+   spring stiffness/damping pairs are left untouched (consumers
+   that respect reduced-motion should bypass spring rendering
+   in JS); this block guarantees CSS-only animations are quiet.
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --aurora-dur-instant: 0ms;
+    --aurora-dur-quick:   60ms;
+    --aurora-dur-base:    80ms;
+    --aurora-dur-luxe:    120ms;
+    --aurora-dur-cinema:  0ms;
+    --aurora-dur-ambient: 0ms;
+    --aurora-dur-aurora:  0ms;
+  }
 }
