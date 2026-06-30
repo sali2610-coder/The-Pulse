@@ -16,9 +16,9 @@ import {
   type BottomNavTab,
   type TabKey,
 } from "@/components/aurora/aurora-bottom-nav";
-import { ComingSoonScreen } from "@/components/aurora/aurora-coming-soon";
 import { AuroraHome } from "@/components/aurora/aurora-home";
 import { Screen } from "@/components/aurora/aurora-screen";
+import { AuroraSettings } from "@/components/aurora/aurora-settings";
 import { AuroraShell } from "@/components/aurora/aurora-shell";
 import { AuroraTimeline } from "@/components/aurora/aurora-timeline";
 import { TopBar } from "@/components/aurora/aurora-top-bar";
@@ -73,18 +73,7 @@ export function AuroraAppShell({
         {tab === "home" ? <AuroraHome /> : null}
         {tab === "activity" ? <AuroraActivity /> : null}
         {tab === "timeline" ? <AuroraTimeline /> : null}
-        {tab === "settings" ? (
-          <ComingSoonScreen
-            eyebrow="הגדרות · בפיתוח"
-            title="הגדרות חשבון"
-            body="חשבונות, הלוואות, הכנסות חוזרות, התראות והגדרות תצוגה יחיו פה. הליבה כבר חיה — כל החיבורים זמינים דרך מסך ההגדרות הקלאסי."
-            items={[
-              { key: "anchors", label: "חשבונות וכרטיסים", hint: "ניהול עוגנים ויתרות חיות" },
-              { key: "loans", label: "הלוואות והכנסות חוזרות", hint: "בסיס לחיזוי סוף החודש" },
-              { key: "budget", label: "תקציב חודשי", hint: "יעד לסרגל הבקרה" },
-            ]}
-          />
-        ) : null}
+        {tab === "settings" ? <AuroraSettings /> : null}
       </Screen>
 
       <AuroraAddFlow open={addOpen} onOpenChange={setAddOpen} />
