@@ -1632,3 +1632,89 @@ main[data-danger="true"] [data-tone="accent"] {
   outline: none;
   box-shadow: var(--aurora-focus-ring);
 }
+
+/* ── Aurora Home composition CSS ──────────────────────────── */
+.aurora-card-button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  text-align: start;
+  border-radius: var(--aurora-radius-bento);
+  transition: transform var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-card-button:active {
+  transform: scale(0.985);
+}
+.aurora-card-button:focus-visible {
+  outline: none;
+  box-shadow: var(--aurora-focus-ring);
+}
+.aurora-card-button > * {
+  width: 100%;
+}
+
+/* Cinema hero card */
+.aurora-hero-card {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 1px solid var(--aurora-glass-border);
+  border-radius: var(--aurora-radius-cinema);
+  background:
+    radial-gradient(120% 80% at 88% -8%, rgba(123, 95, 255, 0.32) 0%, transparent 60%),
+    radial-gradient(110% 70% at 12% 112%, rgba(0, 229, 255, 0.24) 0%, transparent 60%),
+    linear-gradient(180deg, #14102A 0%, #0A0A0F 100%);
+  color: var(--aurora-ink-1);
+  text-align: start;
+  padding: 0;
+  cursor: pointer;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow: var(--aurora-shadow-cinema);
+  transition: transform var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-hero-card:active {
+  transform: scale(0.992);
+}
+.aurora-hero-card:focus-visible {
+  outline: none;
+  box-shadow: var(--aurora-focus-ring), var(--aurora-shadow-cinema);
+}
+.aurora-hero-scrim {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 50%;
+  background: var(--aurora-cinema-text-scrim);
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora-hero-content {
+  position: relative;
+  z-index: 1;
+  padding-inline: var(--aurora-space-6);
+  padding-block: var(--aurora-space-7);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Budget bar */
+.aurora-budget-bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--aurora-hairline-quiet);
+  overflow: hidden;
+}
+.aurora-budget-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  transition: width var(--aurora-dur-luxe) var(--aurora-ease-out-soft);
+}
