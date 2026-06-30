@@ -51,6 +51,7 @@ import {
 } from "@/components/aurora/aurora-charts";
 import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spend-card";
 import { AuroraCreditCenter } from "@/components/aurora/aurora-credit-center";
+import { AuroraLoansCenter } from "@/components/aurora/aurora-loans-center";
 import { PendingPulseCard } from "@/components/aurora/aurora-pending-center";
 import {
   CheckpointRingCard,
@@ -235,6 +236,14 @@ export function AuroraHome() {
           <BentoItem span={6}>
             <MountReveal index={4}>
               <AuroraCreditCenter data={recovery} />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={5}>
+              <AuroraLoansCenter />
             </MountReveal>
           </BentoItem>
         ) : null}

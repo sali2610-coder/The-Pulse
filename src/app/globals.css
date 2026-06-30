@@ -4544,3 +4544,264 @@ main[data-danger="true"] [data-tone="accent"] {
   font-variant-numeric: tabular-nums;
   font-weight: var(--aurora-weight-strong);
 }
+
+/* ── Aurora Loans Center — Phase 443 ────────────────────────── */
+
+.aurora-loans-sum {
+  font-size: var(--aurora-type-body);
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-loans-summary-grid {
+  margin-block-start: var(--aurora-space-4);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-loans-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-loans-summary-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-loans-summary-hint {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+}
+
+.aurora-loans-progress-row {
+  margin-block-start: var(--aurora-space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-3);
+}
+.aurora-loans-progress-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.aurora-loans-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    var(--aurora-brand-aurora-1),
+    var(--aurora-state-safe)
+  );
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.4);
+}
+.aurora-loans-progress-label {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+
+.aurora-loans-list {
+  list-style: none;
+  margin: 0;
+  margin-block-start: var(--aurora-space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+}
+.aurora-loan-li {
+  border-radius: var(--aurora-radius-bento);
+  overflow: hidden;
+}
+.aurora-loan-button {
+  appearance: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--aurora-space-3);
+  width: 100%;
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  border: 1px solid;
+  border-radius: var(--aurora-radius-bento);
+  background: var(--aurora-glass-elev-1);
+  color: var(--aurora-ink-1);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.aurora-loan-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.aurora-loan-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.aurora-loan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aurora-space-2);
+}
+.aurora-loan-title {
+  font-size: var(--aurora-type-body-l);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+}
+.aurora-loan-status {
+  display: inline-flex;
+  padding-inline: 8px;
+  padding-block: 2px;
+  border-radius: 9999px;
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  border: 1px solid;
+}
+.aurora-loan-headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+}
+.aurora-loan-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-loan-amount-hint {
+  font-size: var(--aurora-type-eyebrow);
+  color: var(--aurora-ink-3);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+
+.aurora-loan-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.aurora-loan-progress-bar {
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.aurora-loan-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+}
+.aurora-loan-progress-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-loan-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  background: var(--aurora-glass-elev-1);
+  border: 1px solid var(--aurora-hairline-quiet);
+  border-top: 0;
+  border-radius: 0 0 var(--aurora-radius-bento) var(--aurora-radius-bento);
+  overflow: hidden;
+}
+.aurora-loan-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+}
+.aurora-loan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-loan-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+  border: 1px solid;
+}
+.aurora-loan-cell-eyebrow {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-loan-cell-value {
+  font-size: var(--aurora-type-body-l);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-loan-cell-hint {
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-4);
+}
+
+.aurora-loans-upcoming {
+  margin-block-start: var(--aurora-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-loans-upcoming-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aurora-loans-upcoming-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--aurora-space-3);
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-2);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-loans-upcoming-date {
+  font-size: var(--aurora-type-eyebrow);
+  color: var(--aurora-ink-3);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+.aurora-loans-upcoming-label {
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-emphasis);
+}
+.aurora-loans-upcoming-amount {
+  color: var(--aurora-ink-1);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+}
