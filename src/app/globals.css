@@ -1063,3 +1063,266 @@ main[data-danger="true"] [data-tone="accent"] {
     --aurora-dur-aurora:  0ms;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 430 — AURORA v1 · Layout Shell CSS
+   ───────────────────────────────────────────────────────────────
+   AuroraShell · AuroraCanvas · Screen · TopBar · BottomNav.
+   All classes are namespaced .aurora-* so they never collide
+   with Phase 429 .home-* or shadcn .* classes. Token-only —
+   zero hex literals in this block.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Shell base ──────────────────────────────────────────────── */
+.aurora-shell {
+  background: var(--aurora-brand-charcoal);
+  color: var(--aurora-ink-1);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+.light .aurora-shell {
+  background: var(--aurora-brand-cream);
+}
+
+/* ── Canvas (Aurora field) ───────────────────────────────────── */
+.aurora-canvas {
+  contain: strict;
+}
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  will-change: transform, opacity;
+  animation: aurora-drift var(--aurora-dur-aurora) linear infinite;
+}
+.aurora-blob-1 {
+  inset-block-start: -12vh;
+  inset-inline-end: -10vw;
+  width: 56vw;
+  height: 56vw;
+  background: var(--aurora-blob-1);
+  animation-delay: 0s;
+}
+.aurora-blob-2 {
+  inset-block-start: 12vh;
+  inset-inline-start: -8vw;
+  width: 64vw;
+  height: 64vw;
+  background: var(--aurora-blob-2);
+  animation-delay: -6s;
+}
+.aurora-blob-3 {
+  inset-block-end: -10vh;
+  inset-inline-start: 24vw;
+  width: 48vw;
+  height: 48vw;
+  background: var(--aurora-blob-3);
+  animation-delay: -12s;
+}
+.aurora-scrim-top {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 32vh;
+  background: var(--aurora-cinema-text-scrim);
+  pointer-events: none;
+}
+@keyframes aurora-drift {
+  0%   { transform: translate3d(  0,   0, 0) scale(1);    }
+  33%  { transform: translate3d( 6vw,  4vh, 0) scale(1.05); }
+  66%  { transform: translate3d(-4vw,  8vh, 0) scale(0.97); }
+  100% { transform: translate3d(  0,   0, 0) scale(1);    }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob { animation: none; }
+}
+
+/* ── Screen wrapper ──────────────────────────────────────────── */
+.aurora-screen-main {
+  /* Scrolling lives on <main>. The sticky top bar + fixed bottom
+     nav float above it via their own z-index. */
+  isolation: isolate;
+}
+.aurora-screen-content {
+  /* Centered column; never wider than --aurora-content-max. */
+  max-width: var(--aurora-content-max);
+  padding-inline: var(--aurora-gutter);
+}
+.aurora-screen-sentinel {
+  height: 1px;
+  width: 100%;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────── */
+.aurora-top-bar {
+  background: transparent;
+  transition:
+    background-color var(--aurora-dur-base) var(--aurora-ease-out-soft),
+    border-color var(--aurora-dur-base) var(--aurora-ease-out-soft),
+    box-shadow var(--aurora-dur-base) var(--aurora-ease-out-soft),
+    backdrop-filter var(--aurora-dur-base) var(--aurora-ease-out-soft);
+  border-block-end: 1px solid transparent;
+}
+.aurora-top-bar[data-aurora-revealed="true"] {
+  background: var(--aurora-glass-elev-1);
+  backdrop-filter: var(--aurora-blur-soft);
+  -webkit-backdrop-filter: var(--aurora-blur-soft);
+  border-block-end-color: var(--aurora-hairline-soft);
+}
+.aurora-top-bar-inner {
+  height: var(--aurora-top-bar-h);
+  max-width: var(--aurora-content-max);
+  padding-inline: var(--aurora-gutter);
+  gap: var(--aurora-space-3);
+}
+.aurora-top-bar-leading,
+.aurora-top-bar-trailing {
+  min-width: var(--aurora-tap-min);
+  flex: 0 0 auto;
+}
+.aurora-top-bar-trailing {
+  gap: var(--aurora-space-2);
+}
+.aurora-top-bar-title {
+  font-size: var(--aurora-type-body-l);
+  font-weight: var(--aurora-weight-emphasis);
+  color: var(--aurora-ink-1);
+  letter-spacing: var(--aurora-tracking-title-m);
+  line-height: var(--aurora-leading-title);
+}
+
+/* ── Icon button (used in top bar + nav) ─────────────────────── */
+.aurora-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--aurora-tap-min);
+  height: var(--aurora-tap-min);
+  border: 0;
+  background: transparent;
+  color: var(--aurora-ink-2);
+  border-radius: var(--aurora-radius-full);
+  cursor: pointer;
+  transition: color var(--aurora-dur-quick) var(--aurora-ease-out-soft),
+    background-color var(--aurora-dur-quick) var(--aurora-ease-out-soft),
+    transform var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-icon-button:hover {
+  color: var(--aurora-ink-1);
+  background: var(--aurora-glass-base);
+}
+.aurora-icon-button:active {
+  transform: scale(0.97);
+}
+.aurora-icon-button:focus-visible {
+  outline: none;
+  box-shadow: var(--aurora-focus-ring);
+}
+
+/* ── Bottom nav ──────────────────────────────────────────────── */
+.aurora-bottom-nav {
+  background: var(--aurora-glass-elev-2);
+  backdrop-filter: var(--aurora-blur-deep);
+  -webkit-backdrop-filter: var(--aurora-blur-deep);
+  border-block-start: 1px solid var(--aurora-hairline-soft);
+}
+.aurora-bottom-nav-inner {
+  max-width: var(--aurora-content-max);
+  padding-inline: var(--aurora-space-2);
+  padding-block: var(--aurora-space-2);
+  height: var(--aurora-bottom-nav-h);
+}
+.aurora-bottom-nav-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  align-items: stretch;
+}
+.aurora-bottom-nav-grid > li {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+.aurora-bottom-nav-cutout {
+  /* Empty cell — Add button floats here. */
+  pointer-events: none;
+}
+.aurora-bottom-nav-add-slot {
+  /* Sits above the bar, aligned with the cutout column. */
+}
+.aurora-bottom-nav-add-pill {
+  /* Caller supplies the actual button — slot just centers it. */
+}
+
+/* ── Nav cell (tab) ──────────────────────────────────────────── */
+.aurora-nav-cell {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--aurora-space-1);
+  padding: var(--aurora-space-1) var(--aurora-space-2);
+  min-height: var(--aurora-tap-min);
+  width: 100%;
+  border-radius: var(--aurora-radius-input);
+  color: var(--aurora-ink-3);
+  transition:
+    color var(--aurora-dur-quick) var(--aurora-ease-out-soft),
+    transform var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-nav-cell:hover {
+  color: var(--aurora-ink-2);
+}
+.aurora-nav-cell:active {
+  transform: scale(0.96);
+}
+.aurora-nav-cell:focus-visible {
+  outline: none;
+  box-shadow: var(--aurora-focus-ring);
+}
+.aurora-nav-cell[data-aurora-active="true"] {
+  color: var(--aurora-ink-1);
+}
+.aurora-nav-cell-icon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+}
+.aurora-nav-cell-label {
+  font-size: var(--aurora-type-eyebrow);
+  font-weight: var(--aurora-weight-emphasis);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  line-height: var(--aurora-leading-eyebrow);
+  white-space: nowrap;
+}
+
+/* ── Active ring under the active tab (HIG critique #15) ───── */
+.aurora-nav-cell[data-aurora-active="true"] .aurora-nav-cell-icon::after {
+  content: "";
+  position: absolute;
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  margin-block-start: 8px;
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      var(--aurora-brand-aurora-2) 0%,
+      transparent 70%
+    );
+  opacity: 0.42;
+  pointer-events: none;
+  filter: blur(2px);
+}
+.aurora-nav-cell-icon {
+  position: relative;
+}
