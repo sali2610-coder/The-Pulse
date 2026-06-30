@@ -50,6 +50,7 @@ import {
   MonthProgressBar,
 } from "@/components/aurora/aurora-charts";
 import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spend-card";
+import { PendingPulseCard } from "@/components/aurora/aurora-pending-center";
 import {
   CardsByMonthCard,
   CheckpointRingCard,
@@ -189,6 +190,10 @@ export function AuroraHome() {
   return (
     <div className="aurora-home-stack">
       <h1 className="sr-only">מסך הבית של Pulse</h1>
+
+      <MountReveal index={0}>
+        <PendingPulseCard />
+      </MountReveal>
 
       <MountReveal index={0}>
         <SignatureHero

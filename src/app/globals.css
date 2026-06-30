@@ -3896,3 +3896,192 @@ main[data-danger="true"] [data-tone="accent"] {
   grid-template-columns: repeat(3, 1fr);
   gap: var(--aurora-space-2);
 }
+
+/* ── Aurora Pending Center — Phase 440 ───────────────────────── */
+
+.aurora-pending-cta {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.aurora-pending-cta:focus-visible { outline: none; }
+.aurora-pending-cta-body {
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-3);
+}
+.aurora-pending-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.5);
+  animation: aurora-pending-pulse 2s ease-in-out infinite;
+}
+@keyframes aurora-pending-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-pending-dot { animation: none; }
+}
+.aurora-pending-cta-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: start;
+}
+.aurora-pending-cta-title {
+  font-size: var(--aurora-type-body-l);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-pending-cta-hint {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+}
+.aurora-pending-cta-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  color: var(--aurora-state-watch);
+  font-size: 20px;
+  font-weight: var(--aurora-weight-strong);
+}
+
+/* Sheet */
+.aurora-pending-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-4);
+}
+.aurora-pending-sheet-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aurora-pending-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-pending-row {
+  display: flex;
+  gap: var(--aurora-space-2);
+  align-items: stretch;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+  border: 1px solid var(--aurora-hairline-quiet);
+}
+.aurora-pending-row-body {
+  flex: 1;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-3);
+  background: transparent;
+  border: 0;
+  color: var(--aurora-ink-1);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  padding: 0;
+  min-width: 0;
+}
+.aurora-pending-row-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  flex: 0 0 auto;
+}
+.aurora-pending-row-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.aurora-pending-row-title {
+  font-size: var(--aurora-type-body);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aurora-pending-row-meta {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+}
+.aurora-pending-row-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+}
+
+.aurora-pending-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aurora-pending-action {
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  border: 1px solid;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: var(--aurora-weight-strong);
+  cursor: pointer;
+  transition: transform var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-pending-action:active { transform: scale(0.94); }
+.aurora-pending-action[data-aurora-variant="approve"] {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--aurora-state-safe);
+  border-color: rgba(52, 211, 153, 0.32);
+}
+.aurora-pending-action[data-aurora-variant="reject"] {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--aurora-state-danger);
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+/* Detail view */
+.aurora-pending-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-4);
+}
+.aurora-pending-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.aurora-pending-cat-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-pending-detail-actions {
+  display: flex;
+  gap: var(--aurora-space-3);
+}
