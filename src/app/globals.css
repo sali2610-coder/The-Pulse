@@ -391,6 +391,12 @@
   --aurora-state-info-deep:   #3B82F6;
   --aurora-state-insight:     #D4AF37;
 
+  /* ── Gold accent (CFO voice — concierge / whisper) ───────── */
+  --aurora-accent-gold:      #D4AF37;
+  --aurora-accent-gold-loud: rgba(212, 175, 55, 0.92);
+  --aurora-accent-gold-soft: rgba(212, 175, 55, 0.72);
+  --aurora-accent-gold-hair: rgba(212, 175, 55, 0.48);
+
   /* ── Ink ladder (HIG critique: 4-tier; never below 0.40 for text) */
   --aurora-ink-1: rgba(255, 255, 255, 0.92);  /* hero numbers */
   --aurora-ink-2: rgba(255, 255, 255, 0.72);  /* body, ledger amounts */
@@ -524,6 +530,12 @@
   --aurora-state-info:        #1E5BB0;
   --aurora-state-info-deep:   #1E40AF;
   --aurora-state-insight:     #8B6F1F;
+
+  /* ── Gold accent (CFO voice — deeper saturation for cream) ─ */
+  --aurora-accent-gold:      #8B6F1F;
+  --aurora-accent-gold-loud: rgba(139, 111, 31, 0.96);
+  --aurora-accent-gold-soft: rgba(139, 111, 31, 0.78);
+  --aurora-accent-gold-hair: rgba(139, 111, 31, 0.56);
 
   /* ── Ink ladder (inverted: dark ink on cream) ───────────────── */
   --aurora-ink-1: rgba(10, 10, 15, 0.92);
@@ -1325,4 +1337,298 @@ main[data-danger="true"] [data-tone="accent"] {
 }
 .aurora-nav-cell-icon {
   position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase 432 — AURORA v1 · Primitives CSS
+   ───────────────────────────────────────────────────────────────
+   Eyebrow · GlassCard · BentoGrid · DigitOdometer v2 · LedgerRow
+   · BreathingCaret · ConciergeSentence · WhisperCard.
+   Tokens only — zero hex literals. RTL handled via the document
+   dir; numeric containers opt into dir="ltr" locally.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Eyebrow (11pt tracked, ink-4 decorative) ───────────────── */
+.aurora-eyebrow {
+  display: inline-block;
+  font-size: var(--aurora-type-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  line-height: var(--aurora-leading-eyebrow);
+  color: var(--aurora-ink-4);
+}
+
+/* ── GlassCard ──────────────────────────────────────────────── */
+.aurora-glass-card {
+  position: relative;
+  display: block;
+  border: 1px solid var(--aurora-glass-border);
+  backdrop-filter: var(--aurora-blur-soft);
+  -webkit-backdrop-filter: var(--aurora-blur-soft);
+  box-shadow: var(--aurora-shadow-rest);
+  isolation: isolate;
+  transition:
+    box-shadow var(--aurora-dur-base) var(--aurora-ease-out-soft),
+    transform var(--aurora-dur-base) var(--aurora-ease-out-soft);
+}
+.aurora-glass-base   { background: var(--aurora-glass-base);   }
+.aurora-glass-elev-1 { background: var(--aurora-glass-elev-1); }
+.aurora-glass-elev-2 {
+  background: var(--aurora-glass-elev-2);
+  backdrop-filter: var(--aurora-blur-deep);
+  -webkit-backdrop-filter: var(--aurora-blur-deep);
+}
+.aurora-glass-radius-bento  { border-radius: var(--aurora-radius-bento);       }
+.aurora-glass-radius-hero   { border-radius: var(--aurora-radius-hero-glass);  }
+.aurora-glass-radius-modal  { border-radius: var(--aurora-radius-modal);       }
+.aurora-glass-radius-cinema { border-radius: var(--aurora-radius-cinema);      }
+.aurora-glass-radius-full   { border-radius: var(--aurora-radius-full);        }
+.aurora-glass-pad-compact      { padding: var(--aurora-space-3);    }
+.aurora-glass-pad-comfortable  { padding: var(--aurora-space-5);    }
+.aurora-glass-pad-spacious     { padding: var(--aurora-space-6);    }
+.aurora-glass-tone-danger {
+  box-shadow: var(--aurora-shadow-edge-danger);
+  border-color: var(--aurora-state-danger);
+}
+
+/* ── BentoGrid ─────────────────────────────────────────────── */
+.aurora-bento {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+}
+.aurora-bento-gap-tight       { gap: var(--aurora-space-2); }
+.aurora-bento-gap-comfortable { gap: var(--aurora-space-4); }
+.aurora-bento-gap-spacious    { gap: var(--aurora-space-5); }
+.aurora-bento-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── DigitOdometer v2 ──────────────────────────────────────── */
+.aurora-odo {
+  position: relative;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* Reserve baseline + width via the hidden mirror. */
+  line-height: inherit;
+}
+.aurora-odo-mirror {
+  display: inline-block;
+  visibility: hidden;
+  pointer-events: none;
+}
+.aurora-odo-layer {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* ── BreathingCaret (CSS-only sine breath) ─────────────────── */
+@keyframes aurora-caret-breath {
+  0%   { opacity: 0.32; transform: scaleX(0.96); }
+  50%  { opacity: 0.88; transform: scaleX(1);    }
+  100% { opacity: 0.32; transform: scaleX(0.96); }
+}
+.aurora-breath-caret {
+  display: block;
+  height: 2px;
+  margin-inline: auto;
+  margin-block-start: var(--aurora-space-1);
+  background: var(--aurora-brand-aurora-2);
+  border-radius: 9999px;
+  transform-origin: center;
+  box-shadow: 0 0 16px var(--aurora-glass-stroke-inset);
+  animation: aurora-caret-breath var(--aurora-dur-ambient) ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-breath-caret {
+    animation: none;
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+}
+
+/* ── LedgerRow ─────────────────────────────────────────────── */
+.aurora-ledger-row {
+  display: block;
+  width: 100%;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+.aurora-ledger-row-tappable {
+  cursor: pointer;
+  border-radius: var(--aurora-radius-pill);
+  transition: background-color var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-ledger-row-tappable:hover {
+  background: var(--aurora-hairline-faint);
+}
+.aurora-ledger-row-tappable:focus-visible {
+  outline: none;
+  box-shadow: var(--aurora-focus-ring);
+}
+.aurora-ledger-row-inner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--aurora-space-3);
+  min-height: var(--aurora-tap-min);
+  padding-block: var(--aurora-space-2);
+  padding-inline: var(--aurora-space-2);
+}
+.aurora-ledger-row-leading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+  min-width: 0;
+}
+.aurora-ledger-row-accent {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+}
+.aurora-ledger-row-label {
+  color: var(--aurora-ink-2);
+  font-size: var(--aurora-type-body);
+  letter-spacing: var(--aurora-tracking-body);
+  line-height: var(--aurora-leading-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aurora-ledger-row-meta {
+  color: var(--aurora-ink-3);
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  line-height: var(--aurora-leading-eyebrow);
+  font-weight: var(--aurora-weight-emphasis);
+  margin-inline-start: var(--aurora-space-2);
+  white-space: nowrap;
+}
+.aurora-ledger-row-amount {
+  font-size: var(--aurora-type-amount);
+  font-weight: var(--aurora-weight-hero);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--aurora-tracking-body);
+  white-space: nowrap;
+}
+.aurora-ledger-row-amount[data-aurora-direction="out"]     { color: var(--aurora-row-out); }
+.aurora-ledger-row-amount[data-aurora-direction="in"]      { color: var(--aurora-row-in); }
+.aurora-ledger-row-amount[data-aurora-direction="pending"] { color: var(--aurora-row-pending); }
+
+.aurora-lane-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+}
+
+/* ── ConciergeSentence ─────────────────────────────────────── */
+.aurora-concierge-sentence {
+  font-style: italic;
+  font-size: var(--aurora-type-body-l);
+  line-height: var(--aurora-leading-body);
+  letter-spacing: 0.005em;
+  max-width: 38ch;
+  margin: 0;
+}
+.aurora-concierge-loud { color: var(--aurora-accent-gold-loud); }
+.aurora-concierge-soft { color: var(--aurora-accent-gold-soft); }
+
+/* ── WhisperCard ───────────────────────────────────────────── */
+.aurora-whisper-card {
+  position: relative;
+  display: block;
+  border-radius: var(--aurora-radius-bento);
+  border: 1px solid var(--aurora-glass-border);
+  background: var(--aurora-glass-elev-1);
+  backdrop-filter: var(--aurora-blur-soft);
+  -webkit-backdrop-filter: var(--aurora-blur-soft);
+  box-shadow: var(--aurora-shadow-rest), var(--aurora-whisper-glow);
+  padding-inline: var(--aurora-space-5);
+  padding-block: calc(var(--aurora-space-5) + 0.125rem);
+  overflow: hidden;
+}
+.aurora-whisper-edge {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: var(--aurora-accent-gold);
+}
+.aurora-whisper-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+  margin-inline-start: var(--aurora-space-2);
+}
+.aurora-whisper-actions {
+  display: flex;
+  gap: var(--aurora-space-2);
+}
+
+/* ── Preview-only utility classes (typography ramps) ───────── */
+.aurora-title-l {
+  font-size: var(--aurora-type-title-l);
+  font-weight: var(--aurora-weight-title);
+  letter-spacing: var(--aurora-tracking-title-l);
+  line-height: var(--aurora-leading-title);
+  color: var(--aurora-ink-1);
+}
+.aurora-title-m {
+  font-size: var(--aurora-type-title-m);
+  font-weight: var(--aurora-weight-title);
+  letter-spacing: var(--aurora-tracking-title-m);
+  line-height: var(--aurora-leading-title);
+  color: var(--aurora-ink-1);
+}
+.aurora-body {
+  font-size: var(--aurora-type-body);
+  letter-spacing: var(--aurora-tracking-default);
+  line-height: var(--aurora-leading-body);
+}
+.aurora-body-l {
+  font-size: var(--aurora-type-body-l);
+  letter-spacing: var(--aurora-tracking-body);
+  line-height: var(--aurora-leading-body);
+}
+.aurora-ink-2 { color: var(--aurora-ink-2); }
+.aurora-ink-3 { color: var(--aurora-ink-3); }
+
+/* Ghost button — used in WhisperCard actions + general secondary
+   actions. Standard 44pt tap, no chrome at rest, hairline reveal
+   on hover/focus (HIG critique: no border on closed surfaces). */
+.aurora-ghost-button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  min-height: var(--aurora-tap-min);
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-2);
+  color: var(--aurora-ink-2);
+  font-size: var(--aurora-type-body);
+  font-weight: var(--aurora-weight-emphasis);
+  border-radius: var(--aurora-radius-full);
+  transition: color var(--aurora-dur-quick) var(--aurora-ease-out-soft),
+    background-color var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-ghost-button:hover,
+.aurora-ghost-button:focus-visible {
+  color: var(--aurora-ink-1);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-ghost-button:focus-visible {
+  outline: none;
+  box-shadow: var(--aurora-focus-ring);
 }
