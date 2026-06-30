@@ -13,6 +13,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { toast } from "sonner";
 
 import { Eyebrow } from "@/components/aurora/aurora-eyebrow";
 import { GlassCard } from "@/components/aurora/aurora-glass-card";
@@ -21,7 +22,9 @@ import {
   LedgerRow,
 } from "@/components/aurora/aurora-ledger-row";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { getCategory } from "@/lib/categories";
+import { CATEGORIES, getCategory, type CategoryId } from "@/lib/categories";
+import { useFinanceStore } from "@/lib/store";
+import type { ExpenseEntry } from "@/types/finance";
 
 import {
   applyFilter,
@@ -74,9 +77,55 @@ function categoryLabel(catId: string): string {
 
 export function AuroraActivity() {
   const data = useAuroraActivity();
+  const updateExpense = useFinanceStore((s) => s.updateExpense);
+  const deleteExpense = useFinanceStore((s) => s.deleteExpense);
+  const restoreExpense = useFinanceStore((s) => s.restoreExpense);
+  const entries = useFinanceStore((s) => s.entries);
   const [filter, setFilter] = useState<AuroraActivityFilter>("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AuroraActivityItem | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const closeDetail = () => {
+    setSelected(null);
+    setPickerOpen(false);
+  };
+
+  const handleChangeCategory = (id: CategoryId) => {
+    if (!selected?.entryId || selected.source === "demo") {
+      toast.error("הקטגוריה ניתנת לשינוי רק בעסקאות אמיתיות.");
+      setPickerOpen(false);
+      return;
+    }
+    const updated = updateExpense(selected.entryId, { category: id });
+    if (!updated) {
+      toast.error("לא הצלחנו לעדכן את הקטגוריה.");
+      return;
+    }
+    setSelected({ ...selected, category: id });
+    setPickerOpen(false);
+    toast.success(`הקטגוריה עודכנה ל-${getCategory(id).label}`);
+  };
+
+  const handleDelete = () => {
+    if (!selected?.entryId || selected.source === "demo") {
+      toast.error("מחיקה זמינה רק בעסקאות אמיתיות.");
+      return;
+    }
+    const original: ExpenseEntry | undefined = entries.find(
+      (e) => e.id === selected.entryId,
+    );
+    deleteExpense(selected.entryId);
+    closeDetail();
+    toast(`נמחק: ${selected.label}`, {
+      action: original
+        ? {
+            label: "בטל",
+            onClick: () => restoreExpense(original),
+          }
+        : undefined,
+    });
+  };
 
   const filteredItems = useMemo(
     () => applyFilter(data.items, filter, query),
@@ -151,10 +200,27 @@ export function AuroraActivity() {
 
       <BottomSheet
         open={selected !== null}
-        onOpenChange={(o) => (o ? null : setSelected(null))}
+        onOpenChange={(o) => (o ? null : closeDetail())}
         title={selected?.label ?? ""}
       >
-        {selected ? <ActivityDetail item={selected} /> : null}
+        {selected ? (
+          <ActivityDetail
+            item={selected}
+            onPickCategory={() => setPickerOpen(true)}
+            onDelete={handleDelete}
+          />
+        ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title="שנה קטגוריה"
+      >
+        <CategoryPicker
+          activeId={(selected?.category ?? "other") as CategoryId}
+          onPick={handleChangeCategory}
+        />
       </BottomSheet>
     </div>
   );
@@ -361,7 +427,16 @@ function ActivityRowMeta({ item }: { item: AuroraActivityItem }) {
   return <>{parts.join(" · ")}</>;
 }
 
-function ActivityDetail({ item }: { item: AuroraActivityItem }) {
+function ActivityDetail({
+  item,
+  onPickCategory,
+  onDelete,
+}: {
+  item: AuroraActivityItem;
+  onPickCategory: () => void;
+  onDelete: () => void;
+}) {
+  const isDemo = item.source === "demo";
   return (
     <div className="aurora-activity-detail">
       <div className="aurora-activity-detail-head">
@@ -410,10 +485,75 @@ function ActivityDetail({ item }: { item: AuroraActivityItem }) {
         ) : null}
       </dl>
 
-      <p className="aurora-activity-detail-note">
-        עריכה ומחיקה יתאפשרו בשלב הבא של אורורה. בינתיים, אפשר לתעד פעולה חדשה מהכפתור המרכזי.
-      </p>
+      <div className="aurora-activity-detail-actions">
+        <button
+          type="button"
+          className="aurora-detail-action"
+          data-aurora-variant="primary"
+          onClick={onPickCategory}
+          disabled={isDemo}
+        >
+          שנה קטגוריה
+        </button>
+        <button
+          type="button"
+          className="aurora-detail-action"
+          data-aurora-variant="danger"
+          onClick={onDelete}
+          disabled={isDemo}
+        >
+          מחק עסקה
+        </button>
+      </div>
+      {isDemo ? (
+        <p className="aurora-activity-detail-note">
+          זו עסקת תצוגה. עריכה ומחיקה יהיו זמינות אחרי שתחבר חשבון אמיתי.
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function CategoryPicker({
+  activeId,
+  onPick,
+}: {
+  activeId: CategoryId;
+  onPick: (id: CategoryId) => void;
+}) {
+  return (
+    <ul className="aurora-cat-picker" role="listbox">
+      {CATEGORIES.map((c) => {
+        const Icon = c.icon;
+        const active = c.id === activeId;
+        return (
+          <li key={c.id}>
+            <button
+              type="button"
+              className="aurora-cat-picker-item"
+              role="option"
+              aria-selected={active}
+              data-aurora-active={active ? "true" : "false"}
+              onClick={() => onPick(c.id)}
+            >
+              <span
+                aria-hidden
+                className="aurora-cat-picker-icon"
+                style={{ background: `${c.accent}28`, color: c.accent }}
+              >
+                <Icon size={20} />
+              </span>
+              <span className="aurora-cat-picker-label">{c.label}</span>
+              {active ? (
+                <span aria-hidden className="aurora-cat-picker-check">
+                  ✓
+                </span>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
