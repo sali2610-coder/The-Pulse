@@ -28,7 +28,17 @@ const HAS_SUPABASE = Boolean(
 
 const CANONICAL_HOST = "the-pulse-sooty.vercel.app";
 
-const PUBLIC_PATHS = ["/", "/lite", "/reset", "/healthz"];
+const PUBLIC_PATHS = [
+  "/",
+  "/lite",
+  "/reset",
+  "/healthz",
+  // Phase 432 — AURORA preview surface. Pure layout shell with
+  // no store reads, no engine reads, no auth-bound data. Must be
+  // reachable on localhost without Supabase Auth so reviewers
+  // can evaluate the new shell + tokens before signing in.
+  "/aurora-preview",
+];
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true;
