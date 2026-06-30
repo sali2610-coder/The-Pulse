@@ -3473,3 +3473,278 @@ main[data-danger="true"] [data-tone="accent"] {
   border-bottom: 1px solid var(--aurora-hairline-quiet);
 }
 .aurora-settings-about-row:last-child { border-bottom: 0; }
+
+/* ── Aurora Recovery Cards — Phase 438 ───────────────────────── */
+
+/* Checkpoint ring */
+.aurora-checkpoint-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: 4px;
+  border: 1px solid;
+  border-radius: 9999px;
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-checkpoint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+}
+
+.aurora-checkpoint-ring {
+  position: relative;
+  margin-block-start: var(--aurora-space-4);
+  aspect-ratio: 1;
+  max-width: 320px;
+  margin-inline: auto;
+}
+.aurora-checkpoint-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.aurora-checkpoint-amount {
+  font-size: 40px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--aurora-tracking-hero);
+}
+.aurora-checkpoint-when {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+
+.aurora-checkpoint-chips {
+  margin-block-start: var(--aurora-space-4);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 2px;
+}
+.aurora-checkpoint-chips::-webkit-scrollbar { display: none; }
+.aurora-checkpoint-chip {
+  appearance: none;
+  flex: 0 0 auto;
+  height: 36px;
+  padding-inline: var(--aurora-space-4);
+  border-radius: 9999px;
+  border: 1px solid var(--aurora-hairline-quiet);
+  background: var(--aurora-hairline-faint);
+  color: var(--aurora-ink-2);
+  font-size: var(--aurora-type-body);
+  font-weight: var(--aurora-weight-emphasis);
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--aurora-dur-quick) var(--aurora-ease-out-soft),
+    color var(--aurora-dur-quick) var(--aurora-ease-out-soft);
+}
+.aurora-checkpoint-chip[data-aurora-active="true"] {
+  background: var(--aurora-accent-gold-loud);
+  color: var(--aurora-brand-charcoal);
+  border-color: var(--aurora-accent-gold-loud);
+}
+
+/* Commitments breakdown */
+.aurora-commit-income {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-state-safe);
+  font-weight: var(--aurora-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-commit-lanes {
+  margin-block-start: var(--aurora-space-4);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--aurora-space-3);
+}
+.aurora-commit-lane {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+  border: 1px solid;
+}
+.aurora-commit-lane-eyebrow {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-commit-lane-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-commit-lane-meta {
+  font-size: var(--aurora-type-eyebrow);
+  color: var(--aurora-ink-3);
+}
+
+.aurora-commit-list {
+  list-style: none;
+  margin: 0;
+  margin-block-start: var(--aurora-space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-commit-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: var(--aurora-space-3);
+  padding-block: var(--aurora-space-2);
+  border-bottom: 1px solid var(--aurora-hairline-quiet);
+}
+.aurora-commit-list-label {
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-emphasis);
+}
+.aurora-commit-list-amount {
+  color: var(--aurora-ink-1);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-commit-list-meta {
+  color: var(--aurora-ink-3);
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+
+/* Cards by month */
+.aurora-cards-total {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--aurora-type-body);
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-cards-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  margin-block-start: var(--aurora-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-card-row-li {
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+  overflow: hidden;
+}
+.aurora-card-row-button {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--aurora-space-3);
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  background: transparent;
+  border: 0;
+  color: var(--aurora-ink-1);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.aurora-card-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--aurora-brand-aurora-2);
+}
+.aurora-card-row-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.aurora-card-row-title {
+  color: var(--aurora-ink-1);
+  font-size: var(--aurora-type-body);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-card-row-hint {
+  color: var(--aurora-ink-3);
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-card-row-chevron {
+  color: var(--aurora-ink-3);
+  font-size: 14px;
+}
+.aurora-card-row-detail {
+  padding-inline: var(--aurora-space-3);
+  padding-block-end: var(--aurora-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+  overflow: hidden;
+}
+.aurora-card-bucket-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-card-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-glass-elev-2);
+  border: 1px solid;
+}
+.aurora-card-bucket-label {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-card-bucket-amount {
+  font-size: var(--aurora-type-body-l);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-card-category-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-card-category-list li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+  padding-block: var(--aurora-space-2);
+  border-bottom: 1px solid var(--aurora-hairline-quiet);
+}

@@ -49,6 +49,12 @@ import {
   LineChart,
   MonthProgressBar,
 } from "@/components/aurora/aurora-charts";
+import {
+  CardsByMonthCard,
+  CheckpointRingCard,
+  CommitmentsBreakdownCard,
+} from "@/components/aurora/aurora-recovery-cards";
+import { useAuroraRecovery } from "@/components/aurora/use-aurora-recovery";
 import { DEMO_COACH_LINES } from "./aurora-demo-data";
 import {
   useAuroraHome,
@@ -168,6 +174,7 @@ function pickCoach(coach: string | null, now: Date): string | null {
 
 export function AuroraHome() {
   const data = useAuroraHome();
+  const recovery = useAuroraRecovery();
   const now = useNow(30_000);
   const [sheet, setSheet] = useState<SheetKey>(null);
   const [activeInsight, setActiveInsight] = useState(0);
@@ -175,6 +182,8 @@ export function AuroraHome() {
   const insights = data.insights;
   const insight = insights[activeInsight] ?? insights[0];
   const coach = pickCoach(data.coachSentence, now);
+  const hasRecovery =
+    recovery.ready && !recovery.isDemo && recovery.checkpoints.length > 0;
 
   return (
     <div className="aurora-home-stack">
@@ -200,6 +209,30 @@ export function AuroraHome() {
       ) : null}
 
       <BentoGrid gap="comfortable">
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={2}>
+              <CheckpointRingCard data={recovery} />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={3}>
+              <CommitmentsBreakdownCard data={recovery} />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={4}>
+              <CardsByMonthCard data={recovery} />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
         <BentoItem span={6}>
           <MountReveal index={2}>
             <ForecastCard data={data} onOpen={() => setSheet("forecast")} />
