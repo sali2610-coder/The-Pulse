@@ -4805,3 +4805,335 @@ main[data-danger="true"] [data-tone="accent"] {
   font-variant-numeric: tabular-nums;
   font-weight: var(--aurora-weight-strong);
 }
+
+/* ── Aurora Income Center — Phase 444 ───────────────────────── */
+
+.aurora-income-sum {
+  font-size: var(--aurora-type-body);
+  color: var(--aurora-state-safe);
+  font-weight: var(--aurora-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-income-countdown {
+  margin-block-start: var(--aurora-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  border-radius: var(--aurora-radius-input);
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.12), transparent);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.aurora-income-countdown[data-aurora-tone="quiet"] {
+  background: var(--aurora-hairline-faint);
+  border-color: var(--aurora-hairline-quiet);
+}
+.aurora-income-countdown-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--aurora-space-2);
+}
+.aurora-income-countdown-when {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-state-safe);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-income-countdown-amount {
+  font-size: var(--aurora-type-title-l, 28px);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  color: var(--aurora-ink-1);
+}
+
+.aurora-income-summary-grid {
+  margin-block-start: var(--aurora-space-4);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-income-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-income-summary-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-income-summary-hint {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+}
+
+.aurora-income-list {
+  list-style: none;
+  margin: 0;
+  margin-block-start: var(--aurora-space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+}
+.aurora-income-li {
+  border-radius: var(--aurora-radius-bento);
+  overflow: hidden;
+}
+.aurora-income-button {
+  appearance: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--aurora-space-3);
+  width: 100%;
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  border: 1px solid;
+  border-radius: var(--aurora-radius-bento);
+  background: var(--aurora-glass-elev-1);
+  color: var(--aurora-ink-1);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.aurora-income-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.aurora-income-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.aurora-income-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aurora-space-2);
+}
+.aurora-income-title {
+  font-size: var(--aurora-type-body-l);
+  font-weight: var(--aurora-weight-strong);
+  color: var(--aurora-ink-1);
+}
+.aurora-income-status-pill {
+  padding-inline: 8px;
+  padding-block: 2px;
+  border-radius: 9999px;
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  font-weight: var(--aurora-weight-strong);
+  border: 1px solid;
+}
+.aurora-income-headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--aurora-space-2);
+}
+.aurora-income-amount {
+  font-size: var(--aurora-type-title-m);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-income-share {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+.aurora-income-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.aurora-income-pill {
+  display: inline-flex;
+  padding-inline: 8px;
+  padding-block: 2px;
+  border-radius: 9999px;
+  background: var(--aurora-hairline-faint);
+  border: 1px solid var(--aurora-hairline-quiet);
+  color: var(--aurora-ink-3);
+  font-size: 10px;
+  font-weight: var(--aurora-weight-strong);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+
+.aurora-income-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+  padding-inline: var(--aurora-space-4);
+  padding-block: var(--aurora-space-4);
+  background: var(--aurora-glass-elev-1);
+  border: 1px solid var(--aurora-hairline-quiet);
+  border-top: 0;
+  border-radius: 0 0 var(--aurora-radius-bento) var(--aurora-radius-bento);
+  overflow: hidden;
+}
+.aurora-income-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-3);
+}
+.aurora-income-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--aurora-space-2);
+}
+.aurora-income-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-3);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+  border: 1px solid var(--aurora-hairline-quiet);
+}
+.aurora-income-cell-eyebrow {
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-income-cell-value {
+  font-size: var(--aurora-type-body-l);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.aurora-income-cell-hint {
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-4);
+}
+
+.aurora-income-contribution {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.aurora-income-contribution-bar {
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.aurora-income-contribution-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    var(--aurora-brand-aurora-2),
+    var(--aurora-state-safe)
+  );
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.45);
+}
+.aurora-income-contribution-pct {
+  align-self: flex-end;
+  font-size: var(--aurora-type-eyebrow);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+}
+
+.aurora-income-trend {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  align-items: end;
+  margin-block-start: var(--aurora-space-2);
+}
+.aurora-income-trend-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.aurora-income-trend-bar-wrap {
+  width: 100%;
+  height: 88px;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 8px;
+  background: var(--aurora-hairline-faint);
+}
+.aurora-income-trend-bar {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--aurora-brand-aurora-2);
+  opacity: 0.5;
+}
+.aurora-income-trend-bar[data-aurora-active="true"] {
+  background: var(--aurora-state-safe);
+  opacity: 1;
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.4);
+}
+.aurora-income-trend-label {
+  font-size: 10px;
+  letter-spacing: var(--aurora-tracking-eyebrow);
+  color: var(--aurora-ink-3);
+  font-weight: var(--aurora-weight-strong);
+}
+.aurora-income-trend-amount {
+  font-size: 10px;
+  color: var(--aurora-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.aurora-income-calendar {
+  margin-block-start: var(--aurora-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--aurora-space-2);
+}
+.aurora-income-calendar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aurora-income-calendar-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--aurora-space-3);
+  padding-inline: var(--aurora-space-3);
+  padding-block: var(--aurora-space-2);
+  border-radius: var(--aurora-radius-input);
+  background: var(--aurora-hairline-faint);
+}
+.aurora-income-calendar-date {
+  font-size: var(--aurora-type-eyebrow);
+  color: var(--aurora-ink-3);
+  letter-spacing: var(--aurora-tracking-eyebrow);
+}
+.aurora-income-calendar-label {
+  color: var(--aurora-ink-1);
+  font-weight: var(--aurora-weight-emphasis);
+}
+.aurora-income-calendar-amount {
+  color: var(--aurora-state-safe);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aurora-weight-strong);
+}
