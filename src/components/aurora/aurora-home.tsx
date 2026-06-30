@@ -49,6 +49,7 @@ import {
   LineChart,
   MonthProgressBar,
 } from "@/components/aurora/aurora-charts";
+import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spend-card";
 import {
   CardsByMonthCard,
   CheckpointRingCard,
@@ -229,6 +230,14 @@ export function AuroraHome() {
           <BentoItem span={6}>
             <MountReveal index={4}>
               <CardsByMonthCard data={recovery} />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={5}>
+              <AuroraCategorySpendCard />
             </MountReveal>
           </BentoItem>
         ) : null}
