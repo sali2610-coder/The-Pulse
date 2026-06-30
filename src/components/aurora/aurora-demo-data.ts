@@ -193,6 +193,12 @@ export const DEMO_AURORA_HOME: AuroraHomeData & { isDemo: true } = {
   coachSentence:
     "אתה במסלול טוב — אחרי המשכורת בעוד 3 ימים, מרווח לסוף החודש ₪14,580. שמור על קצב של 240 ₪ ביום.",
   coachVariant: "loud",
+  cashflow30d: [],
+  topCategories: [],
+  goals: [],
+  subscriptions: [],
+  velocity: { thisWeek: 0, lastWeek: 0, pctVsLast: 0 },
+  insights: [],
   isDemo: true,
 };
 
@@ -213,4 +219,131 @@ export const DEMO_COACH_LINES: ReadonlyArray<string> = [
   "קצב 'מסעדות' השבוע: ₪0 — שיא חודשי. חיסכון צפוי ₪380.",
   "מנוי SHIRA YOGA · ₪89 ללא שימוש 47 ימים. שווה לבטל?",
   "אם תמשיך לעמוד ביעד היומי, יוני יסתיים 7% מעל הממוצע השנתי שלך.",
+];
+
+// Demo signals for the new Phase 4 enrichment sections. Same
+// fall-through rule: only surfaced when the store is empty.
+
+// 30-day cashflow forecast — running balance day-by-day.
+// Realistic shape: dips on loan / rent days, jumps on salary.
+export const DEMO_CASHFLOW_30D: number[] = [
+  19_130, 18_950, 18_950, 19_780, 36_780, 36_220, 35_350, 35_010, 34_290,
+  34_290, 33_790, 33_790, 33_590, 33_340, 33_340, 33_100, 32_870, 32_870,
+  30_720, 30_500, 30_280, 30_100, 29_870, 29_870, 26_500, 26_240, 26_010,
+  25_790, 25_790, 25_540,
+];
+
+// Top spending categories this month.
+export type DemoCategory = {
+  key: string;
+  label: string;
+  amount: number;
+  color: string;
+  delta: number; // pct vs last month, signed
+};
+export const DEMO_CATEGORIES: DemoCategory[] = [
+  { key: "groceries",    label: "סופר",       amount: 2_410, color: "#34D399", delta: -7 },
+  { key: "fuel",         label: "דלק",        amount: 780,   color: "#FACC15", delta: 12 },
+  { key: "restaurants",  label: "מסעדות",     amount: 640,   color: "#F87171", delta: 22 },
+  { key: "shopping",     label: "שופינג",     amount: 410,   color: "#A78BFA", delta: -18 },
+  { key: "transport",    label: "תחבורה",     amount: 240,   color: "#75F5FF", delta: -3 },
+];
+
+// Savings / wish goals.
+export type DemoGoal = {
+  key: string;
+  label: string;
+  amount: number;
+  target: number;
+  pct: number;
+  dueLabel: string;
+  tone: "safe" | "watch" | "stress";
+};
+export const DEMO_GOALS: DemoGoal[] = [
+  {
+    key: "japan",
+    label: "טיול ליפן",
+    amount: 22_800,
+    target: 30_000,
+    pct: 76,
+    dueLabel: "עוד 47 ימים",
+    tone: "safe",
+  },
+  {
+    key: "iphone",
+    label: "iPhone 17",
+    amount: 3_400,
+    target: 8_000,
+    pct: 42,
+    dueLabel: "עוד 92 ימים",
+    tone: "watch",
+  },
+];
+
+// Dormant / under-used subscriptions the AI panel can surface.
+export type DemoSubscription = {
+  key: string;
+  label: string;
+  amount: number;
+  unusedDays: number;
+};
+export const DEMO_SUBSCRIPTIONS: DemoSubscription[] = [
+  { key: "yoga", label: "SHIRA YOGA", amount: 89, unusedDays: 47 },
+  { key: "ny-times", label: "NY Times Digital", amount: 21, unusedDays: 31 },
+  { key: "tinder", label: "Tinder Gold", amount: 39, unusedDays: 18 },
+];
+
+// Velocity — change in 7-day spend vs the previous 7-day window.
+// Signed pct (negative = improving).
+export const DEMO_VELOCITY = {
+  thisWeek: 562, // sum of weeklySpend
+  lastWeek: 638,
+  pctVsLast: -12, // (562-638)/638
+};
+
+// Multi-tone AI Insights deck. Each has a kind (info / praise /
+// warn / suggest), a sentence, optional amount, and a CTA label
+// for the bottom-sheet drill-down. The composition cycles through
+// the deck so the screen always has fresh intelligence.
+export type DemoInsight = {
+  key: string;
+  kind: "praise" | "info" | "warn" | "suggest";
+  sentence: string;
+  amount?: number;
+  cta?: string;
+};
+export const DEMO_INSIGHTS: DemoInsight[] = [
+  {
+    key: "velocity-down",
+    kind: "praise",
+    sentence: "השבוע הוצאת 12% פחות מהשבוע הקודם.",
+    amount: 76,
+    cta: "ראה ניתוח שבועי",
+  },
+  {
+    key: "pace-forecast",
+    kind: "info",
+    sentence: "אם תשמור על הקצב, יוני יסתיים עם ₪2,340 פנויים מעל היעד.",
+    cta: "פתח חיזוי",
+  },
+  {
+    key: "restaurants-up",
+    kind: "warn",
+    sentence: "הוצאות מסעדות עלו השבוע ב-22% מהממוצע.",
+    amount: 640,
+    cta: "ראה קטגוריה",
+  },
+  {
+    key: "dormant-subs",
+    kind: "suggest",
+    sentence: "3 מנויים פעילים שלא היו בשימוש לאחרונה — ₪149 לחודש.",
+    cta: "סקור מנויים",
+  },
+  {
+    key: "salary-near",
+    kind: "info",
+    sentence: "המשכורת מגיעה בעוד 3 ימים — תיכף תקפוץ ל-₪37,130.",
+    amount: 18_000,
+    cta: "פתח ציר הכנסות",
+  },
 ];

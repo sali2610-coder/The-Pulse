@@ -34,7 +34,19 @@ import {
   forecastMonthEnd,
 } from "@/lib/forecast";
 import { currentMonthKey } from "@/lib/dates";
-import { DEMO_AURORA_HOME } from "./aurora-demo-data";
+import {
+  DEMO_AURORA_HOME,
+  DEMO_CASHFLOW_30D,
+  DEMO_CATEGORIES,
+  DEMO_GOALS,
+  DEMO_INSIGHTS,
+  DEMO_SUBSCRIPTIONS,
+  DEMO_VELOCITY,
+  type DemoCategory,
+  type DemoGoal,
+  type DemoInsight,
+  type DemoSubscription,
+} from "./aurora-demo-data";
 
 function daysInMonth(monthKey: string): number {
   const [y, m] = monthKey.split("-").map(Number);
@@ -111,9 +123,16 @@ export type AuroraHomeData = {
   upcomingFortnight: AuroraUpcomingEvent[];
   // ── Recent activity
   recentActivity: AuroraActivityRow[];
-  // ── CFO coach sentence
+  // ── CFO coach sentence (legacy single line)
   coachSentence: string | null;
   coachVariant: "loud" | "soft";
+  // ── Phase 4 enrichment surfaces
+  cashflow30d: number[];
+  topCategories: DemoCategory[];
+  goals: DemoGoal[];
+  subscriptions: DemoSubscription[];
+  velocity: { thisWeek: number; lastWeek: number; pctVsLast: number };
+  insights: DemoInsight[];
 };
 
 const HEBREW_MONTH = [
@@ -162,6 +181,12 @@ const EMPTY: AuroraHomeData = {
   recentActivity: [],
   coachSentence: null,
   coachVariant: "loud",
+  cashflow30d: [],
+  topCategories: [],
+  goals: [],
+  subscriptions: [],
+  velocity: { thisWeek: 0, lastWeek: 0, pctVsLast: 0 },
+  insights: [],
 };
 
 function daysBetween(target: Date, now: Date): number {
@@ -192,7 +217,15 @@ export function useAuroraHome(): AuroraHomeData {
       (a) => a.active && a.kind === "bank" && typeof a.anchorBalance === "number",
     );
     if (!hasAnyAnchor && entries.length === 0 && loans.length === 0) {
-      return DEMO_AURORA_HOME;
+      return {
+        ...DEMO_AURORA_HOME,
+        cashflow30d: DEMO_CASHFLOW_30D,
+        topCategories: DEMO_CATEGORIES,
+        goals: DEMO_GOALS,
+        subscriptions: DEMO_SUBSCRIPTIONS,
+        velocity: DEMO_VELOCITY,
+        insights: DEMO_INSIGHTS,
+      };
     }
 
     const monthKey = currentMonthKey();
@@ -416,6 +449,24 @@ export function useAuroraHome(): AuroraHomeData {
       recentActivity: recent,
       coachSentence,
       coachVariant,
+      // Phase 4 enrichment — live mode keeps these empty for now;
+      // Phase 5 will plumb categoryBreakdown / goals store / a real
+      // subscription detector. The composition layer renders
+      // graceful empty states.
+      cashflow30d: curve.points.map((p) => p.balance),
+      topCategories: [],
+      goals: [],
+      subscriptions: [],
+      velocity: { thisWeek: 0, lastWeek: 0, pctVsLast: 0 },
+      insights: coachSentence
+        ? [
+            {
+              key: "live-coach",
+              kind: "info" as const,
+              sentence: coachSentence,
+            },
+          ]
+        : [],
     };
   }, [
     hydrated,
