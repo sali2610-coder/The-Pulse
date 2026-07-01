@@ -54,6 +54,12 @@ import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spe
 import { AuroraCreditCenter } from "@/components/aurora/aurora-credit-center";
 import { AuroraIncomeCenter } from "@/components/aurora/aurora-income-center";
 import { AuroraInsightsCenter } from "@/components/aurora/aurora-insights-center";
+import {
+  AuroraCenterBoundary,
+  AuroraJumpStrip,
+  AuroraSectionAnchor,
+  type AuroraJumpItem,
+} from "@/components/aurora/aurora-integration";
 import { AuroraLoansCenter } from "@/components/aurora/aurora-loans-center";
 import { PendingPulseCard } from "@/components/aurora/aurora-pending-center";
 import {
@@ -178,6 +184,17 @@ function pickCoach(coach: string | null, now: Date): string | null {
 //                     MAIN COMPOSITION
 // ──────────────────────────────────────────────────────────────────
 
+const JUMP_ITEMS: AuroraJumpItem[] = [
+  { id: "checkpoint", label: "צ׳קפוינטים" },
+  { id: "commitments", label: "התחייבויות" },
+  { id: "credit", label: "אשראי" },
+  { id: "loans", label: "הלוואות" },
+  { id: "income", label: "הכנסות" },
+  { id: "banks", label: "בנקים" },
+  { id: "insights", label: "תובנות" },
+  { id: "categories", label: "קטגוריות" },
+];
+
 export function AuroraHome() {
   const data = useAuroraHome();
   const recovery = useAuroraRecovery();
@@ -207,7 +224,10 @@ export function AuroraHome() {
         />
       </MountReveal>
 
-      {insights.length > 0 ? (
+      {/* AI deck only surfaces the demo cycle when the recovery
+          engine hasn't populated the real Insights Center. Prevents
+          two AI sections shouting at the user with the same signals. */}
+      {insights.length > 0 && !hasRecovery ? (
         <MountReveal index={1}>
           <AIInsightsDeck
             insights={insights}
@@ -218,11 +238,17 @@ export function AuroraHome() {
         </MountReveal>
       ) : null}
 
+      {hasRecovery ? <AuroraJumpStrip items={JUMP_ITEMS} /> : null}
+
       <BentoGrid gap="comfortable">
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={2}>
-              <CheckpointRingCard data={recovery} />
+              <AuroraSectionAnchor id="checkpoint">
+                <AuroraCenterBoundary name="CheckpointRingCard">
+                  <CheckpointRingCard data={recovery} />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -230,7 +256,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={3}>
-              <CommitmentsBreakdownCard data={recovery} />
+              <AuroraSectionAnchor id="commitments">
+                <AuroraCenterBoundary name="CommitmentsBreakdownCard">
+                  <CommitmentsBreakdownCard data={recovery} />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -238,7 +268,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={4}>
-              <AuroraCreditCenter data={recovery} />
+              <AuroraSectionAnchor id="credit">
+                <AuroraCenterBoundary name="AuroraCreditCenter">
+                  <AuroraCreditCenter data={recovery} />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -246,7 +280,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={5}>
-              <AuroraLoansCenter />
+              <AuroraSectionAnchor id="loans">
+                <AuroraCenterBoundary name="AuroraLoansCenter">
+                  <AuroraLoansCenter />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -254,7 +292,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={6}>
-              <AuroraIncomeCenter />
+              <AuroraSectionAnchor id="income">
+                <AuroraCenterBoundary name="AuroraIncomeCenter">
+                  <AuroraIncomeCenter />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -262,7 +304,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={7}>
-              <AuroraBanksCenter />
+              <AuroraSectionAnchor id="banks">
+                <AuroraCenterBoundary name="AuroraBanksCenter">
+                  <AuroraBanksCenter />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -270,7 +316,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={8}>
-              <AuroraInsightsCenter />
+              <AuroraSectionAnchor id="insights">
+                <AuroraCenterBoundary name="AuroraInsightsCenter">
+                  <AuroraInsightsCenter />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
@@ -278,7 +328,11 @@ export function AuroraHome() {
         {hasRecovery ? (
           <BentoItem span={6}>
             <MountReveal index={5}>
-              <AuroraCategorySpendCard />
+              <AuroraSectionAnchor id="categories">
+                <AuroraCenterBoundary name="AuroraCategorySpendCard">
+                  <AuroraCategorySpendCard />
+                </AuroraCenterBoundary>
+              </AuroraSectionAnchor>
             </MountReveal>
           </BentoItem>
         ) : null}
