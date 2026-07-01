@@ -53,6 +53,7 @@ import { AuroraBanksCenter } from "@/components/aurora/aurora-banks-center";
 import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spend-card";
 import { AuroraCreditCenter } from "@/components/aurora/aurora-credit-center";
 import { AuroraIncomeCenter } from "@/components/aurora/aurora-income-center";
+import { AuroraInsightsCenter } from "@/components/aurora/aurora-insights-center";
 import { AuroraLoansCenter } from "@/components/aurora/aurora-loans-center";
 import { PendingPulseCard } from "@/components/aurora/aurora-pending-center";
 import {
@@ -262,6 +263,14 @@ export function AuroraHome() {
           <BentoItem span={6}>
             <MountReveal index={7}>
               <AuroraBanksCenter />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={8}>
+              <AuroraInsightsCenter />
             </MountReveal>
           </BentoItem>
         ) : null}
