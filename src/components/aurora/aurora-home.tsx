@@ -49,6 +49,7 @@ import {
   LineChart,
   MonthProgressBar,
 } from "@/components/aurora/aurora-charts";
+import { AuroraBanksCenter } from "@/components/aurora/aurora-banks-center";
 import { AuroraCategorySpendCard } from "@/components/aurora/aurora-category-spend-card";
 import { AuroraCreditCenter } from "@/components/aurora/aurora-credit-center";
 import { AuroraIncomeCenter } from "@/components/aurora/aurora-income-center";
@@ -253,6 +254,14 @@ export function AuroraHome() {
           <BentoItem span={6}>
             <MountReveal index={6}>
               <AuroraIncomeCenter />
+            </MountReveal>
+          </BentoItem>
+        ) : null}
+
+        {hasRecovery ? (
+          <BentoItem span={6}>
+            <MountReveal index={7}>
+              <AuroraBanksCenter />
             </MountReveal>
           </BentoItem>
         ) : null}
