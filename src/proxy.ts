@@ -33,6 +33,10 @@ const PUBLIC_PATHS = [
   "/lite",
   "/reset",
   "/healthz",
+  // Local-only Home v2 preview. Renders HomeCanvas + seeds a demo
+  // state into the existing store on first visit. No engine or auth
+  // changes — same store every other screen reads.
+  "/home-v2-preview",
 ];
 
 function isPublic(pathname: string): boolean {
