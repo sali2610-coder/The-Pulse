@@ -502,6 +502,7 @@ function ActionTile({
       className="pro-action-tile"
       data-aurora-variant={variant}
       onClick={onClick}
+      aria-label={label}
       whileTap={{ scale: 0.97 }}
       transition={{ type: "spring", stiffness: 380, damping: 34 }}
     >
@@ -1499,7 +1500,12 @@ function SectionTitle({
             </span>
           ) : null}
           {action ? (
-            <button type="button" className="sally-ghost-link" onClick={action.onClick}>
+            <button
+              type="button"
+              className="sally-ghost-link"
+              onClick={action.onClick}
+              aria-label={`${label} · ${action.label}`}
+            >
               {action.label}
             </button>
           ) : null}
@@ -1972,7 +1978,12 @@ function SheetList({
     <ul className="pro-sheet-rows">
       {rows.map((r) => (
         <li key={r.key}>
-          <button type="button" onClick={r.onClick} className="pro-sheet-row-btn">
+          <button
+            type="button"
+            onClick={r.onClick}
+            aria-label={`${r.title} · ${r.amount}`}
+            className="pro-sheet-row-btn"
+          >
             <div className="pro-sheet-row-body">
               <span className="pro-sheet-row-title">{r.title}</span>
               <span className="pro-sheet-row-meta">{r.meta}</span>
