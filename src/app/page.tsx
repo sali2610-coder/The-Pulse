@@ -8,7 +8,7 @@
 // When Supabase isn't configured at all (env vars missing), the app
 // falls back to single-device mode and renders the full shell.
 
-import { AuroraApp } from "@/components/aurora/aurora-app";
+import { AppShell } from "@/components/app/app-shell";
 import { WelcomeScreen } from "@/components/auth/welcome-screen";
 import {
   getServerUser,
@@ -35,5 +35,5 @@ export default async function Home({
       return <WelcomeScreen next={next} />;
     }
   }
-  return <AuroraApp />;
+  return <AppShell />;
 }

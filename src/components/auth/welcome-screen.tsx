@@ -191,18 +191,6 @@ export function WelcomeScreen({ next }: { next?: string }) {
             פרופיל בלבד.
           </p>
 
-          {/* Phase 432 — public AURORA preview entry point. Reachable
-             without auth so reviewers can evaluate the new shell +
-             tokens before any Supabase Auth round-trip. The link
-             stays visible in production too: the preview surface is
-             pure design (no PII, no engine reads) and the URL has
-             been allow-listed in middleware. */}
-          <a
-            href="/aurora-preview"
-            className="mt-1 text-center text-[11px] text-muted-foreground/80 underline-offset-4 transition-colors hover:text-foreground hover:underline"
-          >
-            תצוגה מקדימה של עיצוב AURORA · ללא התחברות
-          </a>
         </motion.section>
       </div>
     </main>
