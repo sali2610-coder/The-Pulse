@@ -1,11 +1,12 @@
 "use client";
 
-// Home v2 · Primary Action Dock.
+// Home v2 · Primary Action Dock (premium rebuild).
 //
-// Sticky pill dock at the bottom of the Home tab. Houses the two
-// primary actions of the entire app — Expense and Income. Both
-// callbacks are supplied by the caller so this file never touches
-// engine, store, dialog, or business logic. Pure UI shell.
+// Signature bottom bar. Primary Expense is the dominant gold pill —
+// the single tap the user reaches for 20× a day. Income is the
+// smaller companion pill (safe-green) alongside it. Both sit inside
+// a floating glass rail with an inner-glow hairline. Callback-only
+// component: no engine / store / dialog / navigation logic.
 
 import { motion, useReducedMotion } from "framer-motion";
 
@@ -23,76 +24,62 @@ export function PrimaryActionDock({
     <motion.div
       role="toolbar"
       aria-label="פעולות עיקריות"
-      className="sally-dock"
-      initial={{ opacity: 0, y: 24 }}
+      className="sally-dock-v2"
+      initial={{ opacity: 0, y: 28 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: reduced ? 0.1 : 0.5,
-        delay: reduced ? 0 : 0.15,
+        delay: reduced ? 0 : 0.12,
         ease: [0.32, 0.72, 0, 1],
       }}
     >
-      <div className="sally-dock-inner">
-        <DockButton
-          label="הוצאה"
-          tone="gold"
-          icon={<MinusGlyph />}
+      <span aria-hidden className="sally-dock-v2-glow" />
+      <div className="sally-dock-v2-inner">
+        <motion.button
+          type="button"
+          className="sally-dock-v2-primary"
+          aria-label="הוסף הוצאה חדשה"
           onClick={() => {
             hapticTap();
             onExpense();
           }}
-          ariaLabel="הוסף הוצאה חדשה"
-        />
-        <span aria-hidden className="sally-dock-divider" />
-        <DockButton
-          label="הכנסה"
-          tone="safe"
-          icon={<PlusGlyph />}
+          whileTap={{ scale: 0.97 }}
+          transition={{ type: "spring", stiffness: 380, damping: 34 }}
+        >
+          <span aria-hidden className="sally-dock-v2-primary-halo" />
+          <span aria-hidden className="sally-dock-v2-primary-icon">
+            <MinusGlyph />
+          </span>
+          <span className="sally-dock-v2-primary-text">
+            <span className="sally-dock-v2-primary-label">הוצאה</span>
+            <span className="sally-dock-v2-primary-sub">תיעוד מהיר</span>
+          </span>
+        </motion.button>
+
+        <motion.button
+          type="button"
+          className="sally-dock-v2-secondary"
+          aria-label="הוסף הכנסה חדשה"
           onClick={() => {
             hapticTap();
             onIncome();
           }}
-          ariaLabel="הוסף הכנסה חדשה"
-        />
+          whileTap={{ scale: 0.96 }}
+          transition={{ type: "spring", stiffness: 380, damping: 34 }}
+        >
+          <span aria-hidden className="sally-dock-v2-secondary-icon">
+            <PlusGlyph />
+          </span>
+          <span className="sally-dock-v2-secondary-label">הכנסה</span>
+        </motion.button>
       </div>
     </motion.div>
   );
 }
 
-function DockButton({
-  label,
-  tone,
-  icon,
-  onClick,
-  ariaLabel,
-}: {
-  label: string;
-  tone: "gold" | "safe";
-  icon: React.ReactNode;
-  onClick: () => void;
-  ariaLabel: string;
-}) {
-  return (
-    <motion.button
-      type="button"
-      className="sally-dock-button"
-      data-aurora-tone={tone}
-      aria-label={ariaLabel}
-      onClick={onClick}
-      whileTap={{ scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 380, damping: 34 }}
-    >
-      <span aria-hidden className="sally-dock-icon">
-        {icon}
-      </span>
-      <span className="sally-dock-label">{label}</span>
-    </motion.button>
-  );
-}
-
 function MinusGlyph() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden fill="none">
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden fill="none">
       <path
         d="M4 10h12"
         stroke="currentColor"
@@ -105,7 +92,7 @@ function MinusGlyph() {
 
 function PlusGlyph() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden fill="none">
+    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden fill="none">
       <path
         d="M10 4v12M4 10h12"
         stroke="currentColor"

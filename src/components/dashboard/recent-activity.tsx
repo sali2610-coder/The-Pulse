@@ -380,44 +380,43 @@ export function RecentActivity() {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0, scale: [1, 1.012, 1] }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="glass-card flex flex-col gap-3 rounded-3xl p-4"
+        className="mo-card"
         dir="rtl"
         aria-label="פעילות החודש"
-        data-sally-variant="polish-activity"
       >
-        {/* Header + KPI row */}
-        <header className="flex items-center justify-between gap-3">
-          <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            פעילות החודש
+        <header className="mo-eyebrow">
+          <span className="mo-eyebrow-text">פעילות החודש</span>
+          <span className="mo-eyebrow-badge" data-mono="true" dir="ltr">
+            {summary.monthCount}
           </span>
         </header>
-        <div className="grid grid-cols-2 gap-2">
-          <Kpi
+
+        <div className="mo-kpi-row">
+          <MoKpi
             label="סה״כ פעולות"
             value={summary.monthCount.toString()}
-            tone="#22D3EE"
+            sub={`${summary.todayCount} היום`}
           />
-          <Kpi
-            label="סך הוצאות החודש"
+          <MoKpi
+            label="הוצאות החודש"
             value={ILS.format(Math.round(summary.monthSpend))}
-            tone="#F87171"
+            sub="סך יוצא"
+            emphasize
           />
         </div>
 
         {items.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-[12px] text-muted-foreground">
-            <Bell className="size-4 shrink-0 text-muted-foreground/60" />
+          <div className="mo-empty">
+            <Bell className="size-4 shrink-0" strokeWidth={1.4} />
             עוד אין פעילות החודש. חיוב חדש שיתקבל יופיע כאן בזמן אמת.
           </div>
         ) : (
           <>
-            {/* Hero — latest expense */}
             {summary.lastExpense ? (
               <LatestExpenseCard item={summary.lastExpense} now={now} />
             ) : null}
 
-            {/* Source chips */}
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="mo-source-chips">
               <SourceChip
                 icon={<Wallet className="size-3" />}
                 label="Wallet"
@@ -444,20 +443,26 @@ export function RecentActivity() {
               />
             </div>
 
-            {/* Bottom CTA */}
             <motion.button
               type="button"
               onClick={() => {
                 tap();
                 setSheetOpen(true);
               }}
-              whileTap={{ scale: 0.98 }}
+              whileTap={{ scale: 0.985 }}
               transition={{ type: "spring", stiffness: 320, damping: 26 }}
               aria-label={`פתח פירוט: ${summary.monthCount} פעולות החודש`}
-              className="inline-flex w-full items-center justify-between gap-2 rounded-2xl border border-[color:var(--neon)]/30 bg-[color:var(--neon)]/10 px-3 py-2.5 text-[13px] font-medium text-[color:var(--neon)] transition-colors hover:border-[color:var(--neon)]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+              className="mo-cta"
             >
-              <span>{summary.monthCount} פעולות החודש</span>
-              <ChevronLeft className="size-3.5" aria-hidden />
+              <span className="mo-cta-icon" aria-hidden>
+                <ChevronLeft className="size-4" strokeWidth={1.7} />
+              </span>
+              <span className="mo-cta-label">
+                פתח פירוט מלא
+                <span className="mo-cta-sub">
+                  {summary.monthCount} פעולות · {ILS.format(Math.round(summary.monthSpend))}
+                </span>
+              </span>
             </motion.button>
           </>
         )}
@@ -467,17 +472,26 @@ export function RecentActivity() {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         title="פעילות החודש"
-        className="sally-activity-sheet"
+        className="mo-sheet"
       >
-        <header className="flex items-center justify-between gap-2 pt-1">
-          <span className="text-section text-foreground">פעילות החודש</span>
-          <span className="text-caption text-muted-foreground">
-            {filtered.length}/{items.length}
-          </span>
+        <header className="mo-sheet-hero">
+          <div className="mo-sheet-hero-left">
+            <span className="mo-sheet-hero-eyebrow">חודש נוכחי</span>
+            <span className="mo-sheet-hero-title">פעילות החודש</span>
+          </div>
+          <div className="mo-sheet-hero-right">
+            <span className="mo-sheet-hero-count" data-mono="true" dir="ltr">
+              {filtered.length}
+              <span className="mo-sheet-hero-count-total">/{items.length}</span>
+            </span>
+            <span className="mo-sheet-hero-spend" data-mono="true" dir="ltr">
+              {ILS.format(Math.round(summary.monthSpend))}
+            </span>
+          </div>
         </header>
 
         <div
-          className="flex flex-wrap gap-1.5"
+          className="mo-sheet-filters"
           role="radiogroup"
           aria-label="סינון פעילות"
         >
@@ -493,11 +507,8 @@ export function RecentActivity() {
                   tap();
                   setFilter(f.key);
                 }}
-                className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
-                  active
-                    ? "bg-[color:var(--neon)]/20 text-[color:var(--neon)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--neon)_55%,transparent)]"
-                    : "border border-white/10 bg-black/30 text-muted-foreground hover:text-foreground"
-                }`}
+                className="mo-sheet-filter"
+                data-active={active ? "true" : undefined}
               >
                 {f.label}
               </button>
@@ -506,19 +517,24 @@ export function RecentActivity() {
         </div>
 
         {grouped.length === 0 ? (
-          <div className="rounded-2xl border border-white/8 bg-black/25 p-6 text-center text-caption text-muted-foreground">
-            אין פעילות בסינון הזה.
-          </div>
+          <div className="mo-sheet-empty">אין פעילות בסינון הזה.</div>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="mo-sheet-list">
             <AnimatePresence initial={false}>
               {grouped.map((group) => (
-                <li key={group.dayTs} className="flex flex-col gap-1.5">
-                  <div className="sticky top-0 z-10 flex items-center gap-2 bg-black/40 px-1 py-1 backdrop-blur-sm">
-                    <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground/85">
+                <li key={group.dayTs} className="mo-sheet-day">
+                  <div className="mo-sheet-day-header">
+                    <span className="mo-sheet-day-label">
                       {dayHeader(group.dayTs)}
                     </span>
-                    <span className="h-px flex-1 bg-white/6" />
+                    <span className="mo-sheet-day-rule" aria-hidden />
+                    <span
+                      className="mo-sheet-day-count"
+                      data-mono="true"
+                      dir="ltr"
+                    >
+                      {group.items.length}
+                    </span>
                   </div>
                   {group.items.map((item, idx) => (
                     <ActivityRow
@@ -598,27 +614,19 @@ function ActivityRow({
             }
           : undefined
       }
-      className={`flex items-center gap-2.5 rounded-2xl border border-white/6 bg-black/30 p-2.5 ${
-        tappable
-          ? "cursor-pointer outline-none transition-colors hover:border-white/14 focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
-          : ""
-      }`}
+      className="mo-row"
+      data-tappable={tappable ? "true" : undefined}
+      data-direction={isIn ? "in" : "out"}
+      style={{ "--mo-row-accent": accent } as React.CSSProperties}
     >
-      <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-xl"
-        style={{
-          background: `${accent}22`,
-          color: accent,
-        }}
-      >
+      <span aria-hidden className="mo-row-rail" />
+      <span className="mo-row-icon">
         <Icon className="size-4" strokeWidth={1.7} />
       </span>
 
-      <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[12.5px] font-medium text-foreground">
-            {item.title}
-          </span>
+      <div className="mo-row-body">
+        <div className="mo-row-line1">
+          <span className="mo-row-title">{item.title}</span>
           {item.needsConfirmation ? (
             <Pill tone="gold">ממתין לאישור</Pill>
           ) : item.bankPending ? (
@@ -628,15 +636,15 @@ function ActivityRow({
           {item.isWithdrawal ? <Pill tone="gold">משיכה</Pill> : null}
           {item.excludeFromBudget ? <Pill tone="gold">חוץ-תקציב</Pill> : null}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground/85">
+        <div className="mo-row-line2">
+          <span className="mo-row-when">
             {whenLabel(item.ts, item.hasRealTime, now)}
           </span>
           {(() => {
             const chip = relativeChip(item.ts, item.hasRealTime, now);
             return chip ? (
               <span
-                className="rounded-full bg-[color:var(--neon)]/10 px-1.5 py-0.5 text-[9px] font-medium text-[color:var(--neon)]"
+                className="mo-row-chip"
                 aria-label={`זמן יחסי: ${chip}`}
               >
                 {chip}
@@ -652,49 +660,37 @@ function ActivityRow({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-col items-end leading-tight">
-        <span
-          data-mono="true"
-          dir="ltr"
-          className="text-[13.5px] font-semibold"
-          style={{ color: accent }}
-        >
+      <div className="mo-row-amount-wrap">
+        <span className="mo-row-amount" data-mono="true" dir="ltr">
           {sign}
           {ILS.format(item.amount)}
         </span>
         {isIn ? (
-          <ArrowUpRight className="-mt-0.5 size-2.5 text-[#34D399]" />
+          <ArrowUpRight className="mo-row-amount-arrow" aria-hidden />
         ) : null}
       </div>
     </motion.li>
   );
 }
 
-function Kpi({
+function MoKpi({
   label,
   value,
-  tone,
+  sub,
+  emphasize,
 }: {
   label: string;
   value: string;
-  tone: string;
+  sub?: string;
+  emphasize?: boolean;
 }) {
   return (
-    <div
-      className="flex flex-col gap-0.5 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2"
-      style={{ boxShadow: `inset 0 0 22px -10px ${tone}55` }}
-    >
-      <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-        {label}
-      </span>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-[18px] font-light leading-tight"
-        style={{ color: "#F6F6F6", textShadow: `0 0 18px ${tone}33` }}
-      >
+    <div className="mo-kpi" data-emphasize={emphasize ? "true" : undefined}>
+      <span className="mo-kpi-label">{label}</span>
+      <span className="mo-kpi-value" data-mono="true" dir="ltr">
         {value}
       </span>
+      {sub ? <span className="mo-kpi-sub">{sub}</span> : null}
     </div>
   );
 }
@@ -707,53 +703,36 @@ function LatestExpenseCard({
   now: Date;
 }) {
   const meta = item.category ? getCategory(item.category) : null;
+  const accent = meta?.accent ?? "#F87171";
   return (
     <motion.div
       key={item.id}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.32 }}
-      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3"
-      style={{
-        boxShadow:
-          "0 1px 0 rgba(255,255,255,0.04) inset, 0 0 28px -16px rgba(247,113,113,0.45)",
-      }}
+      className="mo-latest"
+      style={
+        {
+          "--mo-latest-accent": accent,
+        } as React.CSSProperties
+      }
       aria-label={`הוצאה אחרונה: ${item.title}`}
     >
-      <span
-        aria-hidden
-        className="flex size-12 items-center justify-center rounded-2xl"
-        style={{
-          background: `${meta?.accent ?? "#F87171"}22`,
-          color: meta?.accent ?? "#F87171",
-        }}
-      >
+      <span aria-hidden className="mo-latest-icon">
         {meta ? (
-          <meta.icon className="size-6" strokeWidth={1.6} />
+          <meta.icon className="size-5" strokeWidth={1.6} />
         ) : (
-          <ArrowUpRight className="size-6" />
+          <ArrowUpRight className="size-5" />
         )}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-          הוצאה אחרונה
-        </span>
-        <span className="line-clamp-1 text-[15px] font-medium text-foreground">
-          {item.title}
-        </span>
-        <span className="text-[10.5px] text-muted-foreground/85">
+      <div className="mo-latest-body">
+        <span className="mo-latest-eyebrow">הוצאה אחרונה</span>
+        <span className="mo-latest-title">{item.title}</span>
+        <span className="mo-latest-when">
           {whenLabel(item.ts, item.hasRealTime, now)}
         </span>
       </div>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="shrink-0 text-[20px] font-light"
-        style={{
-          color: "#F87171",
-          textShadow: "0 0 22px rgba(248,113,113,0.35)",
-        }}
-      >
+      <span className="mo-latest-amount" data-mono="true" dir="ltr">
         −{ILS.format(item.amount)}
       </span>
     </motion.div>
