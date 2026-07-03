@@ -21,7 +21,7 @@ import type { ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ObligationsAndWeek } from "@/components/future/obligations-and-week";
-import { TimeScreenV2 } from "@/components/time/time-screen-v2";
+import { TimeScreenV3 } from "@/components/time/time-screen-v3";
 
 const lazy = (
   loader: () => Promise<{ default: React.ComponentType<Record<string, unknown>> }>,
@@ -60,8 +60,8 @@ export function FutureTab() {
     <div className="flex flex-col gap-6 pb-28 sm:pb-32">
       {/* Phase 358 — flagship TimeScreen. Hero ring + horizon scrub
          + river + drawer. */}
-      <Safe name="TimeScreenV2">
-        <TimeScreenV2 />
+      <Safe name="TimeScreenV3">
+        <TimeScreenV3 />
       </Safe>
 
       {/* Supporting forecast detail. Sits below the hero so users who
