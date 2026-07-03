@@ -173,8 +173,11 @@ function HeroDonut({
   tone: "safe" | "watch" | "danger";
 }) {
   const reduced = useReducedMotion();
-  const size = 156;
+  // SVG is drawn in a fixed viewBox and CSS scales the wrapper so
+  // the donut never overflows its column. Actual rendered size is
+  // controlled by `.pro-hero-donut` (clamp per breakpoint).
   const stroke = 14;
+  const size = 156;
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const dash = Math.max(0, Math.min(circ, circ * ratio));
@@ -185,36 +188,38 @@ function HeroDonut({
         ? "var(--sally-watch)"
         : "var(--sally-safe)";
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      aria-hidden
-      className="pro-hero-donut"
-    >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="rgba(255,255,255,0.06)"
-        strokeWidth={stroke}
-      />
-      <motion.circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        strokeDasharray={circ}
-        initial={reduced ? { strokeDashoffset: circ - dash } : { strokeDashoffset: circ }}
-        animate={{ strokeDashoffset: circ - dash }}
-        transition={{ duration: reduced ? 0.1 : 1, ease: [0.32, 0.72, 0, 1] }}
-      />
-    </svg>
+    <div className="pro-hero-donut">
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden
+        width="100%"
+        height="100%"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth={stroke}
+        />
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          strokeDasharray={circ}
+          initial={reduced ? { strokeDashoffset: circ - dash } : { strokeDashoffset: circ }}
+          animate={{ strokeDashoffset: circ - dash }}
+          transition={{ duration: reduced ? 0.1 : 1, ease: [0.32, 0.72, 0, 1] }}
+        />
+      </svg>
+    </div>
   );
 }
 

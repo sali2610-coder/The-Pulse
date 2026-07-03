@@ -17,7 +17,7 @@ import dynamic from "next/dynamic";
 import { useFinanceStore } from "@/lib/store";
 import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { FloatingCTA } from "@/components/dashboard/floating-cta";
+// FloatingCTA replaced by PrimaryActionDock — component file preserved on disk.
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 import { WithdrawalDialog } from "@/components/expense-form/withdrawal-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
@@ -31,9 +31,10 @@ import { openAttentionCenter } from "@/lib/use-attention-center";
 import { motion as fmMotion } from "framer-motion";
 import { Bell as BellIcon, ArrowLeft as ArrowLeftIcon } from "lucide-react";
 import { tap as hapticTap } from "@/lib/haptics";
-import { TimeRecapCard } from "@/components/time/time-recap-card";
 import { TapDiscoveryToast } from "@/components/dashboard/tap-discovery-toast";
 import { PortfolioHeroCard } from "@/components/home/portfolio-hero-card";
+import { PrimaryActionDock } from "@/components/home/primary-action-dock";
+import { navigateToTab } from "@/lib/tab-nav";
 
 const lazy = (
   loader: () => Promise<{
@@ -267,13 +268,9 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* Phase 360 — TimeRecapCard is the single entry to the
-           flagship Time experience. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="TimeRecapCard">
-            <TimeRecapCard />
-          </Safe>
-        </div>
+        {/* Phase — TimeRecapCard removed from Home mount; component
+           file preserved on disk. Portfolio Hero now carries the
+           live-forecast surface at the top of the tab. */}
 
         {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
         <div className="sm:col-span-6 empty:hidden">
@@ -304,6 +301,7 @@ export function DashboardTab() {
           title="חיובים קבועים והלוואות"
           subtitle="כל מה שיורד אוטומטית מהבנק כל חודש"
           defaultCollapsed
+          variant="polish-obligations"
           summary={summaries?.obligations ?? undefined}
         >
           <div className="sm:col-span-6">
@@ -337,6 +335,7 @@ export function DashboardTab() {
           title="הכנסות"
           subtitle="משכורות, פריסה והכנסה צפויה"
           defaultCollapsed
+          variant="polish-income"
           summary={summaries?.income ?? undefined}
         >
           <div className="sm:col-span-6">
@@ -363,6 +362,7 @@ export function DashboardTab() {
           title="בדיקות, מנויים וחריגות"
           subtitle="התראות, מנויים וחריגות"
           defaultCollapsed
+          variant="polish-watch"
           summary={summaries?.watch ?? undefined}
         >
           {/* Phase 301 — RiskWarningsCard ("סיכוני תזרים") relocated
@@ -414,9 +414,9 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        <FloatingCTA
+        <PrimaryActionDock
           onExpense={() => setOpen(true)}
-          onWithdrawal={() => setWithdrawalOpen(true)}
+          onIncome={() => navigateToTab("setup", "incomes-mini-app")}
         />
 
         <ExpenseDialog open={open} onOpenChange={setOpen} />

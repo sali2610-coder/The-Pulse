@@ -42,6 +42,10 @@ export type DashboardSectionProps = {
     value: string;
     tone?: DashboardSectionTone;
   };
+  /** Visual-only tag emitted as `data-sally-variant` on the outer
+   *  <section>. Consumed by scoped CSS to polish specific sections
+   *  without changing any child card component. Optional. */
+  variant?: string;
   children: ReactNode;
 };
 
@@ -59,6 +63,7 @@ export function DashboardSection({
   defaultCollapsed = true,
   subtitle,
   summary,
+  variant,
   children,
 }: DashboardSectionProps) {
   // Initialise to the default; flip to the persisted value on mount.
@@ -94,7 +99,10 @@ export function DashboardSection({
   };
 
   return (
-    <section className="sm:col-span-6 flex flex-col gap-2.5">
+    <section
+      className="sm:col-span-6 flex flex-col gap-2.5"
+      data-sally-variant={variant}
+    >
       <button
         type="button"
         onClick={toggle}

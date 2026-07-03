@@ -383,6 +383,7 @@ export function RecentActivity() {
         className="glass-card flex flex-col gap-3 rounded-3xl p-4"
         dir="rtl"
         aria-label="פעילות החודש"
+        data-sally-variant="polish-activity"
       >
         {/* Header + KPI row */}
         <header className="flex items-center justify-between gap-3">
@@ -466,6 +467,7 @@ export function RecentActivity() {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         title="פעילות החודש"
+        className="sally-activity-sheet"
       >
         <header className="flex items-center justify-between gap-2 pt-1">
           <span className="text-section text-foreground">פעילות החודש</span>

@@ -237,6 +237,7 @@ export function ExpenseDialog({ open, onOpenChange }: Props) {
         title="תיעוד הוצאה"
         fullScreen
         lockDismiss
+        className="sally-add-sheet"
         footer={
           <div className="flex gap-2.5 px-4">
             <button
