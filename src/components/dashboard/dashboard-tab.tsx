@@ -68,28 +68,15 @@ const PendingTray = lazy(() =>
 // single home.
 
 // ── Obligations section ───────────────────────────────────────────
-const MonthlyObligationsHeader = lazy(() =>
-  import("@/components/dashboard/monthly-obligations-header").then((m) => ({
+// Phase — expanded experience unified into a single premium
+// ObligationsDashboard. Legacy cards (MonthlyObligationsHeader,
+// LoanSummaryCard, HousingCard, RecurringCalendarCard) preserved on
+// disk for any surface that still imports them; Home no longer mounts
+// them. All values still flow through buildObligationsOverview.
+const ObligationsDashboard = lazy(() =>
+  import("@/components/obligations/obligations-dashboard").then((m) => ({
     default:
-      m.MonthlyObligationsHeader as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const LoanSummaryCard = lazy(() =>
-  import("@/components/dashboard/loan-summary-card").then((m) => ({
-    default:
-      m.LoanSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const HousingCard = lazy(() =>
-  import("@/components/dashboard/housing-card").then((m) => ({
-    default:
-      m.HousingCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const RecurringCalendarCard = lazy(() =>
-  import("@/components/dashboard/recurring-calendar-card").then((m) => ({
-    default:
-      m.RecurringCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
+      m.ObligationsDashboard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 // Phase 297 — ObligationsTimelineCard lazy decl removed from Home.
@@ -305,29 +292,10 @@ export function DashboardTab() {
           summary={summaries?.obligations ?? undefined}
         >
           <div className="sm:col-span-6">
-            <Safe name="MonthlyObligationsHeader">
-              <MonthlyObligationsHeader />
+            <Safe name="ObligationsDashboard">
+              <ObligationsDashboard />
             </Safe>
           </div>
-          <div className="sm:col-span-6">
-            <Safe name="LoanSummaryCard">
-              <LoanSummaryCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="HousingCard">
-              <HousingCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="RecurringCalendarCard">
-              <RecurringCalendarCard />
-            </Safe>
-          </div>
-          {/* Phase 297 — ObligationsTimelineCard ("התחייבויות N
-             חודשים") removed from Home. The forward-looking
-             obligations view is already covered by the Future tab's
-             MonthlyCashflowCard + ObligationsAndWeek pair. */}
         </DashboardSection>
 
         <DashboardSection
