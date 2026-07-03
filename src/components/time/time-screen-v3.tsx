@@ -131,21 +131,7 @@ export function TimeScreenV3() {
 
       <StorySentence frame={frame} confidence={confidence} />
 
-      <InsightGrid frame={frame} confidence={confidence} />
-
-      <div className="tm-lists">
-        <TmList
-          title="חיובים בדרך"
-          eyebrow="עד הצ׳קפוינט"
-          events={outflowsBetween(frame)}
-        />
-        <TmList
-          title="הכנסות בדרך"
-          eyebrow="עד הצ׳קפוינט"
-          events={inflowsBetween(frame)}
-          positive
-        />
-      </div>
+      <InsightGrid key={activeCheckpoint.kind} frame={frame} />
     </div>
   );
 }
@@ -564,168 +550,234 @@ function eventsBetween(frame: TimeFrame): Array<{
     (a, b) => new Date(a.whenISO).getTime() - new Date(b.whenISO).getTime(),
   );
 }
-function outflowsBetween(frame: TimeFrame) {
-  return eventsBetween(frame).filter((e) => e.amount < 0);
-}
-function inflowsBetween(frame: TimeFrame) {
-  return eventsBetween(frame).filter((e) => e.amount > 0);
-}
-
 // ── Insight grid ──────────────────────────────────────────
 
-function InsightGrid({
-  frame,
-  confidence,
-}: {
-  frame: TimeFrame;
-  confidence: Confidence;
-}) {
-  const events = eventsBetween(frame);
-  const inflows = events.filter((e) => e.amount > 0);
-  const outflows = events.filter((e) => e.amount < 0);
-  const salary = inflows
-    .filter((e) => e.kind === "income")
-    .reduce((s, e) => s + e.amount, 0);
-  const salaryCount = inflows.filter((e) => e.kind === "income").length;
-  const loans = outflows
-    .filter((e) => e.kind === "loan")
-    .reduce((s, e) => s + Math.abs(e.amount), 0);
-  const loanCount = outflows.filter((e) => e.kind === "loan").length;
-  const cards = outflows
-    .filter((e) => e.kind === "card")
-    .reduce((s, e) => s + Math.abs(e.amount), 0);
-  const cardCount = outflows.filter((e) => e.kind === "card").length;
-  const bills = outflows
-    .filter((e) => e.kind === "bank_debit")
-    .reduce((s, e) => s + Math.abs(e.amount), 0);
-  const billCount = outflows.filter((e) => e.kind === "bank_debit").length;
-  const netFlow = frame.windowInflow - frame.windowOutflow;
+type LaneKey = "income" | "bank_debit" | "loan" | "card";
+type LaneMeta = {
+  key: LaneKey;
+  eyebrow: string;
+  tone: "safe" | "watch" | "lane-loan" | "lane-card";
+  glyph: React.ReactNode;
+  sign: "+" | "−";
+  emptyLabel: string;
+  singularLabel: (n: number) => string;
+};
 
-  const safeUntil = useMemo(() => {
-    if (!frame.curve) return null;
-    for (const p of frame.curve.points) {
-      if (p.balance < 0) {
-        return p.whenISO;
-      }
+const LANES: LaneMeta[] = [
+  {
+    key: "income",
+    eyebrow: "נכנס",
+    tone: "safe",
+    glyph: <GlyphIn />,
+    sign: "+",
+    emptyLabel: "אין הפקדה עד הצ׳קפוינט",
+    singularLabel: (n) => (n === 1 ? "הפקדה אחת" : `${n} הפקדות`),
+  },
+  {
+    key: "bank_debit",
+    eyebrow: "חיובי בנק",
+    tone: "watch",
+    glyph: <GlyphBill />,
+    sign: "−",
+    emptyLabel: "אין חיובי בנק",
+    singularLabel: (n) => (n === 1 ? "חיוב אחד" : `${n} חיובים`),
+  },
+  {
+    key: "loan",
+    eyebrow: "הלוואות",
+    tone: "lane-loan",
+    glyph: <GlyphLoan />,
+    sign: "−",
+    emptyLabel: "אף הלוואה לא ירדה",
+    singularLabel: (n) => (n === 1 ? "הלוואה אחת" : `${n} הלוואות`),
+  },
+  {
+    key: "card",
+    eyebrow: "אשראי",
+    tone: "lane-card",
+    glyph: <GlyphCard />,
+    sign: "−",
+    emptyLabel: "אין חיובי אשראי",
+    singularLabel: (n) => (n === 1 ? "חיוב אחד" : `${n} חיובים`),
+  },
+];
+
+function InsightGrid({ frame }: { frame: TimeFrame }) {
+  const [openLane, setOpenLane] = useState<LaneKey | null>(null);
+  const events = useMemo(() => eventsBetween(frame), [frame]);
+
+  // Recompute per lane. Every number here is derived from
+  // frame.curve[0..cursor] — so tiles ARE the story of the balance
+  // reached at the selected checkpoint.
+  const perLane = useMemo(() => {
+    const m = new Map<LaneKey, typeof events>();
+    for (const l of LANES) m.set(l.key, []);
+    for (const e of events) {
+      const bucket = m.get(e.kind);
+      if (bucket) bucket.push(e);
     }
-    return null;
-  }, [frame.curve]);
+    return m;
+  }, [events]);
 
   return (
-    <div className="tm-insight-grid">
-      <InsightCard
-        eyebrow="שכר צפוי"
-        value={salary}
-        sub={
-          salaryCount === 0
-            ? "אין הפקדה עד הצ׳קפוינט"
-            : salaryCount === 1
-              ? "הפקדה אחת בדרך"
-              : `${salaryCount} הפקדות בדרך`
-        }
-        tone="safe"
-        glyph={<GlyphIn />}
-      />
-      <InsightCard
-        eyebrow="הלוואות שירדו"
-        value={loans}
-        sub={
-          loanCount === 0
-            ? "אף הלוואה לא ירדה"
-            : loanCount === 1
-              ? "הלוואה אחת ירדה"
-              : `${loanCount} הלוואות ירדו`
-        }
-        tone="lane-loan"
-        glyph={<GlyphLoan />}
-      />
-      <InsightCard
-        eyebrow="הוצאות אשראי"
-        value={cards}
-        sub={
-          cardCount === 0
-            ? "אין חיובי אשראי"
-            : `${cardCount} חיובי אשראי`
-        }
-        tone="lane-card"
-        glyph={<GlyphCard />}
-      />
-      <InsightCard
-        eyebrow="חשבונות ממתינים"
-        value={bills}
-        sub={
-          billCount === 0
-            ? "אין חשבונות ממתינים"
-            : `${billCount} חשבונות ממתינים`
-        }
-        tone="watch"
-        glyph={<GlyphBill />}
-      />
-      <InsightCard
-        eyebrow="בטוח עד"
-        value={safeUntil ? null : frame.balance}
-        rawText={
-          safeUntil
-            ? DATE_FMT.format(new Date(safeUntil))
-            : "לאורך כל הטווח"
-        }
-        sub={safeUntil ? "אחר כך היתרה שלילית" : "היתרה חיובית לאורך כל הדרך"}
-        tone={safeUntil ? "danger" : "safe"}
-        glyph={<GlyphClock />}
-        textPrimary
-      />
-      <InsightCard
-        eyebrow={netFlow >= 0 ? "עודף צפוי" : "גירעון צפוי"}
-        value={Math.abs(netFlow)}
-        sub={
-          netFlow >= 0
-            ? "הכנסות עולות על יציאות"
-            : "יציאות עולות על הכנסות"
-        }
-        tone={confidence === "danger" ? "danger" : netFlow >= 0 ? "safe" : "watch"}
-        glyph={<GlyphNet />}
-      />
+    <div className="tm-insight-wrap" data-open={openLane ?? undefined}>
+      <div className="tm-insight-grid">
+        {LANES.map((lane) => {
+          const rows = perLane.get(lane.key) ?? [];
+          const total = rows.reduce(
+            (s, r) => s + Math.abs(r.amount),
+            0,
+          );
+          const isOpen = openLane === lane.key;
+          const isDimmed = openLane !== null && !isOpen;
+          return (
+            <InsightTile
+              key={lane.key}
+              lane={lane}
+              rows={rows}
+              total={total}
+              active={isOpen}
+              dimmed={isDimmed}
+              onToggle={() =>
+                setOpenLane((prev) => (prev === lane.key ? null : lane.key))
+              }
+            />
+          );
+        })}
+      </div>
+
+      <AnimatePresence initial={false} mode="wait">
+        {openLane ? (
+          <LaneExpansion
+            key={`${openLane}-${frame.cursorISO}`}
+            lane={LANES.find((l) => l.key === openLane) as LaneMeta}
+            rows={perLane.get(openLane) ?? []}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
 
-function InsightCard({
-  eyebrow,
-  value,
-  sub,
-  tone,
-  glyph,
-  rawText,
-  textPrimary,
+function InsightTile({
+  lane,
+  rows,
+  total,
+  active,
+  dimmed,
+  onToggle,
 }: {
-  eyebrow: string;
-  value: number | null;
-  sub: string;
-  tone: "safe" | "watch" | "danger" | "lane-loan" | "lane-card" | "neutral";
-  glyph: React.ReactNode;
-  rawText?: string;
-  textPrimary?: boolean;
+  lane: LaneMeta;
+  rows: ReturnType<typeof eventsBetween>;
+  total: number;
+  active: boolean;
+  dimmed: boolean;
+  onToggle: () => void;
 }) {
+  const reduced = useReducedMotion();
+  const count = rows.length;
+  const sub = count === 0 ? lane.emptyLabel : lane.singularLabel(count);
   return (
-    <div className="tm-insight" data-tone={tone}>
+    <motion.button
+      type="button"
+      className="tm-insight"
+      data-tone={lane.tone}
+      data-active={active ? "true" : undefined}
+      data-dimmed={dimmed ? "true" : undefined}
+      onClick={onToggle}
+      aria-expanded={active}
+      aria-label={`${lane.eyebrow} · ${count} פריטים`}
+      whileTap={{ scale: 0.97 }}
+      transition={{
+        type: "spring",
+        stiffness: 380,
+        damping: 34,
+        duration: reduced ? 0.12 : undefined,
+      }}
+    >
       <span aria-hidden className="tm-insight-glyph">
-        {glyph}
+        {lane.glyph}
       </span>
-      <span className="tm-insight-eyebrow">{eyebrow}</span>
-      {textPrimary && rawText ? (
-        <span className="tm-insight-text" dir="rtl">
-          {rawText}
-        </span>
-      ) : value !== null ? (
-        <span className="tm-insight-value" dir="ltr">
-          <AnimatedNumber
-            value={value}
-            format={(n) => ILS.format(Math.round(n))}
-          />
-        </span>
-      ) : null}
+      <span className="tm-insight-eyebrow">{lane.eyebrow}</span>
+      <span className="tm-insight-value" dir="ltr">
+        {lane.sign}
+        <AnimatedNumber
+          value={total}
+          format={(n) => ILS.format(Math.round(n))}
+        />
+      </span>
       <span className="tm-insight-sub">{sub}</span>
-    </div>
+    </motion.button>
+  );
+}
+
+function LaneExpansion({
+  lane,
+  rows,
+}: {
+  lane: LaneMeta;
+  rows: ReturnType<typeof eventsBetween>;
+}) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.section
+      layout
+      className="tm-lane"
+      data-tone={lane.tone}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+      transition={{
+        type: "spring",
+        stiffness: 320,
+        damping: 30,
+        duration: reduced ? 0.12 : undefined,
+      }}
+      aria-label={`${lane.eyebrow} — פירוט האירועים`}
+    >
+      <header className="tm-lane-head">
+        <span className="tm-lane-eyebrow">{lane.eyebrow}</span>
+        <span className="tm-lane-count" data-mono="true" dir="ltr">
+          {rows.length}
+        </span>
+      </header>
+      {rows.length === 0 ? (
+        <div className="tm-lane-empty">אין אירועים עד הצ׳קפוינט.</div>
+      ) : (
+        <ul className="tm-lane-list">
+          {rows.map((r, i) => (
+            <motion.li
+              key={`${r.whenISO}-${i}`}
+              layout
+              initial={reduced ? { opacity: 0 } : { opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{
+                delay: Math.min(i * 0.03, 0.18),
+                duration: reduced ? 0.12 : 0.32,
+                ease: EASE,
+              }}
+              className="tm-lane-row"
+            >
+              <span aria-hidden className="tm-lane-rail" />
+              <div className="tm-lane-body">
+                <span className="tm-lane-title">{r.label}</span>
+                <span className="tm-lane-date" data-mono="true" dir="ltr">
+                  {DATE_FMT.format(new Date(r.whenISO))}
+                </span>
+              </div>
+              <span
+                className="tm-lane-amount"
+                data-mono="true"
+                dir="ltr"
+              >
+                {lane.sign}
+                {ILS.format(Math.round(Math.abs(r.amount)))}
+              </span>
+            </motion.li>
+          ))}
+        </ul>
+      )}
+    </motion.section>
   );
 }
 
@@ -762,106 +814,6 @@ function GlyphBill() {
     </svg>
   );
 }
-function GlyphClock() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M10 6v4l3 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-function GlyphNet() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path d="M4 14l4-4 3 3 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 3h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-// ── Expandable event lists ─────────────────────────────────
-
-function TmList({
-  title,
-  eyebrow,
-  events,
-  positive,
-}: {
-  title: string;
-  eyebrow: string;
-  events: ReturnType<typeof eventsBetween>;
-  positive?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const reduced = useReducedMotion();
-  const total = events.reduce((s, e) => s + Math.abs(e.amount), 0);
-  return (
-    <section className="tm-list">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="tm-list-head"
-      >
-        <div className="tm-list-head-text">
-          <span className="tm-list-eyebrow">{eyebrow}</span>
-          <span className="tm-list-title">{title}</span>
-        </div>
-        <div className="tm-list-head-right">
-          <span className="tm-list-total" dir="ltr">
-            {ILS.format(Math.round(total))}
-          </span>
-          <span className="tm-list-count">{events.length}</span>
-          <motion.span
-            aria-hidden
-            className="tm-list-arrow"
-            animate={{ rotate: open ? 90 : 0 }}
-            transition={{ duration: reduced ? 0.12 : 0.32, ease: EASE }}
-          >
-            ▸
-          </motion.span>
-        </div>
-      </button>
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.ul
-            key="body"
-            initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
-            transition={{ duration: reduced ? 0.12 : 0.34, ease: EASE }}
-            className="tm-list-body"
-          >
-            {events.length === 0 ? (
-              <li className="tm-list-empty">אין פריטים בטווח.</li>
-            ) : (
-              events.map((e, i) => (
-                <li key={`${e.whenISO}-${i}`} className="tm-list-row">
-                  <span aria-hidden className="tm-list-row-rail" data-positive={positive ? "true" : undefined} />
-                  <div className="tm-list-row-text">
-                    <span className="tm-list-row-title">{e.label}</span>
-                    <span className="tm-list-row-meta">
-                      {DATE_FMT.format(new Date(e.whenISO))}
-                    </span>
-                  </div>
-                  <span
-                    dir="ltr"
-                    className="tm-list-row-amount"
-                    data-tone={positive ? "safe" : "ink"}
-                  >
-                    {e.amount >= 0 ? "+" : "−"}
-                    {ILS.format(Math.abs(Math.round(e.amount)))}
-                  </span>
-                </li>
-              ))
-            )}
-          </motion.ul>
-        ) : null}
-      </AnimatePresence>
-    </section>
-  );
-}
-
 // ── Empty state ────────────────────────────────────────────
 
 function EmptyState({ reason }: { reason: "no-anchors" | "loading" }) {
