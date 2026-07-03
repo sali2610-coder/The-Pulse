@@ -1,23 +1,230 @@
 "use client";
 
-// Home v2 · Dashboard tab (Portfolio Pro).
+// Phase 225 — consumer-first dashboard refactor.
 //
-// Auth-gated production Home. Renders the Portfolio Pro variant so
-// the deployed branch shows the approved visual language to real
-// users. UI-only surface — every number is composed by useHomeData
-// via existing engine helpers. Zero engine change.
+// Replaces the analyst-style 80+ card bento with a calm hero stack
+// + grouped collapsed sections. Reuses every existing calculation
+// (forecast, liquidity, risk-warnings, cash-flow buckets …); only
+// the visual hierarchy + density changes.
+//
+// First-paint reveals three hero cards and six collapsed section
+// headers. Each header shows a single colored summary chip so the
+// user reads the bottom-line of every section without expanding.
 
+import { useMemo, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+
+import { useFinanceStore } from "@/lib/store";
+import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { FloatingCTA } from "@/components/dashboard/floating-cta";
+import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
+import { WithdrawalDialog } from "@/components/expense-form/withdrawal-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
 import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
-import { useFinanceStore } from "@/lib/store";
+import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
-import { useHomeData } from "@/components/home/use-home-data";
-import { VariantPortfolioPro } from "@/components/home/variants/variant-portfolio-pro";
+import { computeSummaries } from "@/lib/dashboard-section-summaries";
+
+import { useAttentionCount } from "@/components/dashboard/attention-center";
+import { openAttentionCenter } from "@/lib/use-attention-center";
+import { motion as fmMotion } from "framer-motion";
+import { Bell as BellIcon, ArrowLeft as ArrowLeftIcon } from "lucide-react";
+import { tap as hapticTap } from "@/lib/haptics";
+import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
+import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
+import { TimeRecapCard } from "@/components/time/time-recap-card";
+import { TapDiscoveryToast } from "@/components/dashboard/tap-discovery-toast";
+
+const lazy = (
+  loader: () => Promise<{
+    default: React.ComponentType<Record<string, unknown>>;
+  }>,
+) => dynamic(loader, { ssr: false });
+
+// ── Always-on critical surfaces ────────────────────────────────────
+const WelcomeSetupCard = lazy(() =>
+  import("@/components/dashboard/welcome-setup-card").then((m) => ({
+    default:
+      m.WelcomeSetupCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const StaleAnchorsBanner = lazy(() =>
+  import("@/components/dashboard/stale-anchors-banner").then((m) => ({
+    default:
+      m.StaleAnchorsBanner as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const PendingTray = lazy(() =>
+  import("@/components/dashboard/pending-tray").then((m) => ({
+    default:
+      m.PendingTray as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+// Phase 285 — future-cashflow lazy components removed from Home.
+// They still ship via the "עתידי" tab.
+
+// Phase 286 — credit-cards lazies removed from Home.
+// Phase 303 — CategorySpendCard lazy decl dropped too; the
+// "ניתוחים וסטטיסטיקות" section no longer mounts the per-category
+// breakdown ("לאן הולך הכסף") because the Expenses tab is now its
+// single home.
+
+// ── Obligations section ───────────────────────────────────────────
+const MonthlyObligationsHeader = lazy(() =>
+  import("@/components/dashboard/monthly-obligations-header").then((m) => ({
+    default:
+      m.MonthlyObligationsHeader as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const LoanSummaryCard = lazy(() =>
+  import("@/components/dashboard/loan-summary-card").then((m) => ({
+    default:
+      m.LoanSummaryCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const HousingCard = lazy(() =>
+  import("@/components/dashboard/housing-card").then((m) => ({
+    default:
+      m.HousingCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const RecurringCalendarCard = lazy(() =>
+  import("@/components/dashboard/recurring-calendar-card").then((m) => ({
+    default:
+      m.RecurringCalendarCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+// Phase 297 — ObligationsTimelineCard lazy decl removed from Home.
+// Component file remains on disk for any future surface that wants it.
+
+// ── Income section ────────────────────────────────────────────────
+const IncomeBreakdownCard = lazy(() =>
+  import("@/components/dashboard/income-breakdown-card").then((m) => ({
+    default:
+      m.IncomeBreakdownCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const IncomeForecastCard = lazy(() =>
+  import("@/components/dashboard/income-forecast-card").then((m) => ({
+    default:
+      m.IncomeForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+
+// ── Analytics section ─────────────────────────────────────────────
+// Phase 303 — CategoryDonut + HeatmapMini lazy decls dropped here.
+// Both visuals duplicated the Expenses-tab CategorySpendCard / the
+// dedicated analytics screens.
+// Phase 311 — analytics-section lazy decls removed entirely.
+// CategoryParetoCard, CategoryPaceCard, SpendSplitCard, NetWorthCard,
+// NetWorthTrendCard, RunwayCard, FixedCostRatioCard, AvgTicketCard,
+// WeekendSpendCard component files stay on disk so other tabs can
+// import them.
+
+// ── Watch / subscriptions / anomalies section ────────────────────
+const SubscriptionReviewCard = lazy(() =>
+  import("@/components/dashboard/subscription-review-card").then((m) => ({
+    default:
+      m.SubscriptionReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const SubscriptionRadarCard = lazy(() =>
+  import("@/components/dashboard/subscription-radar-card").then((m) => ({
+    default:
+      m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+// Phase 301 — RiskWarningsCard lazy decl removed; the card now
+// lives in src/components/expenses/expenses-tab.tsx.
+const AnomalyBanner = lazy(() =>
+  import("@/components/dashboard/anomaly-banner").then((m) => ({
+    default:
+      m.AnomalyBanner as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const AnomaliesCard = lazy(() =>
+  import("@/components/dashboard/anomalies-card").then((m) => ({
+    default:
+      m.AnomaliesCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const SmartInsightsCard = lazy(() =>
+  import("@/components/dashboard/smart-insights-card").then((m) => ({
+    default:
+      m.SmartInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+// Phase 330 — "הצעות חכמות" removed from Home. Duplicate of Insights
+// tab content; component file stays on disk for other surfaces.
+
+// Phase 295 — "פירוט מתקדם" overflow section retired. The six lazy
+// declarations it hosted (PulseBar, SmartSummaryCard,
+// SpentThisMonthCard, AccountBridgeCard, ExpectedBalanceCard,
+// DailyInsightsCard) are removed from Home; the components remain on
+// disk so other surfaces that import them keep working.
+const TodayPulseCard = lazy(() =>
+  import("@/components/dashboard/today-pulse-card").then((m) => ({
+    default:
+      m.TodayPulseCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const RecentActivity = lazy(() =>
+  import("@/components/dashboard/recent-activity").then((m) => ({
+    default:
+      m.RecentActivity as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+const CopilotCard = lazy(() =>
+  import("@/components/dashboard/copilot-card").then((m) => ({
+    default:
+      m.CopilotCard as unknown as React.ComponentType<Record<string, unknown>>,
+  })),
+);
+function Safe({ name, children }: { name: string; children: ReactNode }) {
+  return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
+}
 
 export function DashboardTab() {
+  const [open, setOpen] = useState(false);
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const hydrated = useFinanceStore((s) => s.hasHydrated);
+  const accounts = useFinanceStore((s) => s.accounts);
+  const loans = useFinanceStore((s) => s.loans);
+  const incomes = useFinanceStore((s) => s.incomes);
+  const rules = useFinanceStore((s) => s.rules);
+  const statuses = useFinanceStore((s) => s.statuses);
+  const entries = useFinanceStore((s) => s.entries);
+  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
+  const budgetMode = useFinanceStore((s) => s.budgetMode);
+  const pulseBudget = usePulseBudget({ monthlyBudget, budgetMode });
   const cloudSync = useCloudSyncState();
+
+  const summaries = useMemo(() => {
+    if (!hydrated) return null;
+    // Phase 238 — summaries reflect what the user sees on the hero
+    // stack, so pass the EFFECTIVE budget rather than the raw store
+    // value. Manual mode is a no-op (effective === raw).
+    return computeSummaries({
+      accounts,
+      loans,
+      incomes,
+      rules,
+      statuses,
+      entries,
+      monthlyBudget: pulseBudget,
+    });
+  }, [
+    hydrated,
+    accounts,
+    loans,
+    incomes,
+    rules,
+    statuses,
+    entries,
+    pulseBudget,
+  ]);
 
   const showCurtain = Boolean(
     cloudSync?.configured &&
@@ -28,18 +235,270 @@ export function DashboardTab() {
   if (showCurtain) {
     return <DashboardSkeleton />;
   }
-  void hydrated;
 
   return (
     <SnapshotProvider>
-      <ErrorBoundary name="PortfolioProHome">
-        <ProHomeMount />
-      </ErrorBoundary>
+      <TapDiscoveryToast />
+      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+        {/* ── Critical banners — render only when relevant.
+            Phase 276 — `empty:hidden` collapses the wrapper div when
+            the lazy-loaded child renders null so the grid doesn't
+            accumulate phantom rows (each empty row was still adding
+            a gap-4 between visible cards). */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="WelcomeSetupCard">
+            <WelcomeSetupCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="StaleAnchorsBanner">
+            <StaleAnchorsBanner />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="PendingTray">
+            <PendingTray />
+          </Safe>
+        </div>
+
+        {/* Phase 294 — Attention Center entry banner. Renders only
+           when there's at least one item; opens the bottom sheet
+           that lists pending confirmations, AI risks, and recurring
+           review items. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="AttentionBanner">
+            <AttentionBanner />
+          </Safe>
+        </div>
+
+        {/* Phase 275 — "הפעימה של היום" lifted to the very top of
+           Home above the hero stack. It's emotionally powerful and
+           sets the day's tone before any numbers. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="TodayPulseCard">
+            <TodayPulseCard />
+          </Safe>
+        </div>
+
+        {/* Phase 325 — Daily Budget Strip sits directly under Pulse so
+           the user reads "how much can I spend today?" before any
+           other number. Compact strip; the same engine that drives
+           Pulse / Health drives this. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="HeroSpendableCard">
+            <HeroSpendableCard />
+          </Safe>
+        </div>
+
+        {/* Phase 360 — old "איפה אני אהיה" forecast hero retired
+           from Home. TimeRecapCard is now the single entry to the
+           flagship Time experience; tapping it routes to the זמן
+           tab where the full immersive screen lives. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="TimeRecapCard">
+            <TimeRecapCard />
+          </Safe>
+        </div>
+
+        {/* Phase 379 — "בריאות פיננסית" gauge removed from this tab.
+           Same story is told on the AI Insights tab; keeping it on
+           Home was duplicate visual load. Component file preserved
+           on disk for any future caller. */}
+
+        {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="CopilotCard">
+            <CopilotCard />
+          </Safe>
+        </div>
+
+        <div className="sm:col-span-6">
+          <Safe name="HeroInsightCard">
+            <HeroInsightCard />
+          </Safe>
+        </div>
+
+        {/* Visual separator between hero stack and grouped sections —
+           gives the L1 cards breathing room before L2 starts. */}
+        <div className="sm:col-span-6 h-1" aria-hidden />
+
+        {/* ── Sections — collapsed by default with a summary chip ──
+            Phase 285 — "תזרים עתידי" removed from Home. The full
+            forward-looking surfaces (MonthlyCashflowCard,
+            LiquidityCurveCard, CashflowBucketsCard,
+            UpcomingOutflowsCard, ForecastTimelineCard) all still
+            render inside the dedicated "עתידי" tab. Home stays
+            focused on today / now / immediate state. */}
+
+        {/* Phase 286 — "כרטיסי אשראי" section removed from Home. The
+           CardsHierarchyCard, CardsPressureCard, ActiveInstallmentsCard
+           experience still ships inside the "הוצאות" tab. Home stays
+           focused on executive overview. */}
+
+        <DashboardSection
+          storageKey="simple.obligations"
+          title="חיובים קבועים והלוואות"
+          subtitle="כל מה שיורד אוטומטית מהבנק כל חודש"
+          defaultCollapsed
+          summary={summaries?.obligations ?? undefined}
+        >
+          <div className="sm:col-span-6">
+            <Safe name="MonthlyObligationsHeader">
+              <MonthlyObligationsHeader />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="LoanSummaryCard">
+              <LoanSummaryCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="HousingCard">
+              <HousingCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="RecurringCalendarCard">
+              <RecurringCalendarCard />
+            </Safe>
+          </div>
+          {/* Phase 297 — ObligationsTimelineCard ("התחייבויות N
+             חודשים") removed from Home. The forward-looking
+             obligations view is already covered by the Future tab's
+             MonthlyCashflowCard + ObligationsAndWeek pair. */}
+        </DashboardSection>
+
+        <DashboardSection
+          storageKey="simple.income"
+          title="הכנסות"
+          subtitle="משכורות, פריסה והכנסה צפויה"
+          defaultCollapsed
+          summary={summaries?.income ?? undefined}
+        >
+          <div className="sm:col-span-6">
+            <Safe name="IncomeBreakdownCard">
+              <IncomeBreakdownCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="IncomeForecastCard">
+              <IncomeForecastCard />
+            </Safe>
+          </div>
+        </DashboardSection>
+
+        {/* Phase 311 — "ניתוחים וסטטיסטיקות" removed from Home.
+           CategoryParetoCard / CategoryPaceCard / SpendSplitCard /
+           AvgTicketCard / WeekendSpendCard / FixedCostRatioCard /
+           NetWorthCard / NetWorthTrendCard / RunwayCard are too
+           analytical for an executive overview. Components stay on
+           disk; Expenses / Insights can mount them when needed. */}
+
+        <DashboardSection
+          storageKey="simple.watch"
+          title="בדיקות, מנויים וחריגות"
+          subtitle="התראות, מנויים וחריגות"
+          defaultCollapsed
+          summary={summaries?.watch ?? undefined}
+        >
+          {/* Phase 301 — RiskWarningsCard ("סיכוני תזרים") relocated
+             to the Expenses tab next to the financial-control-center
+             cards. Component file stays — Expenses tab mounts it. */}
+          <div className="sm:col-span-6">
+            <Safe name="AnomalyBanner">
+              <AnomalyBanner />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="AnomaliesCard">
+              <AnomaliesCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SubscriptionReviewCard">
+              <SubscriptionReviewCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SubscriptionRadarCard">
+              <SubscriptionRadarCard />
+            </Safe>
+          </div>
+          <div className="sm:col-span-6">
+            <Safe name="SmartInsightsCard">
+              <SmartInsightsCard />
+            </Safe>
+          </div>
+          {/* Phase 330 — SmartRecommendationsCard removed from Home.
+             Duplicates the Insights tab; user couldn't tell the two
+             apart. Component file remains for other surfaces. */}
+        </DashboardSection>
+
+        {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
+           CopilotCard ("טייס פיננסי") was promoted to the executive
+           hero slot at the top of Home (above the hero stack), and
+           RecentActivity stays as a single compact preview below.
+           Every other card it used to host (HeroEomCard, PulseBar,
+           SmartSummaryCard, SpentThisMonthCard, AccountBridgeCard,
+           ExpectedBalanceCard, DailyInsightsCard) is a duplicate of
+           data already surfaced in Expenses / Future / Insights and
+           is no longer mounted on Home. Components remain on disk so
+           other tabs that import them keep working. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="RecentActivity">
+            <RecentActivity />
+          </Safe>
+        </div>
+
+        <FloatingCTA
+          onExpense={() => setOpen(true)}
+          onWithdrawal={() => setWithdrawalOpen(true)}
+        />
+
+        <ExpenseDialog open={open} onOpenChange={setOpen} />
+        <WithdrawalDialog
+          open={withdrawalOpen}
+          onOpenChange={setWithdrawalOpen}
+        />
+      </div>
     </SnapshotProvider>
   );
 }
 
-function ProHomeMount() {
-  const data = useHomeData();
-  return <VariantPortfolioPro data={data} />;
+function AttentionBanner() {
+  const count = useAttentionCount();
+  if (count === 0) return null;
+  return (
+    <fmMotion.button
+      type="button"
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      onClick={() => {
+        hapticTap();
+        openAttentionCenter();
+      }}
+      aria-label={`פתח את מרכז תשומת הלב · ${count} פריטים`}
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[#FBBF24]/30 bg-[#FBBF24]/8 p-3 text-start transition-colors hover:border-[#FBBF24]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FBBF24]/60"
+      style={{
+        boxShadow:
+          "0 16px 40px -22px rgba(251, 191, 36, 0.45), inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#FBBF24]/15 text-[#FBBF24]">
+          <BellIcon className="size-4" />
+        </span>
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="text-[12px] uppercase tracking-[0.22em] text-[#FBBF24]">
+            מרכז תשומת הלב
+          </span>
+          <span className="text-section text-foreground">
+            {count} פריטים דורשים בדיקה
+          </span>
+        </div>
+      </div>
+      <ArrowLeftIcon className="size-4 shrink-0 text-[#FBBF24]" aria-hidden />
+    </fmMotion.button>
+  );
 }
