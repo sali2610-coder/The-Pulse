@@ -83,16 +83,15 @@ const ObligationsDashboard = lazy(() =>
 // Component file remains on disk for any future surface that wants it.
 
 // ── Income section ────────────────────────────────────────────────
-const IncomeBreakdownCard = lazy(() =>
-  import("@/components/dashboard/income-breakdown-card").then((m) => ({
+// Phase — expanded experience unified into a single premium
+// IncomeLauncher: hero ring + next-income secondary + expandable
+// per-income edit list. Legacy cards (IncomeBreakdownCard,
+// IncomeForecastCard) preserved on disk for surfaces that still
+// import them; Home no longer mounts them.
+const IncomeLauncher = lazy(() =>
+  import("@/components/income/income-launcher").then((m) => ({
     default:
-      m.IncomeBreakdownCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const IncomeForecastCard = lazy(() =>
-  import("@/components/dashboard/income-forecast-card").then((m) => ({
-    default:
-      m.IncomeForecastCard as unknown as React.ComponentType<Record<string, unknown>>,
+      m.IncomeLauncher as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 
@@ -107,36 +106,16 @@ const IncomeForecastCard = lazy(() =>
 // import them.
 
 // ── Watch / subscriptions / anomalies section ────────────────────
-const SubscriptionReviewCard = lazy(() =>
-  import("@/components/dashboard/subscription-review-card").then((m) => ({
+// Phase — expanded experience unified into a single premium
+// WatchLauncher: severity hero + 3 metric chips + expandable list
+// of every attention item. Legacy cards (SubscriptionReviewCard,
+// SubscriptionRadarCard, AnomalyBanner, AnomaliesCard, SmartInsights-
+// Card) preserved on disk for other surfaces; Home no longer mounts
+// them.
+const WatchLauncher = lazy(() =>
+  import("@/components/watch/watch-launcher").then((m) => ({
     default:
-      m.SubscriptionReviewCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const SubscriptionRadarCard = lazy(() =>
-  import("@/components/dashboard/subscription-radar-card").then((m) => ({
-    default:
-      m.SubscriptionRadarCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-// Phase 301 — RiskWarningsCard lazy decl removed; the card now
-// lives in src/components/expenses/expenses-tab.tsx.
-const AnomalyBanner = lazy(() =>
-  import("@/components/dashboard/anomaly-banner").then((m) => ({
-    default:
-      m.AnomalyBanner as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const AnomaliesCard = lazy(() =>
-  import("@/components/dashboard/anomalies-card").then((m) => ({
-    default:
-      m.AnomaliesCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-const SmartInsightsCard = lazy(() =>
-  import("@/components/dashboard/smart-insights-card").then((m) => ({
-    default:
-      m.SmartInsightsCard as unknown as React.ComponentType<Record<string, unknown>>,
+      m.WatchLauncher as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
 // Phase 330 — "הצעות חכמות" removed from Home. Duplicate of Insights
@@ -307,13 +286,8 @@ export function DashboardTab() {
           summary={summaries?.income ?? undefined}
         >
           <div className="sm:col-span-6">
-            <Safe name="IncomeBreakdownCard">
-              <IncomeBreakdownCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="IncomeForecastCard">
-              <IncomeForecastCard />
+            <Safe name="IncomeLauncher">
+              <IncomeLauncher />
             </Safe>
           </div>
         </DashboardSection>
@@ -333,37 +307,11 @@ export function DashboardTab() {
           variant="polish-watch"
           summary={summaries?.watch ?? undefined}
         >
-          {/* Phase 301 — RiskWarningsCard ("סיכוני תזרים") relocated
-             to the Expenses tab next to the financial-control-center
-             cards. Component file stays — Expenses tab mounts it. */}
           <div className="sm:col-span-6">
-            <Safe name="AnomalyBanner">
-              <AnomalyBanner />
+            <Safe name="WatchLauncher">
+              <WatchLauncher />
             </Safe>
           </div>
-          <div className="sm:col-span-6">
-            <Safe name="AnomaliesCard">
-              <AnomaliesCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="SubscriptionReviewCard">
-              <SubscriptionReviewCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="SubscriptionRadarCard">
-              <SubscriptionRadarCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="SmartInsightsCard">
-              <SmartInsightsCard />
-            </Safe>
-          </div>
-          {/* Phase 330 — SmartRecommendationsCard removed from Home.
-             Duplicates the Insights tab; user couldn't tell the two
-             apart. Component file remains for other surfaces. */}
         </DashboardSection>
 
         {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
