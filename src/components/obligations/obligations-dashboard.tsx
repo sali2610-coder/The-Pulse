@@ -26,7 +26,6 @@ import {
 import {
   Banknote,
   CalendarClock,
-  ChevronDown,
   MoreHorizontal,
   Pause,
   Play,
@@ -63,7 +62,7 @@ const DATE_FMT_LONG = new Intl.DateTimeFormat("he-IL", {
 
 const EASE = [0.32, 0.72, 0, 1] as const;
 
-type Lens = "loans" | "fixed" | null;
+type Lens = "loans" | "fixed" | "next" | "debt" | null;
 
 export function ObligationsDashboard() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
@@ -98,6 +97,11 @@ export function ObligationsDashboard() {
     [rules],
   );
 
+  const upcoming = useMemo(
+    () => pickUpcoming(overview?.loans ?? [], activeRulesThisMonth, 8),
+    [overview, activeRulesThisMonth],
+  );
+
   if (!hydrated || !overview) return <SkeletonState />;
   if (overview.loansMonthly === 0 && overview.fixedMonthly === 0) {
     return <EmptyState />;
@@ -115,73 +119,62 @@ export function ObligationsDashboard() {
     setLoanEditorOpen(true);
   }
 
+  function toggleLens(next: Lens) {
+    hapticTap();
+    setLens((prev) => (prev === next ? null : next));
+  }
+
   return (
-    <div className="ob-dashboard" dir="rtl">
-      <div className="ob-summary-grid">
-        <SummaryTile
-          eyebrow="יורד החודש"
-          value={ILS.format(
-            overview.loansMonthly + overview.fixedMonthly,
-          )}
-          sub={`${overview.loans.length + activeRulesThisMonth.length} חיובים`}
-          tone="gold"
-          icon={<Wallet className="size-4" />}
+    <div className="ob-dashboard" data-lens-open={lens ?? undefined} dir="rtl">
+      <div className="ob-launcher-grid">
+        <LauncherTile
+          eyebrow="הלוואות"
+          headline={String(overview.loans.length)}
+          headlineSub={ILS.format(overview.loansMonthly)}
+          tone="purple"
+          glyph={<Banknote className="size-4" />}
+          active={lens === "loans"}
+          dimmed={lens !== null && lens !== "loans"}
+          onClick={() => toggleLens("loans")}
         />
-        <SummaryTile
-          eyebrow="הלוואות פעילות"
-          value={ILS.format(overview.loansMonthly)}
-          sub={
+        <LauncherTile
+          eyebrow="חיובים קבועים"
+          headline={String(activeRulesThisMonth.length)}
+          headlineSub={ILS.format(overview.fixedMonthly)}
+          tone="cyan"
+          glyph={<Sparkles className="size-4" />}
+          active={lens === "fixed"}
+          dimmed={lens !== null && lens !== "fixed"}
+          onClick={() => toggleLens("fixed")}
+        />
+        <LauncherTile
+          eyebrow="הבא בתור"
+          headline={
+            nextEvent ? DATE_FMT.format(nextEvent.date) : "—"
+          }
+          headlineSub={nextEvent ? ILS.format(nextEvent.amount) : "אין"}
+          tone="safe"
+          glyph={<CalendarClock className="size-4" />}
+          active={lens === "next"}
+          dimmed={lens !== null && lens !== "next"}
+          onClick={() => toggleLens("next")}
+        />
+        <LauncherTile
+          eyebrow="יתרת חוב"
+          headline={ILS.format(totalRemainingDebt)}
+          headlineSub={
             overview.loans.length === 0
-              ? "אין הלוואות פעילות"
+              ? "אין הלוואות"
               : `${overview.loans.length} ${
                   overview.loans.length === 1 ? "הלוואה" : "הלוואות"
                 }`
           }
-          tone="purple"
-          icon={<Banknote className="size-4" />}
-          onClick={() => {
-            hapticTap();
-            setLens((prev) => (prev === "loans" ? null : "loans"));
-          }}
-          expanded={lens === "loans"}
+          tone="watch"
+          glyph={<Wallet className="size-4" />}
+          active={lens === "debt"}
+          dimmed={lens !== null && lens !== "debt"}
+          onClick={() => toggleLens("debt")}
         />
-        <SummaryTile
-          eyebrow="חיובים קבועים"
-          value={ILS.format(overview.fixedMonthly)}
-          sub={
-            activeRulesThisMonth.length === 0
-              ? "אין חיובים קבועים"
-              : `${activeRulesThisMonth.length} חיובים חודשיים`
-          }
-          tone="cyan"
-          icon={<Sparkles className="size-4" />}
-          onClick={() => {
-            hapticTap();
-            setLens((prev) => (prev === "fixed" ? null : "fixed"));
-          }}
-          expanded={lens === "fixed"}
-        />
-        <SummaryTile
-          eyebrow="הבא בתור"
-          value={nextEvent ? ILS.format(nextEvent.amount) : "—"}
-          sub={
-            nextEvent
-              ? `${nextEvent.label} · ${DATE_FMT_LONG.format(nextEvent.date)}`
-              : "אין חיובים בהמתנה"
-          }
-          tone="safe"
-          icon={<CalendarClock className="size-4" />}
-        />
-        {overview.loans.length > 0 ? (
-          <SummaryTile
-            eyebrow="יתרת חוב"
-            value={ILS.format(totalRemainingDebt)}
-            sub="עד סוף כל ההלוואות"
-            tone="watch"
-            icon={<Banknote className="size-4" />}
-            span2
-          />
-        ) : null}
       </div>
 
       <AnimatePresence initial={false} mode="wait">
@@ -214,6 +207,12 @@ export function ObligationsDashboard() {
             }}
           />
         ) : null}
+        {lens === "next" ? (
+          <NextLens key="next" events={upcoming} />
+        ) : null}
+        {lens === "debt" ? (
+          <DebtLens key="debt" loans={overview.loans} onEdit={openLoanEditor} />
+        ) : null}
       </AnimatePresence>
 
       <LoanFullScreenEdit
@@ -228,76 +227,52 @@ export function ObligationsDashboard() {
   );
 }
 
-// ── Summary tile ─────────────────────────────────────────────
+// ── Launcher tile ─────────────────────────────────────────────
 
-function SummaryTile({
+function LauncherTile({
   eyebrow,
-  value,
-  sub,
+  headline,
+  headlineSub,
   tone,
-  icon,
+  glyph,
+  active,
+  dimmed,
   onClick,
-  expanded,
-  span2,
 }: {
   eyebrow: string;
-  value: string;
-  sub: string;
-  tone: "gold" | "purple" | "cyan" | "safe" | "watch";
-  icon: React.ReactNode;
-  onClick?: () => void;
-  expanded?: boolean;
-  span2?: boolean;
+  headline: string;
+  headlineSub: string;
+  tone: "purple" | "cyan" | "safe" | "watch";
+  glyph: React.ReactNode;
+  active: boolean;
+  dimmed: boolean;
+  onClick: () => void;
 }) {
-  const body = (
-    <>
-      <span aria-hidden className="ob-tile-glow" />
-      <span aria-hidden className="ob-tile-icon">
-        {icon}
-      </span>
-      <span className="ob-tile-eyebrow">{eyebrow}</span>
-      <span className="ob-tile-value" data-mono="true" dir="ltr">
-        {value}
-      </span>
-      <span className="ob-tile-sub">{sub}</span>
-      {onClick ? (
-        <span
-          className="ob-tile-chevron"
-          aria-hidden
-          data-open={expanded ? "true" : undefined}
-        >
-          <ChevronDown className="size-3.5" />
-        </span>
-      ) : null}
-    </>
-  );
-  if (onClick) {
-    return (
-      <motion.button
-        type="button"
-        className="ob-tile"
-        data-tone={tone}
-        data-interactive="true"
-        data-expanded={expanded ? "true" : undefined}
-        data-span2={span2 ? "true" : undefined}
-        onClick={onClick}
-        aria-expanded={Boolean(expanded)}
-        aria-label={`${eyebrow} · ${value}`}
-        whileTap={{ scale: 0.98 }}
-        transition={{ type: "spring", stiffness: 380, damping: 34 }}
-      >
-        {body}
-      </motion.button>
-    );
-  }
   return (
-    <div
-      className="ob-tile"
+    <motion.button
+      type="button"
+      className="ob-launcher"
       data-tone={tone}
-      data-span2={span2 ? "true" : undefined}
+      data-active={active ? "true" : undefined}
+      data-dimmed={dimmed ? "true" : undefined}
+      onClick={onClick}
+      aria-expanded={active}
+      aria-label={`${eyebrow} · ${headline}`}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 380, damping: 34 }}
     >
-      {body}
-    </div>
+      <span aria-hidden className="ob-launcher-halo" />
+      <span aria-hidden className="ob-launcher-glyph">
+        {glyph}
+      </span>
+      <span className="ob-launcher-eyebrow">{eyebrow}</span>
+      <span className="ob-launcher-headline" data-mono="true" dir="ltr">
+        {headline}
+      </span>
+      <span className="ob-launcher-sub" data-mono="true" dir="ltr">
+        {headlineSub}
+      </span>
+    </motion.button>
   );
 }
 
@@ -720,6 +695,168 @@ function ActionsMenu({
   );
 }
 
+// ── Next lens (upcoming timeline) ───────────────────────────
+
+function NextLens({
+  events,
+}: {
+  events: Array<{ label: string; amount: number; date: Date; kind: "loan" | "rule" }>;
+}) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.section
+      layout
+      className="ob-lens"
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+      transition={{ duration: reduced ? 0.12 : 0.42, ease: EASE }}
+    >
+      <header className="ob-lens-head">
+        <span className="ob-lens-eyebrow">חיובים בדרך</span>
+        <span className="ob-lens-count" data-mono="true" dir="ltr">
+          {events.length}
+        </span>
+      </header>
+      {events.length === 0 ? (
+        <div className="ob-empty">אין חיובים ידועים בהמתנה.</div>
+      ) : (
+        <ul className="ob-timeline">
+          {events.map((e, i) => (
+            <motion.li
+              key={`${e.date.toISOString()}-${i}`}
+              layout
+              initial={reduced ? { opacity: 0 } : { opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{
+                delay: Math.min(i * 0.04, 0.24),
+                duration: reduced ? 0.12 : 0.42,
+                ease: EASE,
+              }}
+              className="ob-timeline-row"
+              data-kind={e.kind}
+            >
+              <span aria-hidden className="ob-timeline-dot" />
+              <span aria-hidden className="ob-timeline-rule" />
+              <div className="ob-timeline-body">
+                <span className="ob-timeline-date" data-mono="true" dir="ltr">
+                  {DATE_FMT_LONG.format(e.date)}
+                </span>
+                <span className="ob-timeline-label">{e.label}</span>
+              </div>
+              <span className="ob-timeline-amount" data-mono="true" dir="ltr">
+                {ILS.format(e.amount)}
+              </span>
+            </motion.li>
+          ))}
+        </ul>
+      )}
+    </motion.section>
+  );
+}
+
+// ── Debt lens (per-loan remaining) ──────────────────────────
+
+function DebtLens({
+  loans,
+  onEdit,
+}: {
+  loans: LoanRow[];
+  onEdit: (id: string) => void;
+}) {
+  const reduced = useReducedMotion();
+  const rows = useMemo(
+    () =>
+      loans
+        .map((l) => {
+          const total = l.loan.totalPayments;
+          const remaining = l.remainingPayments;
+          const paid = total !== undefined && remaining !== undefined ? total - remaining : null;
+          const remainingDebt =
+            remaining !== undefined ? remaining * l.loan.monthlyInstallment : null;
+          const progress =
+            total !== undefined && paid !== null ? Math.max(0, Math.min(1, paid / total)) : null;
+          return { row: l, paid, total, remaining, remainingDebt, progress };
+        })
+        .sort((a, b) => (b.remainingDebt ?? 0) - (a.remainingDebt ?? 0)),
+    [loans],
+  );
+  const grandTotal = rows.reduce((s, r) => s + (r.remainingDebt ?? 0), 0);
+
+  return (
+    <motion.section
+      layout
+      className="ob-lens"
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+      transition={{ duration: reduced ? 0.12 : 0.42, ease: EASE }}
+    >
+      <header className="ob-lens-head">
+        <span className="ob-lens-eyebrow">פירוט חוב</span>
+        <span className="ob-lens-total" data-mono="true" dir="ltr">
+          {ILS.format(grandTotal)}
+        </span>
+      </header>
+      {rows.length === 0 ? (
+        <div className="ob-empty">אין חוב פעיל.</div>
+      ) : (
+        <ul className="ob-debt-list">
+          {rows.map((r, i) => (
+            <motion.li
+              key={r.row.loan.id}
+              layout
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: Math.min(i * 0.04, 0.24),
+                duration: reduced ? 0.12 : 0.42,
+                ease: EASE,
+              }}
+              className="ob-debt-row"
+            >
+              <button
+                type="button"
+                className="ob-debt-row-surface"
+                onClick={() => onEdit(r.row.loan.id)}
+                aria-label={`ערוך את ההלוואה ${r.row.loan.label}`}
+              >
+                <div className="ob-debt-row-head">
+                  <span className="ob-debt-row-title">{r.row.loan.label}</span>
+                  <span className="ob-debt-row-amount" data-mono="true" dir="ltr">
+                    {r.remainingDebt !== null ? ILS.format(r.remainingDebt) : "—"}
+                  </span>
+                </div>
+                <div className="ob-debt-row-meta">
+                  <span data-mono="true" dir="ltr">
+                    {ILS.format(r.row.loan.monthlyInstallment)}/ח׳
+                  </span>
+                  <span aria-hidden>·</span>
+                  <span>
+                    {r.remaining !== undefined
+                      ? `נותרו ${r.remaining} תשלומים`
+                      : "הלוואה פתוחה"}
+                  </span>
+                </div>
+                {r.progress !== null ? (
+                  <div className="ob-debt-bar">
+                    <motion.span
+                      className="ob-debt-bar-fill"
+                      initial={{ width: reduced ? `${r.progress * 100}%` : 0 }}
+                      animate={{ width: `${r.progress * 100}%` }}
+                      transition={{ duration: reduced ? 0.12 : 0.9, ease: EASE }}
+                    />
+                  </div>
+                ) : null}
+              </button>
+            </motion.li>
+          ))}
+        </ul>
+      )}
+    </motion.section>
+  );
+}
+
 // ── Empty / skeleton ────────────────────────────────────────
 
 function EmptyState() {
@@ -753,23 +890,38 @@ function pickNextEvent(
   loans: LoanRow[],
   rules: RecurringRule[],
 ): { label: string; amount: number; date: Date } | null {
-  const candidates: Array<{ label: string; amount: number; date: Date }> = [];
+  const list = pickUpcoming(loans, rules, 1);
+  return list[0] ?? null;
+}
+
+function pickUpcoming(
+  loans: LoanRow[],
+  rules: RecurringRule[],
+  limit: number,
+): Array<{ label: string; amount: number; date: Date; kind: "loan" | "rule" }> {
+  const out: Array<{
+    label: string;
+    amount: number;
+    date: Date;
+    kind: "loan" | "rule";
+  }> = [];
   for (const l of loans) {
     if (l.monthlyAmount <= 0) continue;
-    candidates.push({
+    out.push({
       label: l.loan.label,
       amount: l.monthlyAmount,
       date: l.nextChargeDate,
+      kind: "loan",
     });
   }
   for (const r of rules) {
-    candidates.push({
+    out.push({
       label: r.label,
       amount: r.estimatedAmount,
       date: nextChargeDate(r.dayOfMonth),
+      kind: "rule",
     });
   }
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.date.getTime() - b.date.getTime());
-  return candidates[0];
+  out.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return out.slice(0, limit);
 }
