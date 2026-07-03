@@ -1,21 +1,13 @@
 "use client";
 
-// Income · premium launcher for the Home "הכנסות" section.
+// Income · premium 4-tile launcher for Home "הכנסות" section.
 //
-// Three-part composition per the product rule:
-//   1. Hero visualization   — animated progress ring, big expected
-//                             number, received/expected caption.
-//   2. Secondary card       — next-income chip (label + date + ₪).
-//   3. Expandable details   — per-income edit list with baseline
-//                             editor (opens IncomeFullScreenEdit) +
-//                             one-off month overrides (setIncomeActual)
-//                             for the current and next month.
-//
-// UI/UX only. Baseline reads/writes route to store.updateIncome,
-// month overrides route to store.setIncomeActual — both preexisting
-// store methods. Every downstream engine (forecast, liquidity, cash-
-// flow) continues to derive its numbers from the same store — nothing
-// here recomputes anything.
+// Closed: four compact touch tiles in a 2×2 grid. Each tile shows a
+// smart summary — one headline + one sub-line. Tap → inline lens
+// with a SHORT (never long) info card that answers exactly the tile's
+// question. Baseline edits open the shared IncomeFullScreenEdit,
+// one-off month overrides route through store.setIncomeActual —
+// both preexisting. Zero engine / calculation / API / model change.
 
 import { useMemo, useState } from "react";
 import {
@@ -25,7 +17,7 @@ import {
 } from "framer-motion";
 import {
   CalendarClock,
-  ChevronDown,
+  CheckCircle2,
   Pencil,
   Wallet,
 } from "lucide-react";
@@ -43,6 +35,10 @@ const ILS = new Intl.NumberFormat("he-IL", {
   currency: "ILS",
   maximumFractionDigits: 0,
 });
+const DATE_FMT = new Intl.DateTimeFormat("he-IL", {
+  day: "2-digit",
+  month: "2-digit",
+});
 const DATE_FMT_LONG = new Intl.DateTimeFormat("he-IL", {
   weekday: "short",
   day: "2-digit",
@@ -51,11 +47,13 @@ const DATE_FMT_LONG = new Intl.DateTimeFormat("he-IL", {
 
 const EASE = [0.32, 0.72, 0, 1] as const;
 
+type Lens = "expected" | "next" | "received" | "edit" | null;
+
 export function IncomeLauncher() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const incomes = useFinanceStore((s) => s.incomes);
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [lens, setLens] = useState<Lens>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [overrideIncomeId, setOverrideIncomeId] = useState<string | null>(null);
@@ -63,6 +61,9 @@ export function IncomeLauncher() {
     currentMonthKey(),
   );
   const [overrideOpen, setOverrideOpen] = useState(false);
+
+  const monthKey = currentMonthKey();
+  const nextMonthKey = addMonths(monthKey, 1);
 
   const active = useMemo(
     () =>
@@ -72,36 +73,37 @@ export function IncomeLauncher() {
         .sort((a, b) => a.dayOfMonth - b.dayOfMonth),
     [incomes],
   );
-  const monthKey = currentMonthKey();
-  const nextMonthKey = addMonths(monthKey, 1);
 
   const expectedThisMonth = useMemo(
     () => active.reduce((s, i) => s + incomeForMonth(i, monthKey), 0),
     [active, monthKey],
   );
   const receivedThisMonth = useMemo(() => {
-    const now = new Date();
-    const today = now.getDate();
+    const today = new Date().getDate();
     let sum = 0;
     for (const i of active) {
       if (i.dayOfMonth <= today) sum += incomeForMonth(i, monthKey);
     }
     return sum;
   }, [active, monthKey]);
-  const nextIncomeInfo = useMemo(
-    () => pickNextIncome(active, monthKey, nextMonthKey),
+  const upcoming = useMemo(
+    () => collectUpcoming(active, monthKey, nextMonthKey, 3),
     [active, monthKey, nextMonthKey],
   );
+  const nextInfo = upcoming[0] ?? null;
 
   if (!hydrated) return <div className="ob-skeleton" aria-hidden />;
   if (active.length === 0) return <EmptyState />;
 
+  function toggleLens(next: Lens) {
+    hapticTap();
+    setLens((prev) => (prev === next ? null : next));
+  }
   function openBaselineEditor(id: string | null) {
     hapticTap();
     setEditingIncomeId(id);
     setEditorOpen(true);
   }
-
   function openOverrideEditor(id: string, mk: string) {
     hapticTap();
     setOverrideIncomeId(id);
@@ -115,98 +117,83 @@ export function IncomeLauncher() {
       : 0;
 
   return (
-    <div className="il-root" dir="rtl">
-      <IncomeHero
-        expected={expectedThisMonth}
-        received={receivedThisMonth}
-        ratio={ratio}
-        activeCount={active.length}
-      />
+    <div className="ob-dashboard" data-lens-open={lens ?? undefined} dir="rtl">
+      <div className="ob-launcher-grid">
+        <LauncherTile
+          eyebrow="צפוי החודש"
+          headline={ILS.format(Math.round(expectedThisMonth))}
+          sub={`${active.length} ${active.length === 1 ? "משכורת" : "משכורות"}`}
+          tone="safe"
+          glyph={<Wallet className="size-4" />}
+          active={lens === "expected"}
+          dimmed={lens !== null && lens !== "expected"}
+          onClick={() => toggleLens("expected")}
+        />
+        <LauncherTile
+          eyebrow="הקרובה"
+          headline={nextInfo ? DATE_FMT.format(nextInfo.date) : "—"}
+          sub={nextInfo ? ILS.format(Math.round(nextInfo.amount)) : "אין"}
+          tone="gold"
+          glyph={<CalendarClock className="size-4" />}
+          active={lens === "next"}
+          dimmed={lens !== null && lens !== "next"}
+          onClick={() => toggleLens("next")}
+        />
+        <LauncherTile
+          eyebrow="נכנס עד היום"
+          headline={ILS.format(Math.round(receivedThisMonth))}
+          sub={`${Math.round(ratio * 100)}% מהצפוי`}
+          tone="cyan"
+          glyph={<CheckCircle2 className="size-4" />}
+          active={lens === "received"}
+          dimmed={lens !== null && lens !== "received"}
+          onClick={() => toggleLens("received")}
+        />
+        <LauncherTile
+          eyebrow="עריכת משכורות"
+          headline={String(active.length)}
+          sub="פעילות"
+          tone="purple"
+          glyph={<Pencil className="size-4" />}
+          active={lens === "edit"}
+          dimmed={lens !== null && lens !== "edit"}
+          onClick={() => toggleLens("edit")}
+        />
+      </div>
 
-      <NextIncomeCard next={nextIncomeInfo} />
-
-      <ExpandableDetails
-        open={detailsOpen}
-        onToggle={() => {
-          hapticTap();
-          setDetailsOpen((v) => !v);
-        }}
-        activeCount={active.length}
-      >
-        <ul className="il-edit-list">
-          {active.map((inc) => {
-            const currentAmt = incomeForMonth(inc, monthKey);
-            const nextAmt = incomeForMonth(inc, nextMonthKey);
-            const overriddenCurrent =
-              inc.actualByMonth?.[monthKey] !== undefined;
-            const overriddenNext =
-              inc.actualByMonth?.[nextMonthKey] !== undefined;
-            return (
-              <li key={inc.id} className="il-edit-row">
-                <div className="il-edit-head">
-                  <div className="il-edit-titles">
-                    <span className="il-edit-title">{inc.label}</span>
-                    <span className="il-edit-meta">
-                      בסיס: {ILS.format(inc.amount)} · יום {inc.dayOfMonth}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="il-edit-baseline"
-                    onClick={() => openBaselineEditor(inc.id)}
-                    aria-label={`ערוך משכורת ${inc.label}`}
-                  >
-                    <Pencil className="size-3.5" />
-                    ערוך משכורת
-                  </button>
-                </div>
-                <div className="il-edit-months">
-                  <button
-                    type="button"
-                    className="il-edit-month"
-                    onClick={() => openOverrideEditor(inc.id, monthKey)}
-                    data-overridden={overriddenCurrent ? "true" : undefined}
-                  >
-                    <span className="il-edit-month-label">חודש נוכחי</span>
-                    <span
-                      className="il-edit-month-value"
-                      data-mono="true"
-                      dir="ltr"
-                    >
-                      {ILS.format(Math.round(currentAmt))}
-                    </span>
-                    <span className="il-edit-month-hint">
-                      {overriddenCurrent
-                        ? "שינוי חד-פעמי · הקש לעדכון"
-                        : "עדכן לחודש הזה"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="il-edit-month"
-                    onClick={() => openOverrideEditor(inc.id, nextMonthKey)}
-                    data-overridden={overriddenNext ? "true" : undefined}
-                  >
-                    <span className="il-edit-month-label">חודש הבא</span>
-                    <span
-                      className="il-edit-month-value"
-                      data-mono="true"
-                      dir="ltr"
-                    >
-                      {ILS.format(Math.round(nextAmt))}
-                    </span>
-                    <span className="il-edit-month-hint">
-                      {overriddenNext
-                        ? "שינוי חד-פעמי · הקש לעדכון"
-                        : "שמור שינוי חד-פעמי"}
-                    </span>
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </ExpandableDetails>
+      <AnimatePresence initial={false} mode="wait">
+        {lens === "expected" ? (
+          <ExpectedLens
+            key="expected"
+            incomes={active}
+            monthKey={monthKey}
+            total={expectedThisMonth}
+          />
+        ) : null}
+        {lens === "next" ? (
+          <NextLens key="next" upcoming={upcoming} />
+        ) : null}
+        {lens === "received" ? (
+          <ReceivedLens
+            key="received"
+            incomes={active}
+            monthKey={monthKey}
+            received={receivedThisMonth}
+            expected={expectedThisMonth}
+          />
+        ) : null}
+        {lens === "edit" ? (
+          <EditLens
+            key="edit"
+            incomes={active}
+            monthKey={monthKey}
+            nextMonthKey={nextMonthKey}
+            onEditBaseline={openBaselineEditor}
+            onOverrideCurrent={(id) => openOverrideEditor(id, monthKey)}
+            onOverrideNext={(id) => openOverrideEditor(id, nextMonthKey)}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <IncomeFullScreenEdit
         incomeId={editingIncomeId}
@@ -230,182 +217,361 @@ export function IncomeLauncher() {
   );
 }
 
-// ── Hero ──────────────────────────────────────────────────
+// ── Launcher tile ────────────────────────────────────────
 
-function IncomeHero({
-  expected,
-  received,
-  ratio,
-  activeCount,
+function LauncherTile({
+  eyebrow,
+  headline,
+  sub,
+  tone,
+  glyph,
+  active,
+  dimmed,
+  onClick,
 }: {
-  expected: number;
-  received: number;
-  ratio: number;
-  activeCount: number;
-}) {
-  const reduced = useReducedMotion();
-  const R = 62;
-  const CIRC = 2 * Math.PI * R;
-  return (
-    <section className="il-hero" aria-label="הכנסות החודש">
-      <span aria-hidden className="il-hero-aurora" />
-      <div className="il-hero-ring">
-        <svg viewBox="0 0 160 160" width="100%" height="100%">
-          <defs>
-            <linearGradient id="il-hero-grad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#34D399" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#4ADE80" stopOpacity="1" />
-            </linearGradient>
-          </defs>
-          <circle
-            cx="80"
-            cy="80"
-            r={R}
-            fill="none"
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth="10"
-          />
-          <motion.circle
-            cx="80"
-            cy="80"
-            r={R}
-            fill="none"
-            stroke="url(#il-hero-grad)"
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={CIRC}
-            transform="rotate(-90 80 80)"
-            initial={reduced ? undefined : { strokeDashoffset: CIRC }}
-            animate={{ strokeDashoffset: CIRC * (1 - ratio) }}
-            transition={{ duration: reduced ? 0.12 : 0.9, ease: EASE }}
-            filter="drop-shadow(0 0 8px rgba(52,211,153,0.35))"
-          />
-        </svg>
-        <div className="il-hero-ring-center">
-          <span className="il-hero-eyebrow">צפוי החודש</span>
-          <span className="il-hero-value" data-mono="true" dir="ltr">
-            {ILS.format(Math.round(expected))}
-          </span>
-        </div>
-      </div>
-      <div className="il-hero-body">
-        <div className="il-hero-metric">
-          <span className="il-hero-metric-label">נכנס עד היום</span>
-          <span
-            className="il-hero-metric-value"
-            data-mono="true"
-            dir="ltr"
-          >
-            {ILS.format(Math.round(received))}
-            <span className="il-hero-metric-pct">
-              {Math.round(ratio * 100)}%
-            </span>
-          </span>
-        </div>
-        <div className="il-hero-metric">
-          <span className="il-hero-metric-label">משכורות פעילות</span>
-          <span
-            className="il-hero-metric-value"
-            data-mono="true"
-            dir="ltr"
-          >
-            {activeCount}
-          </span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ── Secondary card ────────────────────────────────────────
-
-function NextIncomeCard({
-  next,
-}: {
-  next: { income: Income; amount: number; date: Date } | null;
+  eyebrow: string;
+  headline: string;
+  sub: string;
+  tone: "purple" | "cyan" | "safe" | "watch" | "gold";
+  glyph: React.ReactNode;
+  active: boolean;
+  dimmed: boolean;
+  onClick: () => void;
 }) {
   return (
-    <section className="il-next" aria-label="ההכנסה הקרובה">
-      <span aria-hidden className="il-next-glyph">
-        <CalendarClock className="size-4" />
+    <motion.button
+      type="button"
+      className="ob-launcher"
+      data-tone={tone}
+      data-active={active ? "true" : undefined}
+      data-dimmed={dimmed ? "true" : undefined}
+      onClick={onClick}
+      aria-expanded={active}
+      aria-label={`${eyebrow} · ${headline}`}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 380, damping: 34 }}
+    >
+      <span aria-hidden className="ob-launcher-halo" />
+      <span aria-hidden className="ob-launcher-glyph">
+        {glyph}
       </span>
-      <div className="il-next-body">
-        <span className="il-next-eyebrow">ההכנסה הקרובה</span>
-        {next ? (
-          <span className="il-next-title">
-            {next.income.label} · {DATE_FMT_LONG.format(next.date)}
-          </span>
-        ) : (
-          <span className="il-next-title">אין הכנסה קרובה מוגדרת</span>
-        )}
-      </div>
-      {next ? (
-        <span className="il-next-amount" data-mono="true" dir="ltr">
-          {ILS.format(Math.round(next.amount))}
-        </span>
-      ) : null}
-    </section>
+      <span className="ob-launcher-eyebrow">{eyebrow}</span>
+      <span className="ob-launcher-headline" data-mono="true" dir="ltr">
+        {headline}
+      </span>
+      <span className="ob-launcher-sub" data-mono="true" dir="ltr">
+        {sub}
+      </span>
+    </motion.button>
   );
 }
 
-// ── Expandable details ────────────────────────────────────
+// ── Lens frame ───────────────────────────────────────────
 
-function ExpandableDetails({
-  open,
-  onToggle,
-  activeCount,
+function LensFrame({
+  eyebrow,
+  right,
   children,
 }: {
-  open: boolean;
-  onToggle: () => void;
-  activeCount: number;
+  eyebrow: string;
+  right?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const reduced = useReducedMotion();
   return (
-    <section className="il-details">
-      <button
-        type="button"
-        className="il-details-head"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <div className="il-details-head-text">
-          <span className="il-details-eyebrow">
-            ערוך משכורות והכנסות
-          </span>
-          <span className="il-details-title">
-            {activeCount} פעילות · בסיס + חד-פעמי
-          </span>
-        </div>
-        <motion.span
-          aria-hidden
-          className="il-details-arrow"
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: reduced ? 0.12 : 0.28, ease: EASE }}
-        >
-          <ChevronDown className="size-4" />
-        </motion.span>
-      </button>
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            key="body"
-            initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
-            transition={{ duration: reduced ? 0.12 : 0.4, ease: EASE }}
-            className="il-details-body"
-          >
-            {children}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </section>
+    <motion.section
+      layout
+      className="ob-lens"
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+      transition={{
+        type: "spring",
+        stiffness: 320,
+        damping: 30,
+        duration: reduced ? 0.12 : undefined,
+      }}
+    >
+      <header className="ob-lens-head">
+        <span className="ob-lens-eyebrow">{eyebrow}</span>
+        {right}
+      </header>
+      {children}
+    </motion.section>
   );
 }
 
-// ── One-off override sheet ───────────────────────────────
+// ── Expected lens (compact per-income list, capped at 5) ─
+
+function ExpectedLens({
+  incomes,
+  monthKey,
+  total,
+}: {
+  incomes: Income[];
+  monthKey: string;
+  total: number;
+}) {
+  const visible = incomes.slice(0, 5);
+  const more = Math.max(0, incomes.length - visible.length);
+  return (
+    <LensFrame
+      eyebrow="משכורות צפויות החודש"
+      right={
+        <span className="ob-lens-total" data-mono="true" dir="ltr">
+          {ILS.format(Math.round(total))}
+        </span>
+      }
+    >
+      <ul className="il-mini-list">
+        {visible.map((inc) => {
+          const amt = incomeForMonth(inc, monthKey);
+          const overridden = inc.actualByMonth?.[monthKey] !== undefined;
+          return (
+            <li key={inc.id} className="il-mini-row">
+              <span aria-hidden className="il-mini-rail" />
+              <div className="il-mini-body">
+                <span className="il-mini-title">{inc.label}</span>
+                <span className="il-mini-meta">
+                  ב-{inc.dayOfMonth} בחודש
+                  {overridden ? " · חד-פעמי" : ""}
+                </span>
+              </div>
+              <span className="il-mini-amount" data-mono="true" dir="ltr">
+                {ILS.format(Math.round(amt))}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {more > 0 ? (
+        <div className="il-mini-more">+ עוד {more}</div>
+      ) : null}
+    </LensFrame>
+  );
+}
+
+// ── Next lens (max 3 upcoming) ───────────────────────────
+
+function NextLens({
+  upcoming,
+}: {
+  upcoming: Array<{ income: Income; amount: number; date: Date }>;
+}) {
+  return (
+    <LensFrame eyebrow="הכנסות בדרך">
+      {upcoming.length === 0 ? (
+        <div className="ob-empty">אין הכנסה קרובה בטווח.</div>
+      ) : (
+        <ul className="ob-timeline">
+          {upcoming.map((r, i) => (
+            <li
+              key={`${r.income.id}-${i}`}
+              className="ob-timeline-row"
+              data-kind="rule"
+            >
+              <span aria-hidden className="ob-timeline-dot" />
+              <div className="ob-timeline-body">
+                <span
+                  className="ob-timeline-date"
+                  data-mono="true"
+                  dir="ltr"
+                >
+                  {DATE_FMT_LONG.format(r.date)}
+                </span>
+                <span className="ob-timeline-label">
+                  {r.income.label}
+                </span>
+              </div>
+              <span
+                className="ob-timeline-amount"
+                data-mono="true"
+                dir="ltr"
+              >
+                {ILS.format(Math.round(r.amount))}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </LensFrame>
+  );
+}
+
+// ── Received lens (compact list w/ diff) ────────────────
+
+function ReceivedLens({
+  incomes,
+  monthKey,
+  received,
+  expected,
+}: {
+  incomes: Income[];
+  monthKey: string;
+  received: number;
+  expected: number;
+}) {
+  const today = new Date().getDate();
+  const rows = incomes
+    .filter((i) => i.dayOfMonth <= today)
+    .slice(0, 5);
+  return (
+    <LensFrame
+      eyebrow="מה נכנס עד היום"
+      right={
+        <span className="ob-lens-total" data-mono="true" dir="ltr">
+          {ILS.format(Math.round(received))} / {ILS.format(Math.round(expected))}
+        </span>
+      }
+    >
+      {rows.length === 0 ? (
+        <div className="ob-empty">עוד לא נכנסה משכורת החודש.</div>
+      ) : (
+        <ul className="il-mini-list">
+          {rows.map((inc) => {
+            const amt = incomeForMonth(inc, monthKey);
+            const diff = amt - inc.amount;
+            const overridden = inc.actualByMonth?.[monthKey] !== undefined;
+            return (
+              <li key={inc.id} className="il-mini-row">
+                <span aria-hidden className="il-mini-rail" data-tone="safe" />
+                <div className="il-mini-body">
+                  <span className="il-mini-title">
+                    {inc.label}
+                    {overridden ? (
+                      <span className="il-mini-badge">חד-פעמי</span>
+                    ) : null}
+                  </span>
+                  <span className="il-mini-meta">
+                    התקבל ב-{inc.dayOfMonth}
+                  </span>
+                </div>
+                <div className="il-mini-amount-wrap">
+                  <span
+                    className="il-mini-amount"
+                    data-mono="true"
+                    dir="ltr"
+                  >
+                    {ILS.format(Math.round(amt))}
+                  </span>
+                  {diff !== 0 ? (
+                    <span
+                      className="il-mini-diff"
+                      data-tone={diff > 0 ? "safe" : "watch"}
+                      data-mono="true"
+                      dir="ltr"
+                    >
+                      {diff > 0 ? "+" : "−"}
+                      {ILS.format(Math.round(Math.abs(diff)))}
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </LensFrame>
+  );
+}
+
+// ── Edit lens (short — max 3 incomes; scroll if more) ───
+
+function EditLens({
+  incomes,
+  monthKey,
+  nextMonthKey,
+  onEditBaseline,
+  onOverrideCurrent,
+  onOverrideNext,
+}: {
+  incomes: Income[];
+  monthKey: string;
+  nextMonthKey: string;
+  onEditBaseline: (id: string) => void;
+  onOverrideCurrent: (id: string) => void;
+  onOverrideNext: (id: string) => void;
+}) {
+  return (
+    <LensFrame eyebrow="ערוך משכורות">
+      <ul className="il-edit-list">
+        {incomes.map((inc) => {
+          const currentAmt = incomeForMonth(inc, monthKey);
+          const nextAmt = incomeForMonth(inc, nextMonthKey);
+          const overriddenCurrent =
+            inc.actualByMonth?.[monthKey] !== undefined;
+          const overriddenNext =
+            inc.actualByMonth?.[nextMonthKey] !== undefined;
+          return (
+            <li key={inc.id} className="il-edit-row">
+              <div className="il-edit-head">
+                <div className="il-edit-titles">
+                  <span className="il-edit-title">{inc.label}</span>
+                  <span className="il-edit-meta">
+                    בסיס: {ILS.format(inc.amount)} · יום {inc.dayOfMonth}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="il-edit-baseline"
+                  onClick={() => onEditBaseline(inc.id)}
+                  aria-label={`ערוך משכורת ${inc.label}`}
+                >
+                  <Pencil className="size-3.5" />
+                  ערוך משכורת
+                </button>
+              </div>
+              <div className="il-edit-months">
+                <button
+                  type="button"
+                  className="il-edit-month"
+                  onClick={() => onOverrideCurrent(inc.id)}
+                  data-overridden={overriddenCurrent ? "true" : undefined}
+                >
+                  <span className="il-edit-month-label">חודש נוכחי</span>
+                  <span
+                    className="il-edit-month-value"
+                    data-mono="true"
+                    dir="ltr"
+                  >
+                    {ILS.format(Math.round(currentAmt))}
+                  </span>
+                  <span className="il-edit-month-hint">
+                    {overriddenCurrent
+                      ? "חד-פעמי · הקש לעדכון"
+                      : "עדכן לחודש הזה"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="il-edit-month"
+                  onClick={() => onOverrideNext(inc.id)}
+                  data-overridden={overriddenNext ? "true" : undefined}
+                >
+                  <span className="il-edit-month-label">חודש הבא</span>
+                  <span
+                    className="il-edit-month-value"
+                    data-mono="true"
+                    dir="ltr"
+                  >
+                    {ILS.format(Math.round(nextAmt))}
+                  </span>
+                  <span className="il-edit-month-hint">
+                    {overriddenNext
+                      ? "חד-פעמי · הקש לעדכון"
+                      : "שמור שינוי חד-פעמי"}
+                  </span>
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </LensFrame>
+  );
+}
+
+// ── Override sheet ───────────────────────────────────────
 
 function OverrideSheet({
   open,
@@ -505,7 +671,7 @@ function OverrideSheet({
   );
 }
 
-// ── Empty ─────────────────────────────────────────────────
+// ── Empty ────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -519,15 +685,15 @@ function EmptyState() {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────
 
-function pickNextIncome(
+function collectUpcoming(
   incomes: Income[],
   currentMK: string,
   nextMK: string,
-): { income: Income; amount: number; date: Date } | null {
-  const now = new Date();
-  const today = now.getDate();
+  limit: number,
+): Array<{ income: Income; amount: number; date: Date }> {
+  const today = new Date().getDate();
   const [cY, cM] = mkParts(currentMK);
   const [nY, nM] = mkParts(nextMK);
   const list: Array<{ income: Income; amount: number; date: Date }> = [];
@@ -546,7 +712,7 @@ function pickNextIncome(
     });
   }
   list.sort((a, b) => a.date.getTime() - b.date.getTime());
-  return list[0] ?? null;
+  return list.slice(0, limit);
 }
 
 function mkParts(mk: string): [number, number] {
@@ -562,5 +728,3 @@ function formatMonth(mk: string): string {
     year: "numeric",
   }).format(d);
 }
-
-void Wallet;
