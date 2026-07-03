@@ -3606,3 +3606,150 @@ button.sally-glass {
   .pro-pending-ribbon-dot,
   .pro-empty-orb { animation: none; }
 }
+
+/* ── Portfolio Hero standalone · enlarged premium sizing ─────── */
+
+.pro-hero-standalone {
+  /* Nearly full width with generous side breathing room */
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
+  padding: clamp(28px, 6vw, 40px) clamp(24px, 5vw, 36px);
+  border-radius: clamp(28px, 6vw, 36px);
+
+  /* Amplified depth for hero status */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.10) inset,
+    0 -1px 0 rgba(212, 175, 55, 0.28) inset,
+    0 60px 120px -32px rgba(0, 0, 0, 0.7),
+    0 16px 40px -12px rgba(212, 175, 55, 0.22);
+}
+
+/* Head row breathes more on the enlarged hero */
+.pro-hero-standalone .pro-hero-head {
+  gap: 16px;
+  margin-block-end: clamp(20px, 4vw, 28px);
+}
+.pro-hero-standalone .pro-hero-month {
+  font-size: 13px;
+  margin-block-start: 8px;
+}
+.pro-hero-standalone .pro-hero-status {
+  padding-inline: 14px;
+  padding-block: 5px;
+  font-size: 10px;
+}
+
+/* Columns get more room · balance dominates */
+.pro-hero-standalone .pro-hero-columns {
+  gap: clamp(20px, 5vw, 28px);
+  margin-block-start: 0;
+  align-items: start;
+}
+.pro-hero-standalone .pro-hero-left { gap: 12px; }
+.pro-hero-standalone .pro-hero-balance {
+  font-size: clamp(52px, 15.5vw, 72px);
+  letter-spacing: -0.035em;
+  margin-block-start: 4px;
+}
+.pro-hero-standalone .pro-hero-shelf { margin-block-start: 6px; }
+.pro-hero-standalone .pro-hero-delta {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  margin-block-start: 2px;
+}
+
+/* "Next in line" secondary block · more breathing */
+.pro-hero-standalone .pro-hero-next {
+  margin-block-start: 12px;
+  padding-block-start: 16px;
+  gap: 6px;
+}
+.pro-hero-standalone .pro-hero-next-title { font-size: 15px; }
+.pro-hero-standalone .pro-hero-next-meta { font-size: 13px; }
+
+/* Right column · donut aligns with balance baseline */
+.pro-hero-standalone .pro-hero-right {
+  gap: 10px;
+  padding-block-start: 8px;
+}
+.pro-hero-standalone .pro-hero-eom {
+  font-size: clamp(24px, 6.4vw, 30px);
+}
+.pro-hero-standalone .pro-hero-eom-hint {
+  font-size: 12px;
+}
+.pro-hero-standalone .pro-hero-donut {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Safety strip · slightly taller for premium feel */
+.pro-hero-standalone .pro-safety-strip {
+  margin-block-start: clamp(20px, 4vw, 26px);
+  height: 7px;
+}
+.pro-hero-standalone .pro-safety-marker {
+  width: 14px; height: 14px; inset-block-start: -4px;
+}
+
+/* Emboss orb re-anchored inside the enlarged card */
+.pro-hero-standalone .pro-hero-emboss {
+  inset-inline-end: clamp(24px, 8vw, 60px);
+  inset-block-start: clamp(140px, 20vw, 180px);
+  width: clamp(90px, 24vw, 130px);
+  height: clamp(90px, 24vw, 130px);
+}
+
+/* ── Responsive breakpoints ────────────────────────────────── */
+
+/* Very small phones (iPhone SE, ≤360px): single column stack */
+@media (max-width: 380px) {
+  .pro-hero-standalone {
+    padding-inline: 22px;
+    padding-block: 26px;
+    border-radius: 26px;
+  }
+  .pro-hero-standalone .pro-hero-columns {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .pro-hero-standalone .pro-hero-right {
+    align-items: flex-start;
+    padding-block-start: 0;
+    padding-block-end: 4px;
+  }
+  .pro-hero-standalone .pro-hero-eom-hint {
+    text-align: start;
+  }
+  /* Donut smaller so it doesn't crowd the balance below it */
+  .pro-hero-standalone .pro-hero-donut { max-width: 128px; }
+}
+
+/* iPhone 13 / 15 (≥390 to <430px): default layout, tuned padding */
+@media (min-width: 380px) and (max-width: 430px) {
+  .pro-hero-standalone {
+    padding-inline: 26px;
+    padding-block: 30px;
+  }
+}
+
+/* iPhone 15 Pro Max (≥430 to <500px): more breathing */
+@media (min-width: 430px) and (max-width: 500px) {
+  .pro-hero-standalone {
+    padding-inline: 32px;
+    padding-block: 34px;
+  }
+}
+
+/* Tablet / desktop (≥500px): max-width caps at 640, centered */
+@media (min-width: 500px) {
+  .pro-hero-standalone {
+    padding-inline: 40px;
+    padding-block: 40px;
+  }
+  .pro-hero-standalone .pro-hero-columns {
+    grid-template-columns: 1.4fr 1fr;
+  }
+}

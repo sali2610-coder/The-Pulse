@@ -31,10 +31,9 @@ import { openAttentionCenter } from "@/lib/use-attention-center";
 import { motion as fmMotion } from "framer-motion";
 import { Bell as BellIcon, ArrowLeft as ArrowLeftIcon } from "lucide-react";
 import { tap as hapticTap } from "@/lib/haptics";
-import { HeroSpendableCard } from "@/components/dashboard/simple/hero-spendable-card";
-import { HeroInsightCard } from "@/components/dashboard/simple/hero-insight-card";
 import { TimeRecapCard } from "@/components/time/time-recap-card";
 import { TapDiscoveryToast } from "@/components/dashboard/tap-discovery-toast";
+import { PortfolioHeroCard } from "@/components/home/portfolio-hero-card";
 
 const lazy = (
   loader: () => Promise<{
@@ -49,12 +48,8 @@ const WelcomeSetupCard = lazy(() =>
       m.WelcomeSetupCard as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-const StaleAnchorsBanner = lazy(() =>
-  import("@/components/dashboard/stale-anchors-banner").then((m) => ({
-    default:
-      m.StaleAnchorsBanner as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase — StaleAnchorsBanner removed from Home mount; component
+// file preserved on disk for any future caller.
 const PendingTray = lazy(() =>
   import("@/components/dashboard/pending-tray").then((m) => ({
     default:
@@ -164,12 +159,8 @@ const SmartInsightsCard = lazy(() =>
 // SpentThisMonthCard, AccountBridgeCard, ExpectedBalanceCard,
 // DailyInsightsCard) are removed from Home; the components remain on
 // disk so other surfaces that import them keep working.
-const TodayPulseCard = lazy(() =>
-  import("@/components/dashboard/today-pulse-card").then((m) => ({
-    default:
-      m.TodayPulseCard as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
+// Phase — TodayPulseCard removed from Home mount; component
+// file preserved on disk for any future caller.
 const RecentActivity = lazy(() =>
   import("@/components/dashboard/recent-activity").then((m) => ({
     default:
@@ -245,14 +236,19 @@ export function DashboardTab() {
             the lazy-loaded child renders null so the grid doesn't
             accumulate phantom rows (each empty row was still adding
             a gap-4 between visible cards). */}
+        {/* ── Portfolio Hero · single dominant Home card.
+            Replaced legacy StaleAnchorsBanner / TodayPulseCard /
+            HeroSpendableCard / HeroInsightCard. Component files
+            preserved on disk; only unmounted from Home. */}
+        <div className="sm:col-span-6">
+          <Safe name="PortfolioHeroCard">
+            <PortfolioHeroCard />
+          </Safe>
+        </div>
+
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="WelcomeSetupCard">
             <WelcomeSetupCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="StaleAnchorsBanner">
-            <StaleAnchorsBanner />
           </Safe>
         </div>
         <div className="sm:col-span-6 empty:hidden">
@@ -271,50 +267,18 @@ export function DashboardTab() {
           </Safe>
         </div>
 
-        {/* Phase 275 — "הפעימה של היום" lifted to the very top of
-           Home above the hero stack. It's emotionally powerful and
-           sets the day's tone before any numbers. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="TodayPulseCard">
-            <TodayPulseCard />
-          </Safe>
-        </div>
-
-        {/* Phase 325 — Daily Budget Strip sits directly under Pulse so
-           the user reads "how much can I spend today?" before any
-           other number. Compact strip; the same engine that drives
-           Pulse / Health drives this. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="HeroSpendableCard">
-            <HeroSpendableCard />
-          </Safe>
-        </div>
-
-        {/* Phase 360 — old "איפה אני אהיה" forecast hero retired
-           from Home. TimeRecapCard is now the single entry to the
-           flagship Time experience; tapping it routes to the זמן
-           tab where the full immersive screen lives. */}
+        {/* Phase 360 — TimeRecapCard is the single entry to the
+           flagship Time experience. */}
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="TimeRecapCard">
             <TimeRecapCard />
           </Safe>
         </div>
 
-        {/* Phase 379 — "בריאות פיננסית" gauge removed from this tab.
-           Same story is told on the AI Insights tab; keeping it on
-           Home was duplicate visual load. Component file preserved
-           on disk for any future caller. */}
-
         {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
         <div className="sm:col-span-6 empty:hidden">
           <Safe name="CopilotCard">
             <CopilotCard />
-          </Safe>
-        </div>
-
-        <div className="sm:col-span-6">
-          <Safe name="HeroInsightCard">
-            <HeroInsightCard />
           </Safe>
         </div>
 
