@@ -372,36 +372,69 @@ export function RecentActivity() {
     setEditEntry(e);
   }
 
+  const preview = items.slice(0, 3);
+
   return (
     <>
       <motion.section
         key={summary.monthCount}
         layout
         initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0, scale: [1, 1.012, 1] }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
         className="mo-card"
         dir="rtl"
         aria-label="פעילות החודש"
       >
-        <header className="mo-eyebrow">
-          <span className="mo-eyebrow-text">פעילות החודש</span>
-          <span className="mo-eyebrow-badge" data-mono="true" dir="ltr">
-            {summary.monthCount}
+        {/* Compact header row: title + count + total on the right,
+           small glyph on the far left (RTL flow). */}
+        <header className="mo-head">
+          <span aria-hidden className="mo-head-glyph">
+            <Sparkles className="size-4" strokeWidth={1.6} />
           </span>
+          <div className="mo-head-text">
+            <span className="mo-head-title">פעילות החודש</span>
+            <span className="mo-head-meta">
+              <span data-mono="true" dir="ltr">
+                {summary.monthCount}
+              </span>{" "}
+              פעולות
+              {summary.monthSpend > 0 ? (
+                <>
+                  <span aria-hidden> · </span>
+                  <span
+                    data-mono="true"
+                    dir="ltr"
+                    className="mo-head-total"
+                  >
+                    {ILS.format(Math.round(summary.monthSpend))}
+                  </span>
+                </>
+              ) : null}
+            </span>
+          </div>
         </header>
 
-        <div className="mo-kpi-row">
-          <MoKpi
+        {/* Two compact tap-tiles. Tap any → open full detail sheet. */}
+        <div className="mo-tiles">
+          <MoTile
             label="סה״כ פעולות"
             value={summary.monthCount.toString()}
-            sub={`${summary.todayCount} היום`}
+            hint={`${summary.todayCount} היום`}
+            onClick={() => {
+              tap();
+              setSheetOpen(true);
+            }}
           />
-          <MoKpi
-            label="הוצאות החודש"
+          <MoTile
+            label="סה״כ הוצאות"
             value={ILS.format(Math.round(summary.monthSpend))}
-            sub="סך יוצא"
+            hint="החודש"
             emphasize
+            onClick={() => {
+              tap();
+              setSheetOpen(true);
+            }}
           />
         </div>
 
@@ -412,36 +445,17 @@ export function RecentActivity() {
           </div>
         ) : (
           <>
-            {summary.lastExpense ? (
-              <LatestExpenseCard item={summary.lastExpense} now={now} />
-            ) : null}
-
-            <div className="mo-source-chips">
-              <SourceChip
-                icon={<Wallet className="size-3" />}
-                label="Wallet"
-                count={summary.walletCount}
-                tone="#75F5FF"
-              />
-              <SourceChip
-                icon={<Sparkles className="size-3" />}
-                label="ידני"
-                count={summary.manualCount}
-                tone="#D4AF37"
-              />
-              <SourceChip
-                icon={<Banknote className="size-3" />}
-                label="אשראי"
-                count={summary.creditCount}
-                tone="#A78BFA"
-              />
-              <SourceChip
-                icon={<Smartphone className="size-3" />}
-                label="מזומן"
-                count={summary.cashCount}
-                tone="#34D399"
-              />
-            </div>
+            <ul className="mo-preview">
+              {preview.map((item, idx) => (
+                <MoPreviewRow
+                  key={item.id}
+                  item={item}
+                  now={now}
+                  delay={idx * 0.04}
+                  onTap={() => handleRowTap(item)}
+                />
+              ))}
+            </ul>
 
             <motion.button
               type="button"
@@ -451,17 +465,12 @@ export function RecentActivity() {
               }}
               whileTap={{ scale: 0.985 }}
               transition={{ type: "spring", stiffness: 320, damping: 26 }}
-              aria-label={`פתח פירוט: ${summary.monthCount} פעולות החודש`}
-              className="mo-cta"
+              aria-label={`פתח פירוט מלא של ${summary.monthCount} פעולות החודש`}
+              className="mo-open"
             >
-              <span className="mo-cta-icon" aria-hidden>
-                <ChevronLeft className="size-4" strokeWidth={1.7} />
-              </span>
-              <span className="mo-cta-label">
-                פתח פירוט מלא
-                <span className="mo-cta-sub">
-                  {summary.monthCount} פעולות · {ILS.format(Math.round(summary.monthSpend))}
-                </span>
+              <span className="mo-open-label">פתח פירוט מלא</span>
+              <span aria-hidden className="mo-open-chevron">
+                <ChevronLeft className="size-4" strokeWidth={1.9} />
               </span>
             </motion.button>
           </>
@@ -673,104 +682,104 @@ function ActivityRow({
   );
 }
 
-function MoKpi({
+function MoTile({
   label,
   value,
-  sub,
+  hint,
   emphasize,
+  onClick,
 }: {
   label: string;
   value: string;
-  sub?: string;
+  hint?: string;
   emphasize?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div className="mo-kpi" data-emphasize={emphasize ? "true" : undefined}>
-      <span className="mo-kpi-label">{label}</span>
-      <span className="mo-kpi-value" data-mono="true" dir="ltr">
+    <motion.button
+      type="button"
+      className="mo-tile"
+      data-emphasize={emphasize ? "true" : undefined}
+      onClick={onClick}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 380, damping: 34 }}
+      aria-label={`${label} · ${value}`}
+    >
+      <span className="mo-tile-label">{label}</span>
+      <span className="mo-tile-value" data-mono="true" dir="ltr">
         {value}
       </span>
-      {sub ? <span className="mo-kpi-sub">{sub}</span> : null}
-    </div>
+      {hint ? <span className="mo-tile-hint">{hint}</span> : null}
+    </motion.button>
   );
 }
 
-function LatestExpenseCard({
+function MoPreviewRow({
   item,
   now,
+  delay,
+  onTap,
 }: {
   item: ActivityItem;
   now: Date;
+  delay: number;
+  onTap?: () => void;
 }) {
-  const meta = item.category ? getCategory(item.category) : null;
-  const accent = meta?.accent ?? "#F87171";
+  const tappable = Boolean(item.entryId && onTap);
+  const cat = item.category ? getCategory(item.category) : null;
+  const isIn = item.direction === "in";
+  const accent = isIn
+    ? "#34D399"
+    : item.isWithdrawal
+      ? "#D4AF37"
+      : cat?.accent ?? "#F87171";
+  const sign = isIn ? "+" : "−";
+  const Icon = isIn
+    ? ArrowDownToLine
+    : item.installments && item.installments > 1
+      ? Repeat2
+      : cat
+        ? cat.icon
+        : Banknote;
+
   return (
-    <motion.div
-      key={item.id}
+    <motion.li
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.32 }}
-      className="mo-latest"
-      style={
-        {
-          "--mo-latest-accent": accent,
-        } as React.CSSProperties
+      transition={{ delay, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      whileTap={tappable ? { scale: 0.985 } : undefined}
+      onClick={tappable ? onTap : undefined}
+      role={tappable ? "button" : undefined}
+      tabIndex={tappable ? 0 : undefined}
+      onKeyDown={
+        tappable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onTap?.();
+              }
+            }
+          : undefined
       }
-      aria-label={`הוצאה אחרונה: ${item.title}`}
+      className="mo-p"
+      data-tappable={tappable ? "true" : undefined}
+      style={{ "--mo-p-accent": accent } as React.CSSProperties}
     >
-      <span aria-hidden className="mo-latest-icon">
-        {meta ? (
-          <meta.icon className="size-5" strokeWidth={1.6} />
-        ) : (
-          <ArrowUpRight className="size-5" />
-        )}
+      <span aria-hidden className="mo-p-icon">
+        <Icon className="size-5" strokeWidth={1.6} />
       </span>
-      <div className="mo-latest-body">
-        <span className="mo-latest-eyebrow">הוצאה אחרונה</span>
-        <span className="mo-latest-title">{item.title}</span>
-        <span className="mo-latest-when">
+      <div className="mo-p-body">
+        <span className="mo-p-title">{item.title}</span>
+        <span className="mo-p-meta">
+          {cat ? cat.label : ""}
+          {cat ? <span aria-hidden> · </span> : null}
           {whenLabel(item.ts, item.hasRealTime, now)}
         </span>
       </div>
-      <span className="mo-latest-amount" data-mono="true" dir="ltr">
-        −{ILS.format(item.amount)}
+      <span className="mo-p-amount" data-mono="true" dir="ltr">
+        {sign}
+        {ILS.format(item.amount)}
       </span>
-    </motion.div>
-  );
-}
-
-function SourceChip({
-  icon,
-  label,
-  count,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  tone: string;
-}) {
-  if (count === 0) return null;
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]"
-      style={{
-        color: tone,
-        borderColor: `${tone}44`,
-        background: `${tone}12`,
-      }}
-    >
-      <span aria-hidden className="inline-flex items-center" style={{ color: tone }}>
-        {icon}
-      </span>
-      {label}
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-[10.5px] opacity-80"
-      >
-        {count}
-      </span>
-    </span>
+    </motion.li>
   );
 }
