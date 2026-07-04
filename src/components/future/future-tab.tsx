@@ -56,30 +56,51 @@ export function FutureTab() {
         <TimeScreenV3 />
       </Safe>
 
-      {/* Supporting forecast detail — kept behind a details toggle,
-         but the two cards the user called out as redundant
-         (CashflowForecast35 = 'תחזית תזרים חכמה' + ForecastTimelineCard
-         = 'ציר זמן צפוי החודש') are gone. */}
-      <details className="group rounded-2xl border border-white/8 bg-white/[0.02]" dir="rtl">
-        <summary className="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-[12.5px] text-foreground/85">
-          <span>פירוט תחזית — 35 ימים קדימה</span>
-          <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground transition-transform group-open:rotate-180">
-            פתח
-          </span>
-        </summary>
-        <div className="grid grid-cols-1 gap-4 px-3 pb-4 sm:grid-cols-6">
-          <div className="sm:col-span-6">
-            <Safe name="MonthlyCashflowCard">
-              <MonthlyCashflowCard />
-            </Safe>
-          </div>
-          <div className="sm:col-span-6">
-            <Safe name="ObligationsAndWeek">
-              <ObligationsAndWeek />
-            </Safe>
-          </div>
+      {/* Supporting detail — no longer wrapped in a <details>
+         accordion. Static header + hairline divider, then the
+         cards, matching the Home sections language (Apple Finance
+         / Revolut, not a settings menu). */}
+      <TimeSectionHeader
+        title="תחזית תזרים החודש"
+        subtitle="פירוט חודשי — צפוי מול בפועל"
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+        <div className="sm:col-span-6">
+          <Safe name="MonthlyCashflowCard">
+            <MonthlyCashflowCard />
+          </Safe>
         </div>
-      </details>
+      </div>
+
+      <TimeSectionHeader
+        title="התחייבויות והשבוע הקרוב"
+        subtitle="חיובים בהמתנה לפי מקור וטווח קצר"
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+        <div className="sm:col-span-6">
+          <Safe name="ObligationsAndWeek">
+            <ObligationsAndWeek />
+          </Safe>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function TimeSectionHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <header className="sally-section-header" dir="rtl" aria-label={title}>
+      <div className="sally-section-header-text">
+        <span className="sally-section-header-title">{title}</span>
+        <span className="sally-section-header-sub">{subtitle}</span>
+      </div>
+      <span aria-hidden className="sally-section-header-divider" />
+    </header>
   );
 }
