@@ -1,17 +1,23 @@
 "use client";
 
-// Phase 268 — month-first cashflow card.
+// Monthly cashflow · compact launcher rebuild.
 //
-// Same data the cashflow buckets card surfaces, regrouped into one
-// folder per month. Inside each folder: per-source groups (income /
-// bank / cards / loans), expandable. Default-open for current +
-// next month, default-closed for further months — matches the
-// brief.
+// Prior card was a full .glass-card with a hero stat strip, a 3-col
+// stat row, a month-tile grid, and a folder body — ~500px tall on
+// mobile. The rebuild flattens it into:
+//   1. Static thin header (🗓️ תזרים חודשי · sub + hairline glow).
+//   2. 4-tile month grid (חודש נוכחי + 3 קדימה) — short cards, glass,
+//      month + projected EOM balance + tone dot.
+//   3. Inline expansion under the grid when a tile is tapped —
+//      4 collapsible source groups (הכנסות / חיובי בנק / כרטיסים /
+//      הלוואות). One month open at a time.
+//
+// UI/UX only. buildMonthlyCashflow + every engine downstream stays
+// exactly as it was.
 
 import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  Banknote,
   CalendarRange,
   ChevronDown,
   CreditCard,
@@ -26,7 +32,6 @@ import {
   type MonthlyCashflowFolder,
   type MonthlySourceGroup,
 } from "@/lib/monthly-cashflow";
-import { SectionHeader } from "@/components/ui/section-header";
 import { CardEmpty } from "@/components/ui/card-empty";
 import { tap } from "@/lib/haptics";
 
@@ -35,35 +40,47 @@ const ILS = new Intl.NumberFormat("he-IL", {
   currency: "ILS",
   maximumFractionDigits: 0,
 });
-
 const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
   day: "numeric",
   month: "short",
 });
 
-const TONE_COLOR: Record<MonthlyCashflowFolder["tone"], string> = {
-  current: "#34D399",
-  next: "#60A5FA",
-  future: "#A78BFA",
-};
+const EASE = [0.32, 0.72, 0, 1] as const;
 
-const SOURCE_ICON: Record<MonthlySourceGroup["source"], React.ReactNode> = {
-  income: <Wallet className="size-4" />,
-  bank_debit: <Landmark className="size-4" />,
-  card: <CreditCard className="size-4" />,
-  loan: <HandCoins className="size-4" />,
-};
-
-const SOURCE_TONE: Record<MonthlySourceGroup["source"], string> = {
-  income: "#34D399",
-  bank_debit: "#60A5FA",
-  card: "#A78BFA",
-  loan: "#F87171",
+const SOURCE_ORDER: ReadonlyArray<MonthlySourceGroup["source"]> = [
+  "income",
+  "bank_debit",
+  "card",
+  "loan",
+];
+const SOURCE_META: Record<
+  MonthlySourceGroup["source"],
+  { tone: string; icon: React.ReactNode; label: string }
+> = {
+  income: {
+    tone: "#34D399",
+    icon: <Wallet className="size-4" />,
+    label: "הכנסות",
+  },
+  bank_debit: {
+    tone: "#60A5FA",
+    icon: <Landmark className="size-4" />,
+    label: "חיובי בנק",
+  },
+  card: {
+    tone: "#A78BFA",
+    icon: <CreditCard className="size-4" />,
+    label: "כרטיסים",
+  },
+  loan: {
+    tone: "#F87171",
+    icon: <HandCoins className="size-4" />,
+    label: "הלוואות",
+  },
 };
 
 export function MonthlyCashflowCard({
-  windowDays = 90,
-  title = "תזרים חודשי לפי תיקיות",
+  windowDays = 120,
 }: {
   windowDays?: number;
   title?: string;
@@ -89,98 +106,41 @@ export function MonthlyCashflowCard({
     });
   }, [hydrated, accounts, loans, incomes, rules, statuses, entries, windowDays]);
 
+  const visible = folders.slice(0, 4);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const openFolder =
+    visible.find((f) => f.monthKey === openKey) ?? null;
+
   if (!hydrated) return null;
-  if (folders.length === 0) {
+  if (visible.length === 0) {
     return (
-      <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
-        <SectionHeader icon={<CalendarRange />} title={title} />
+      <>
+        <MonthlyHeader />
         <CardEmpty
           icon={<CalendarRange className="size-4" />}
           title="אין עדיין תזרים עתידי"
           reason="הוסף הוצאות קבועות, הלוואות, או הכנסה צפויה כדי לראות חלוקה לחודשים."
         />
-      </section>
+      </>
     );
   }
 
-  const grandIncome = folders.reduce((acc, f) => acc + f.totalIncome, 0);
-  const grandExpense = folders.reduce((acc, f) => acc + f.totalExpense, 0);
-  const grandNet = grandIncome - grandExpense;
-
-  return <MonthlyCashflowBody
-    title={title}
-    windowDays={windowDays}
-    folders={folders}
-    grandIncome={grandIncome}
-    grandExpense={grandExpense}
-    grandNet={grandNet}
-  />;
-}
-
-function MonthlyCashflowBody({
-  title,
-  windowDays,
-  folders,
-  grandIncome,
-  grandExpense,
-  grandNet,
-}: {
-  title: string;
-  windowDays: number;
-  folders: MonthlyCashflowFolder[];
-  grandIncome: number;
-  grandExpense: number;
-  grandNet: number;
-}) {
-  // Phase 291 — single open month at a time. Default closed.
-  const [openKey, setOpenKey] = useState<string | null>(null);
-  const openFolder = folders.find((f) => f.monthKey === openKey) ?? null;
-
   return (
-    <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
-      <SectionHeader
-        icon={<CalendarRange />}
-        title={title}
-        trailing={
-          <span className="text-caption text-muted-foreground" dir="ltr">
-            סה״כ {windowDays} ימים
-          </span>
-        }
-      />
-      <p className="text-caption text-muted-foreground">
-        כל חודש בנפרד. בכל תיקייה הכנסות, חיובי בנק, כרטיסים והלוואות.
-      </p>
+    <div className="mcf-root" dir="rtl">
+      <MonthlyHeader />
 
-      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/8 bg-black/25 p-3">
-        <Stat
-          label={`הכנסות ${windowDays} ימים`}
-          value={`+${ILS.format(Math.round(grandIncome))}`}
-          tone="#34D399"
-        />
-        <Stat
-          label={`יציאות ${windowDays} ימים`}
-          value={`−${ILS.format(Math.round(grandExpense))}`}
-          tone="#F87171"
-        />
-        <Stat
-          label={`נטו ${windowDays} ימים`}
-          value={`${grandNet < 0 ? "−" : "+"}${ILS.format(
-            Math.abs(Math.round(grandNet)),
-          )}`}
-          tone={grandNet < 0 ? "#F87171" : "#34D399"}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {folders.map((folder) => (
-          <MonthButton
+      <div className="mcf-grid" data-open={openKey ?? undefined}>
+        {visible.map((folder, idx) => (
+          <MonthTile
             key={folder.monthKey}
             folder={folder}
+            tierIndex={idx}
             active={openKey === folder.monthKey}
+            dimmed={openKey !== null && openKey !== folder.monthKey}
             onClick={() => {
               tap();
-              setOpenKey(
-                openKey === folder.monthKey ? null : folder.monthKey,
+              setOpenKey((prev) =>
+                prev === folder.monthKey ? null : folder.monthKey,
               );
             }}
           />
@@ -189,230 +149,228 @@ function MonthlyCashflowBody({
 
       <AnimatePresence initial={false} mode="wait">
         {openFolder ? (
-          <motion.div
+          <FolderExpansion
             key={openFolder.monthKey}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
-            <FolderBody folder={openFolder} />
-          </motion.div>
+            folder={openFolder}
+          />
         ) : null}
       </AnimatePresence>
-    </section>
+    </div>
   );
 }
 
-function MonthButton({
+// ── Header ──────────────────────────────────────────────────
+
+function MonthlyHeader() {
+  return (
+    <header
+      className="sally-section-header"
+      dir="rtl"
+      aria-label="תזרים חודשי"
+    >
+      <div className="sally-section-header-text">
+        <span className="sally-section-header-title">🗓️ תזרים חודשי</span>
+        <span className="sally-section-header-sub">
+          חודש נוכחי + 3 חודשים קדימה · לחץ חודש לפירוט
+        </span>
+      </div>
+      <span aria-hidden className="sally-section-header-divider" />
+    </header>
+  );
+}
+
+// ── Month tile ──────────────────────────────────────────────
+
+function MonthTile({
   folder,
+  tierIndex,
   active,
+  dimmed,
   onClick,
 }: {
   folder: MonthlyCashflowFolder;
+  tierIndex: number;
   active: boolean;
+  dimmed: boolean;
   onClick: () => void;
 }) {
-  const color = TONE_COLOR[folder.tone];
+  const reduced = useReducedMotion();
+  const tier =
+    tierIndex === 0
+      ? "current"
+      : tierIndex === 1
+        ? "next"
+        : "future";
   const tierLabel =
-    folder.tone === "current"
+    tier === "current"
       ? "חודש נוכחי"
-      : folder.tone === "next"
+      : tier === "next"
         ? "החודש הבא"
-        : "חודש עתידי";
+        : `+${tierIndex}`;
+  const netNegative = folder.net < 0;
+  const tone: "safe" | "danger" = netNegative ? "danger" : "safe";
   return (
-    <button
+    <motion.button
       type="button"
+      className="mcf-tile"
+      data-tone={tone}
+      data-tier={tier}
+      data-active={active ? "true" : undefined}
+      data-dimmed={dimmed ? "true" : undefined}
       onClick={onClick}
-      aria-pressed={active}
-      aria-label={`${active ? "סגור" : "פתח"} ${folder.fullLabel} · ${tierLabel}`}
-      title={`${active ? "סגור" : "פתח"} ${folder.fullLabel}`}
-      className={`relative flex flex-col gap-1 overflow-hidden rounded-2xl border px-3 py-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 ${
-        active
-          ? "bg-black/40"
-          : "bg-black/25 hover:bg-white/3"
-      }`}
-      style={{
-        borderColor: active ? `${color}66` : "rgba(255,255,255,0.08)",
-        boxShadow: active
-          ? `0 16px 40px -22px ${color}66, inset 0 1px 0 rgba(255,255,255,0.06)`
-          : undefined,
-        background: active
-          ? `linear-gradient(180deg, ${color}1f 0%, rgba(0,0,0,0.35) 80%)`
-          : undefined,
+      aria-expanded={active}
+      aria-label={`${tierLabel} · ${folder.fullLabel} · ${
+        netNegative ? "גירעון" : "עודף"
+      } ${ILS.format(Math.abs(Math.round(folder.net)))}`}
+      whileTap={{ scale: 0.97 }}
+      transition={{
+        type: "spring",
+        stiffness: 380,
+        damping: 34,
+        duration: reduced ? 0.12 : undefined,
       }}
     >
-      <span
-        className="text-[11px] uppercase tracking-[0.18em]"
-        style={{ color }}
-      >
-        {tierLabel}
-      </span>
-      <span className="text-section text-foreground leading-tight">
-        {folder.fullLabel}
-      </span>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-caption"
-        style={{ color: folder.net < 0 ? "#F87171" : "#34D399" }}
-      >
-        {folder.net < 0 ? "−" : "+"}
+      <span aria-hidden className="mcf-tile-dot" />
+      <span className="mcf-tile-tier">{tierLabel}</span>
+      <span className="mcf-tile-name">{folder.fullLabel}</span>
+      <span className="mcf-tile-value" data-mono="true" dir="ltr">
+        {netNegative ? "−" : "+"}
         {ILS.format(Math.abs(Math.round(folder.net)))}
       </span>
-    </button>
+    </motion.button>
   );
 }
 
-function FolderBody({ folder }: { folder: MonthlyCashflowFolder }) {
-  return (
-    <div className="flex flex-col gap-3 pt-3">
-      <div className="grid grid-cols-2 gap-2">
-        <Stat
-          label="הכנסות"
-          value={`+${ILS.format(Math.round(folder.totalIncome))}`}
-          tone="#34D399"
-        />
-        <Stat
-          label="יציאות"
-          value={`−${ILS.format(Math.round(folder.totalExpense))}`}
-          tone="#F87171"
-        />
-      </div>
+// ── Expansion ───────────────────────────────────────────────
 
-      <ul className="flex flex-col gap-1.5">
-        {(["income", "card", "bank_debit", "loan"] as const).map(
-          (source, idx) => {
-            const group = folder.bySource[source];
-            if (group.total === 0) return null;
-            return (
-              <motion.div
-                key={source}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  delay: Math.min(idx * 0.05, 0.2),
-                  duration: 0.22,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-              >
-                <SourceRow group={group} isInflow={source === "income"} />
-              </motion.div>
-            );
-          },
-        )}
+function FolderExpansion({ folder }: { folder: MonthlyCashflowFolder }) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.section
+      layout
+      className="mcf-lens"
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+      transition={{
+        type: "spring",
+        stiffness: 320,
+        damping: 30,
+        duration: reduced ? 0.12 : undefined,
+      }}
+    >
+      <header className="mcf-lens-head">
+        <div className="mcf-lens-head-text">
+          <span className="mcf-lens-eyebrow">פירוט</span>
+          <span className="mcf-lens-title">{folder.fullLabel}</span>
+        </div>
+        <div className="mcf-lens-strip">
+          <span className="mcf-lens-strip-item" data-mono="true" dir="ltr">
+            +{ILS.format(Math.round(folder.totalIncome))}
+          </span>
+          <span
+            aria-hidden
+            className="mcf-lens-strip-dot"
+          />
+          <span className="mcf-lens-strip-item" data-mono="true" dir="ltr">
+            −{ILS.format(Math.round(folder.totalExpense))}
+          </span>
+        </div>
+      </header>
+
+      <ul className="mcf-groups">
+        {SOURCE_ORDER.map((src, idx) => {
+          const group = folder.bySource[src];
+          if (group.total === 0) return null;
+          return (
+            <SourceGroup
+              key={src}
+              group={group}
+              delay={Math.min(idx * 0.04, 0.18)}
+            />
+          );
+        })}
       </ul>
-    </div>
+    </motion.section>
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-micro text-muted-foreground">{label}</span>
-      <span
-        data-mono="true"
-        dir="ltr"
-        className="text-body font-medium"
-        style={{ color: tone }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function SourceRow({
+function SourceGroup({
   group,
-  isInflow,
+  delay,
 }: {
   group: MonthlySourceGroup;
-  isInflow: boolean;
+  delay: number;
 }) {
   const [open, setOpen] = useState(false);
-  const tone = SOURCE_TONE[group.source];
+  const reduced = useReducedMotion();
+  const meta = SOURCE_META[group.source];
+  const isInflow = group.source === "income";
   const sign = isInflow ? "+" : "−";
+
   return (
-    <li className="overflow-hidden rounded-xl border border-white/6 bg-black/15">
+    <motion.li
+      layout
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: reduced ? 0.12 : 0.32, ease: EASE }}
+      className="mcf-group"
+      style={{ "--mcf-tone": meta.tone } as React.CSSProperties}
+    >
       <button
         type="button"
         onClick={() => {
-          setOpen((v) => !v);
           tap();
+          setOpen((v) => !v);
         }}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start hover:bg-white/3"
+        className="mcf-group-head"
       >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="flex size-7 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: `${tone}22`, color: tone }}
-          >
-            {SOURCE_ICON[group.source]}
+        <span aria-hidden className="mcf-group-icon">
+          {meta.icon}
+        </span>
+        <div className="mcf-group-text">
+          <span className="mcf-group-label">{meta.label}</span>
+          <span className="mcf-group-count">
+            {group.events.length} פעולות
           </span>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="text-body text-foreground">{group.label}</span>
-            <span className="text-caption text-muted-foreground">
-              {group.events.length} פעולות
-            </span>
-          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-body font-medium"
-            style={{ color: tone }}
-          >
-            {sign}
-            {ILS.format(Math.round(group.total))}
-          </span>
-          <motion.span
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: 0.18 }}
-            className="text-muted-foreground"
-          >
-            <ChevronDown className="size-4" />
-          </motion.span>
-        </div>
+        <span className="mcf-group-amount" data-mono="true" dir="ltr">
+          {sign}
+          {ILS.format(Math.round(group.total))}
+        </span>
+        <motion.span
+          aria-hidden
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 28 }}
+          className="mcf-group-chev"
+        >
+          <ChevronDown className="size-4" />
+        </motion.span>
       </button>
       <AnimatePresence initial={false}>
         {open ? (
           <motion.ul
-            key="items"
-            initial={{ opacity: 0, height: 0 }}
+            key="body"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.18 }}
-            className="overflow-hidden border-t border-white/6"
+            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: reduced ? 0.12 : 0.3, ease: EASE }}
+            className="mcf-events"
           >
             {group.events.map((ev, i) => (
-              <li
-                key={`${ev.refId}-${i}`}
-                className="flex items-baseline justify-between gap-2 px-4 py-2"
-              >
-                <div className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate text-caption text-foreground">
-                    {ev.label}
-                  </span>
-                  <span className="text-caption text-muted-foreground/80">
+              <li key={`${ev.refId}-${i}`} className="mcf-event">
+                <span aria-hidden className="mcf-event-rail" />
+                <div className="mcf-event-body">
+                  <span className="mcf-event-label">{ev.label}</span>
+                  <span className="mcf-event-date">
                     {DAY_FMT.format(new Date(ev.effectiveCashAt))}
                   </span>
                 </div>
                 <span
+                  className="mcf-event-amount"
                   data-mono="true"
                   dir="ltr"
-                  className="text-caption font-medium"
-                  style={{ color: tone }}
                 >
                   {sign}
                   {ILS.format(Math.round(ev.amount))}
@@ -422,8 +380,6 @@ function SourceRow({
           </motion.ul>
         ) : null}
       </AnimatePresence>
-    </li>
+    </motion.li>
   );
 }
-
-void Banknote;
