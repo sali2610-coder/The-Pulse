@@ -618,9 +618,20 @@ function InsightGrid({ frame }: { frame: TimeFrame }) {
     }
     return m;
   }, [events]);
+  const cursorDate = new Date(frame.cursorISO);
 
   return (
     <div className="tm-insight-wrap" data-open={openLane ?? undefined}>
+      <div className="tm-insight-caption" dir="rtl">
+        <span>מה השפיע על היתרה עד</span>
+        <span
+          className="tm-insight-caption-date"
+          data-mono="true"
+          dir="ltr"
+        >
+          {DATE_FMT.format(cursorDate)}
+        </span>
+      </div>
       <div className="tm-insight-grid">
         {LANES.map((lane) => {
           const rows = perLane.get(lane.key) ?? [];
@@ -677,7 +688,16 @@ function InsightTile({
 }) {
   const reduced = useReducedMotion();
   const count = rows.length;
-  const sub = count === 0 ? lane.emptyLabel : lane.singularLabel(count);
+  // Single-event tile shows the event label directly so the tile
+  // reads as the reason for the balance ('לימודים' / 'משכורת' /
+  // 'רכב'), not an abstract count. Two-plus events fall back to the
+  // 'N חיובים' summary.
+  const sub =
+    count === 0
+      ? lane.emptyLabel
+      : count === 1
+        ? rows[0].label
+        : lane.singularLabel(count);
   return (
     <motion.button
       type="button"

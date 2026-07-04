@@ -6505,3 +6505,23 @@ button.sally-glass {
 .tm-lane[data-tone="watch"] .tm-lane-total { color: var(--sally-watch, #FBBF24); }
 .tm-lane[data-tone="lane-loan"] .tm-lane-total { color: #A78BFA; }
 .tm-lane[data-tone="lane-card"] .tm-lane-total { color: #75F5FF; }
+
+/* ── Time · insight grid caption ─────────────────────────────── */
+.tm-insight-caption {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-inline: 4px;
+  margin-block-end: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--sally-ink-4, rgba(255, 255, 255, 0.55));
+}
+.tm-insight-caption-date {
+  color: var(--sally-gold-loud, #E4C158);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  font-size: 12px;
+}
