@@ -4724,9 +4724,9 @@ button.sally-glass {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 720px;
+  max-width: 780px;
   margin-inline: auto;
-  padding-inline: 16px;
+  padding-inline: 12px;
   padding-block-start: 8px;
   padding-block-end: 140px;
   color: var(--sally-ink-1, #F6F6F6);
@@ -4763,17 +4763,49 @@ button.sally-glass {
 .tm-river {
   position: relative;
   overflow: hidden;
-  padding: 22px 22px 8px;
+  padding: 24px 22px 12px;
   border-radius: 32px;
-  border: 1px solid rgba(212, 175, 55, 0.22);
+  border: 1px solid rgba(212, 175, 55, 0.28);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.005)),
-    var(--surface, rgba(10, 10, 12, 0.55));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.006)),
+    var(--surface, rgba(10, 10, 12, 0.62));
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 70px -30px rgba(0, 0, 0, 0.75),
-    0 0 0 1px rgba(0, 0, 0, 0.2);
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.35) inset,
+    0 34px 78px -30px rgba(0, 0, 0, 0.78),
+    0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 60px -30px rgba(212, 175, 55, 0.42);
+  isolation: isolate;
+  color: var(--sally-safe, #34D399);
+  animation: tm-river-breath 8s ease-in-out infinite;
 }
+.tm-river[data-tone="watch"] {
+  color: var(--sally-watch, #FBBF24);
+  border-color: rgba(251, 191, 36, 0.34);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.35) inset,
+    0 34px 78px -30px rgba(0, 0, 0, 0.78),
+    0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 60px -30px rgba(251, 191, 36, 0.5);
+}
+.tm-river[data-tone="danger"] {
+  color: var(--sally-danger, #F87171);
+  border-color: rgba(248, 113, 113, 0.38);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.35) inset,
+    0 34px 78px -30px rgba(0, 0, 0, 0.78),
+    0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 60px -30px rgba(248, 113, 113, 0.55);
+}
+@keyframes tm-river-breath {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50%      { filter: brightness(1.03) saturate(1.06); }
+}
+
 .tm-river-aurora {
   position: absolute;
   inset-block-start: -40%;
@@ -4781,15 +4813,82 @@ button.sally-glass {
   width: 140%;
   height: 140%;
   background:
-    radial-gradient(45% 45% at 25% 25%, rgba(212, 175, 55, 0.18), transparent 60%),
-    radial-gradient(45% 45% at 75% 40%, rgba(52, 211, 153, 0.10), transparent 60%);
+    radial-gradient(45% 45% at 25% 25%, currentColor, transparent 60%),
+    radial-gradient(45% 45% at 75% 40%, rgba(212, 175, 55, 0.16), transparent 60%);
   pointer-events: none;
   filter: blur(30px);
-  opacity: 0.85;
+  opacity: 0.28;
+  animation: tm-river-aurora-drift 14s ease-in-out infinite alternate;
+}
+@keyframes tm-river-aurora-drift {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0.24; }
+  100% { transform: translate(6%, -3%) scale(1.05); opacity: 0.34; }
+}
+.tm-river-halo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 40% at 50% 0%, rgba(212, 175, 55, 0.10), transparent 60%);
+  z-index: 0;
+}
+.tm-river-pulse {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid currentColor;
+  opacity: 0;
+  animation: tm-river-ai-pulse 9s ease-out infinite;
+}
+@keyframes tm-river-ai-pulse {
+  0%    { opacity: 0;    transform: scale(1);     }
+  6%    { opacity: 0.35; transform: scale(1);     }
+  20%   { opacity: 0;    transform: scale(1.006); }
+  100%  { opacity: 0;    transform: scale(1);     }
+}
+
+/* Status header line */
+.tm-river-status {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 6px;
+  padding: 5px 10px 5px 12px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 10, 12, 0.5);
+  backdrop-filter: blur(12px);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--sally-ink-2, rgba(255, 255, 255, 0.85));
+}
+.tm-river-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  color: var(--sally-safe, #34D399);
+  box-shadow: 0 0 8px currentColor;
+  animation: tm-river-status-dot 2.4s ease-in-out infinite;
+}
+.tm-river[data-tone="watch"] .tm-river-status-dot { color: var(--sally-watch, #FBBF24); }
+.tm-river[data-tone="danger"] .tm-river-status-dot { color: var(--sally-danger, #F87171); }
+@keyframes tm-river-status-dot {
+  0%, 100% { transform: scale(1);   opacity: 0.95; }
+  50%      { transform: scale(1.4); opacity: 1;    }
+}
+.tm-river-status-text {
+  white-space: nowrap;
 }
 
 .tm-river-head {
   position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -4816,10 +4915,11 @@ button.sally-glass {
 
 .tm-river-hero {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-block: 18px 8px;
+  padding-block: 20px 10px;
 }
 .tm-river-hero-label {
   font-size: 11px;
@@ -4829,13 +4929,13 @@ button.sally-glass {
   color: var(--sally-ink-4, rgba(255, 255, 255, 0.5));
 }
 .tm-river-hero-balance {
-  font-size: 44px;
+  font-size: 50px;
   font-weight: 300;
   letter-spacing: -0.04em;
   line-height: 1.02;
   font-variant-numeric: tabular-nums;
   color: var(--sally-ink-1, #F6F6F6);
-  text-shadow: 0 0 32px rgba(212, 175, 55, 0.14);
+  text-shadow: 0 0 34px rgba(212, 175, 55, 0.18);
 }
 .tm-river-hero-balance[data-tone="safe"] {
   color: var(--sally-safe, #34D399);
@@ -4857,8 +4957,9 @@ button.sally-glass {
 
 .tm-river-chart-wrap {
   position: relative;
+  z-index: 1;
   margin-block-start: 10px;
-  height: 200px;
+  height: 220px;
 }
 .tm-river-svg {
   width: 100%;
@@ -4871,6 +4972,7 @@ button.sally-glass {
   inset-inline-end: 4px;
   inset-block-start: 4px;
   inset-block-end: 4px;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -4880,6 +4982,12 @@ button.sally-glass {
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+@media (max-width: 400px) {
+  .tm-river { padding: 20px 18px 10px; border-radius: 26px; }
+  .tm-river-hero-balance { font-size: 42px; }
+  .tm-river-chart-wrap { height: 200px; }
 }
 
 /* Confidence pill */

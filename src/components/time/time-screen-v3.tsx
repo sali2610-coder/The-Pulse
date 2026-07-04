@@ -213,9 +213,36 @@ function BalanceRiver({
         ? "var(--sally-watch)"
         : "var(--sally-safe)";
 
+  const moodLabel =
+    confidence === "danger"
+      ? "🔴 סיכון זמני"
+      : confidence === "watch"
+        ? "🟡 דורש תשומת לב"
+        : "🟢 שליטה מלאה";
+
   return (
-    <section className="tm-river" aria-label="נהר יתרה על ציר הזמן">
+    <motion.section
+      className="tm-river"
+      data-tone={confidence}
+      aria-label="נהר יתרה על ציר הזמן"
+      initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{
+        type: "spring",
+        stiffness: 300,
+        damping: 28,
+        duration: reduced ? 0.12 : 0.55,
+      }}
+    >
       <span aria-hidden className="tm-river-aurora" />
+      <span aria-hidden className="tm-river-halo" />
+      <span aria-hidden className="tm-river-pulse" />
+      <div className="tm-river-status" aria-live="polite">
+        <span className="tm-river-status-dot" aria-hidden />
+        <span className="tm-river-status-text">
+          🧠 AI Forecast Active · {moodLabel}
+        </span>
+      </div>
       <div className="tm-river-head">
         <div className="tm-river-title-block">
           <span className="tm-river-eyebrow">{labelForKind(activeKind)}</span>
@@ -298,6 +325,22 @@ function BalanceRiver({
             transition={{ duration: 0.55, ease: EASE }}
           />
 
+          {/* Blurred underlay for the aura glow */}
+          <motion.path
+            key={`glow-${activeKind}`}
+            d={shape.activePath}
+            fill="none"
+            stroke="url(#tm-river-stroke)"
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeOpacity="0.55"
+            filter="url(#tm-river-glow)"
+            initial={reduced ? undefined : { pathLength: 0, opacity: 0.2 }}
+            animate={{ pathLength: 1, opacity: 0.55 }}
+            transition={{ duration: reduced ? 0.12 : 1.0, ease: EASE }}
+          />
+          {/* Sharp active stroke on top */}
           <motion.path
             key={`stroke-${activeKind}`}
             d={shape.activePath}
@@ -306,20 +349,29 @@ function BalanceRiver({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            filter="url(#tm-river-glow)"
             initial={reduced ? undefined : { pathLength: 0, opacity: 0.4 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 0.9, ease: EASE }}
+            transition={{ duration: reduced ? 0.12 : 0.9, ease: EASE }}
           />
 
+          {/* Cursor: idle breathing dot on top of pulsing ring */}
           <motion.circle
             cx={shape.cursorX}
             cy={shape.cursorY}
             r={6}
             fill={tone}
             initial={{ scale: 0.4, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.55, ease: EASE }}
+            animate={
+              reduced
+                ? { scale: 1, opacity: 1 }
+                : { scale: [1, 1.12, 1], opacity: 1 }
+            }
+            transition={{
+              duration: reduced ? 0.12 : 3.6,
+              repeat: reduced ? 0 : Infinity,
+              ease: EASE,
+            }}
+            filter="url(#tm-river-glow)"
           />
           <motion.circle
             cx={shape.cursorX}
@@ -358,7 +410,7 @@ function BalanceRiver({
           <span dir="ltr">{ILS.format(Math.round(shape.min))}</span>
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }
 
