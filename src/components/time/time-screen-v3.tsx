@@ -529,6 +529,22 @@ function eventsBetween(frame: TimeFrame): Array<{
 }> {
   if (!frame.curve) return [];
   const cursor = frame.cursorOffset;
+
+  // The liquidity curve attaches past-month debits and past-month
+  // loan/rule installments to dayIndex=0 for user traceability (so
+  // LIVE can annotate the balance with "how did we get here?"). The
+  // Time tiles must NOT surface those past events: the tile answers
+  // the question "from now until the checkpoint, what changes?".
+  // Two filters keep the lens honest:
+  //   1. Skip `informational` events — they're already inside the
+  //      anchor balance; showing them would double-count.
+  //   2. Skip events whose calendar date is before today's start of
+  //      day. Those are historical and belong to the balance ring,
+  //      not to a "what's still coming" list.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startTs = startOfToday.getTime();
+
   const out: Array<{
     whenISO: string;
     label: string;
@@ -538,6 +554,9 @@ function eventsBetween(frame: TimeFrame): Array<{
   for (const p of frame.curve.points) {
     if (p.dayIndex < 0 || p.dayIndex > cursor) continue;
     for (const e of p.events) {
+      if (e.informational) continue;
+      const eventTs = new Date(e.whenISO).getTime();
+      if (Number.isFinite(eventTs) && eventTs < startTs) continue;
       out.push({
         whenISO: e.whenISO,
         label: e.label,
