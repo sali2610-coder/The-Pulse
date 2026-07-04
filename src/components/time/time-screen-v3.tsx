@@ -652,6 +652,7 @@ function InsightGrid({ frame }: { frame: TimeFrame }) {
             key={`${openLane}-${frame.cursorISO}`}
             lane={LANES.find((l) => l.key === openLane) as LaneMeta}
             rows={perLane.get(openLane) ?? []}
+            cursorISO={frame.cursorISO}
           />
         ) : null}
       </AnimatePresence>
@@ -714,11 +715,15 @@ function InsightTile({
 function LaneExpansion({
   lane,
   rows,
+  cursorISO,
 }: {
   lane: LaneMeta;
   rows: ReturnType<typeof eventsBetween>;
+  cursorISO: string;
 }) {
   const reduced = useReducedMotion();
+  const total = rows.reduce((s, r) => s + Math.abs(r.amount), 0);
+  const cursorDate = new Date(cursorISO);
   return (
     <motion.section
       layout
@@ -736,10 +741,21 @@ function LaneExpansion({
       aria-label={`${lane.eyebrow} — פירוט האירועים`}
     >
       <header className="tm-lane-head">
-        <span className="tm-lane-eyebrow">{lane.eyebrow}</span>
-        <span className="tm-lane-count" data-mono="true" dir="ltr">
-          {rows.length}
-        </span>
+        <div className="tm-lane-head-text">
+          <span className="tm-lane-eyebrow">{lane.eyebrow}</span>
+          <span className="tm-lane-window">
+            עד {DATE_FMT.format(cursorDate)}
+          </span>
+        </div>
+        <div className="tm-lane-head-right">
+          <span className="tm-lane-total" data-mono="true" dir="ltr">
+            {lane.sign}
+            {ILS.format(Math.round(total))}
+          </span>
+          <span className="tm-lane-count" data-mono="true" dir="ltr">
+            {rows.length}
+          </span>
+        </div>
       </header>
       {rows.length === 0 ? (
         <div className="tm-lane-empty">אין אירועים עד הצ׳קפוינט.</div>

@@ -11,20 +11,21 @@
 // headers. Each header shows a single colored summary chip so the
 // user reads the bottom-line of every section without expanding.
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 
 import { useFinanceStore } from "@/lib/store";
-import { usePulseBudget } from "@/lib/use-pulse-budget";
 import { ErrorBoundary } from "@/components/error-boundary";
 // FloatingCTA replaced by PrimaryActionDock — component file preserved on disk.
 import { ExpenseDialog } from "@/components/expense-form/expense-dialog";
 import { WithdrawalDialog } from "@/components/expense-form/withdrawal-dialog";
 import { SnapshotProvider } from "@/lib/snapshot-context";
 import { useCloudSyncState } from "@/lib/supabase/cloud-sync-context";
-import { DashboardSection } from "@/components/dashboard/dashboard-section";
+// Phase — DashboardSection accordion retired for the 3 Home sections
+// below (Obligations / Income / Watch). They now render behind a
+// static <SectionHeader> so the user sees everything without a click.
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
-import { computeSummaries } from "@/lib/dashboard-section-summaries";
+// computeSummaries import dropped alongside DashboardSection above.
 
 import { useAttentionCount } from "@/components/dashboard/attention-center";
 import { openAttentionCenter } from "@/lib/use-attention-center";
@@ -147,42 +148,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
-  const hydrated = useFinanceStore((s) => s.hasHydrated);
-  const accounts = useFinanceStore((s) => s.accounts);
-  const loans = useFinanceStore((s) => s.loans);
-  const incomes = useFinanceStore((s) => s.incomes);
-  const rules = useFinanceStore((s) => s.rules);
-  const statuses = useFinanceStore((s) => s.statuses);
-  const entries = useFinanceStore((s) => s.entries);
-  const monthlyBudget = useFinanceStore((s) => s.monthlyBudget);
-  const budgetMode = useFinanceStore((s) => s.budgetMode);
-  const pulseBudget = usePulseBudget({ monthlyBudget, budgetMode });
   const cloudSync = useCloudSyncState();
-
-  const summaries = useMemo(() => {
-    if (!hydrated) return null;
-    // Phase 238 — summaries reflect what the user sees on the hero
-    // stack, so pass the EFFECTIVE budget rather than the raw store
-    // value. Manual mode is a no-op (effective === raw).
-    return computeSummaries({
-      accounts,
-      loans,
-      incomes,
-      rules,
-      statuses,
-      entries,
-      monthlyBudget: pulseBudget,
-    });
-  }, [
-    hydrated,
-    accounts,
-    loans,
-    incomes,
-    rules,
-    statuses,
-    entries,
-    pulseBudget,
-  ]);
 
   const showCurtain = Boolean(
     cloudSync?.configured &&
@@ -262,57 +228,35 @@ export function DashboardTab() {
            experience still ships inside the "הוצאות" tab. Home stays
            focused on executive overview. */}
 
-        <DashboardSection
-          storageKey="simple.obligations"
+        <SectionHeader
           title="חיובים קבועים והלוואות"
-          subtitle="כל מה שיורד אוטומטית מהבנק כל חודש"
-          defaultCollapsed
-          variant="polish-obligations"
-          summary={summaries?.obligations ?? undefined}
-        >
-          <div className="sm:col-span-6">
-            <Safe name="ObligationsDashboard">
-              <ObligationsDashboard />
-            </Safe>
-          </div>
-        </DashboardSection>
+          subtitle="שירותים שיורדים אוטומטית כל חודש"
+        />
+        <div className="sm:col-span-6">
+          <Safe name="ObligationsDashboard">
+            <ObligationsDashboard />
+          </Safe>
+        </div>
 
-        <DashboardSection
-          storageKey="simple.income"
+        <SectionHeader
           title="הכנסות"
           subtitle="משכורות, פריסה והכנסה צפויה"
-          defaultCollapsed
-          variant="polish-income"
-          summary={summaries?.income ?? undefined}
-        >
-          <div className="sm:col-span-6">
-            <Safe name="IncomeLauncher">
-              <IncomeLauncher />
-            </Safe>
-          </div>
-        </DashboardSection>
+        />
+        <div className="sm:col-span-6">
+          <Safe name="IncomeLauncher">
+            <IncomeLauncher />
+          </Safe>
+        </div>
 
-        {/* Phase 311 — "ניתוחים וסטטיסטיקות" removed from Home.
-           CategoryParetoCard / CategoryPaceCard / SpendSplitCard /
-           AvgTicketCard / WeekendSpendCard / FixedCostRatioCard /
-           NetWorthCard / NetWorthTrendCard / RunwayCard are too
-           analytical for an executive overview. Components stay on
-           disk; Expenses / Insights can mount them when needed. */}
-
-        <DashboardSection
-          storageKey="simple.watch"
+        <SectionHeader
           title="בדיקות, מנויים וחריגות"
-          subtitle="התראות, מנויים וחריגות"
-          defaultCollapsed
-          variant="polish-watch"
-          summary={summaries?.watch ?? undefined}
-        >
-          <div className="sm:col-span-6">
-            <Safe name="WatchLauncher">
-              <WatchLauncher />
-            </Safe>
-          </div>
-        </DashboardSection>
+          subtitle="התראות, מנויים חשודים ופריטים לאישור"
+        />
+        <div className="sm:col-span-6">
+          <Safe name="WatchLauncher">
+            <WatchLauncher />
+          </Safe>
+        </div>
 
         {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
            CopilotCard ("טייס פיננסי") was promoted to the executive
@@ -380,5 +324,32 @@ function AttentionBanner() {
       </div>
       <ArrowLeftIcon className="size-4 shrink-0 text-[#FBBF24]" aria-hidden />
     </fmMotion.button>
+  );
+}
+
+// Phase — static section header. Replaces the DashboardSection
+// accordion for the three Home sections that now render open by
+// default (Obligations / Income / Watch). No collapse, no arrow,
+// no container box — just a title + subtitle sitting on top of a
+// premium hairline divider so the grid flows uninterrupted.
+function SectionHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <header
+      className="sally-section-header sm:col-span-6"
+      dir="rtl"
+      aria-label={title}
+    >
+      <div className="sally-section-header-text">
+        <span className="sally-section-header-title">{title}</span>
+        <span className="sally-section-header-sub">{subtitle}</span>
+      </div>
+      <span aria-hidden className="sally-section-header-divider" />
+    </header>
   );
 }

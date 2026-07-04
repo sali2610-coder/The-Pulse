@@ -6426,3 +6426,82 @@ button.sally-glass {
   color: var(--sally-gold-loud, #E4C158);
 }
 .ob-launcher[data-tone="gold"] .ob-launcher-headline { color: var(--sally-gold-loud, #E4C158); }
+
+/* ── Home · static section header (accordion-free) ──────────── */
+/* Replaces the DashboardSection wrapper for the three sections
+   that now render always-open (Obligations / Income / Watch). No
+   arrow, no clickable header, no container box. Just a title +
+   subtitle sitting on top of a hairline gold-glow divider. */
+
+.sally-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 6px 0;
+  margin-block-start: 8px;
+}
+.sally-section-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-inline: 2px;
+}
+.sally-section-header-title {
+  font-size: 15.5px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--sally-ink-1, #F6F6F6);
+  line-height: 1.15;
+}
+.sally-section-header-sub {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.55));
+}
+.sally-section-header-divider {
+  display: block;
+  height: 1px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(212, 175, 55, 0.28) 12%,
+    rgba(212, 175, 55, 0.38) 50%,
+    rgba(212, 175, 55, 0.28) 88%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.12);
+  margin-block-start: 2px;
+}
+
+/* ── Time · lane expansion header extras ─────────────────────── */
+.tm-lane-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tm-lane-window {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.55));
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.tm-lane-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tm-lane-total {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+  color: var(--sally-ink-1, #F6F6F6);
+}
+.tm-lane[data-tone="safe"] .tm-lane-total { color: var(--sally-safe, #34D399); }
+.tm-lane[data-tone="watch"] .tm-lane-total { color: var(--sally-watch, #FBBF24); }
+.tm-lane[data-tone="lane-loan"] .tm-lane-total { color: #A78BFA; }
+.tm-lane[data-tone="lane-card"] .tm-lane-total { color: #75F5FF; }
