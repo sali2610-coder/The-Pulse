@@ -1,36 +1,48 @@
 "use client";
 
-// Insights · Financial Intelligence Center (cockpit rebuild).
+// Insights · Financial Intelligence Center v2.
 //
-// Prior tab was a long stack: digest + live events + 6 domain
-// folders + panels. Rebuilt as one cockpit dashboard:
+// Complete rebuild of the tab as a single-screen cockpit dashboard.
+// Every value comes from existing engines (gatherAiInsights,
+// detectSpendAnomalies, liquidityCurve, forecastEndOfMonth,
+// categoryTrends, monthOverMonthTotals). No engine, calculation,
+// forecast, store, API, or model change — only UI/UX composition.
 //
-//   1. Hero — animated health-score ring + status label.
-//   2. 6 launcher tiles (2×3 grid) — risks, opportunities, spend
-//      anomalies, next-week charges, commitments, AI recommendations.
-//      Tap a tile → inline lens under the grid with capped rows.
-//   3. Delta card — 'המצב השתנה מאז אתמול' with mini metric strip.
-//   4. CFO Sandbox — kept as the AI simulation surface.
+// Screen composition:
+//   1. Hero CFO card (~280px)
+//        greeting · Financial Health Score ring · AI 3-line summary
+//        · 30-day balance sparkline
+//   2. 5 KPI chips that swap the summary lens inside the hero
+//   3. 2×3 dashboard grid (6 tap-cards): risks / opportunities /
+//      forecast / week / AI recs / trends
+//   4. Inline expansion under the grid — only one card open at a
+//      time, spring animation
+//   5. Timeline of live events
+//   6. AI Recommendations carousel with apply / dismiss
+//   7. Trends mini graphs
+//   8. Smart footer "What Changed Today"
 //
-// UI/UX only. gatherAiInsights + detectSpendAnomalies + all
-// downstream engines untouched.
+// Bottom-most: the CFO Sandbox stays as the AI simulation surface.
 
-import dynamic from "next/dynamic";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
   Bot,
   CalendarClock,
-  ChevronDown,
+  ChevronRight,
   CreditCard,
   Lightbulb,
+  LineChart,
+  Sparkles,
   TrendingDown,
+  TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 import { tap as hapticTap } from "@/lib/haptics";
 import { useFinanceStore } from "@/lib/store";
-import { currentMonthKey } from "@/lib/dates";
+import { addMonths, currentMonthKey } from "@/lib/dates";
 import { CfoSandboxCard } from "@/components/insights/cfo-sandbox-card";
 import { gatherAiInsights, type AiInsight } from "@/lib/ai-insights";
 import {
@@ -40,7 +52,14 @@ import {
   type InsightStatusKind,
 } from "@/lib/insight-status";
 import { detectSpendAnomalies, type SpendAnomaly } from "@/lib/spend-anomalies";
-import { getCategory } from "@/lib/categories";
+import { liquidityCurve, type LiquidityCurve } from "@/lib/liquidity-curve";
+import {
+  forecastEndOfMonth,
+  categoryTrends,
+  monthOverMonthTotals,
+} from "@/lib/forecast";
+import { getCategory, type CategoryId } from "@/lib/categories";
+import { buildLiveEvents, formatRelative } from "@/lib/live-events";
 import type { Loan, RecurringRule } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -54,27 +73,14 @@ const DAY_FMT = new Intl.DateTimeFormat("he-IL", {
 });
 const EASE = [0.32, 0.72, 0, 1] as const;
 
-const lazy = (
-  loader: () => Promise<{
-    default: React.ComponentType<Record<string, unknown>>;
-  }>,
-) => dynamic(loader, { ssr: false });
-
-const RecurringRulesPanel = lazy(() =>
-  import("@/components/recurring/recurring-rules-panel").then((m) => ({
-    default:
-      m.RecurringRulesPanel as unknown as React.ComponentType<Record<string, unknown>>,
-  })),
-);
-
-// Tile identifiers.
+type Chip = "risk" | "cash" | "savings" | "forecast" | "ai";
 type Lens =
   | "risks"
   | "opportunities"
-  | "anomalies"
+  | "forecast"
   | "week"
-  | "commitments"
   | "recs"
+  | "trends"
   | null;
 
 function useStatusTick(): number {
@@ -109,7 +115,22 @@ export function InsightsTab() {
 
   useStatusTick();
   const now = useNowTick(60_000);
+
+  const [chip, setChip] = useState<Chip>("risk");
   const [lens, setLens] = useState<Lens>(null);
+
+  const curve = useMemo<LiquidityCurve | null>(() => {
+    if (!hydrated) return null;
+    return liquidityCurve({
+      accounts,
+      loans,
+      incomes,
+      rules,
+      statuses,
+      entries,
+      windowDays: 30,
+    });
+  }, [hydrated, accounts, loans, incomes, rules, statuses, entries]);
 
   const ai = useMemo(() => {
     if (!hydrated) return null;
@@ -134,6 +155,19 @@ export function InsightsTab() {
     monthlyBudget,
   ]);
 
+  const eomForecast = useMemo(() => {
+    if (!hydrated) return null;
+    return forecastEndOfMonth({
+      accounts,
+      loans,
+      incomes,
+      entries,
+      rules,
+      statuses,
+      monthKey: currentMonthKey(),
+    });
+  }, [hydrated, accounts, loans, incomes, entries, rules, statuses]);
+
   const anomalies = useMemo<SpendAnomaly[]>(() => {
     if (!hydrated) return [];
     return detectSpendAnomalies({ entries, monthKey: currentMonthKey() });
@@ -144,15 +178,34 @@ export function InsightsTab() {
     loans,
     now,
   ]);
-  void incomes;
+
+  const trends = useMemo(() => {
+    if (!hydrated) return [];
+    return categoryTrends({ entries, monthKey: currentMonthKey() }).slice(0, 6);
+  }, [hydrated, entries]);
+
+  const mom = useMemo(() => {
+    if (!hydrated) return [];
+    return monthOverMonthTotals({ entries, monthKey: currentMonthKey() }).slice(-6);
+  }, [hydrated, entries]);
+
+  const liveEvents = useMemo(
+    () =>
+      buildLiveEvents({
+        entries,
+        rules,
+        incomes,
+        now: new Date(now || 0),
+        cap: 6,
+      }),
+    [entries, rules, incomes, now],
+  );
 
   if (!hydrated || !ai) return null;
 
   const insights = ai.insights;
-
   const risks = insights.filter((i) => i.group === "risk");
   const opportunities = insights.filter((i) => i.group === "opportunity");
-  const commitments = insights.filter((i) => /rule|loan|installment|subscription|recurring|הלוואה|מנוי|תשלום/i.test(`${i.id} ${i.title} ${i.body}`));
   const recs = insights.filter(
     (i) =>
       i.group === "recommendation" ||
@@ -161,85 +214,115 @@ export function InsightsTab() {
       i.group === "positive",
   );
 
+  const savings = sumOpportunityImpact(opportunities);
+  const eomBalance = eomForecast?.forecast ?? 0;
+
   const score = computeHealthScore(risks, opportunities, insights.length);
   const scoreStatus =
     score >= 80
-      ? { label: "מצב טוב", tone: "safe" as const }
+      ? { label: "מצוין", tone: "safe" as const }
       : score >= 55
         ? { label: "כדאי לבדוק", tone: "watch" as const }
         : { label: "דורש התייחסות", tone: "danger" as const };
 
-  const delta = computeDelta(risks, opportunities);
+  const summaryLines = composeSummaryLines(chip, now, {
+    eomForecast,
+    risks,
+    opportunities,
+    anomalies,
+    week,
+    savings,
+  });
 
   function toggleLens(next: Lens) {
     hapticTap();
     setLens((prev) => (prev === next ? null : next));
   }
+  function pickChip(next: Chip) {
+    hapticTap();
+    setChip(next);
+  }
 
   return (
-    <div className="ic-root" dir="rtl">
-      <HealthHero
+    <div className="fic-root" dir="rtl">
+      <HeroCfo
         score={score}
         status={scoreStatus}
-        risksCount={risks.length}
-        oppsCount={opportunities.length}
-        commitCount={commitments.length}
+        summaryLines={summaryLines}
+        curve={curve}
+        greeting={greetingFor(new Date(now))}
       />
 
-      <div className="ic-grid" data-lens-open={lens ?? undefined}>
-        <IcTile
+      <ChipRow chip={chip} onPick={pickChip} />
+
+      <div className="fic-grid" data-lens-open={lens ?? undefined}>
+        <FicCard
           icon={<AlertTriangle className="size-4" />}
-          label="סיכונים"
-          count={risks.length}
+          eyebrow="סיכונים"
+          headline={String(risks.length)}
+          hint={anomalies.length > 0 ? `+${anomalies.length} חריגות` : "0 חריגות"}
           tone="danger"
           active={lens === "risks"}
           dimmed={lens !== null && lens !== "risks"}
           onClick={() => toggleLens("risks")}
         />
-        <IcTile
+        <FicCard
           icon={<Lightbulb className="size-4" />}
-          label="הזדמנויות"
-          count={opportunities.length}
+          eyebrow="הזדמנויות"
+          headline={savings > 0 ? ILS.format(Math.round(savings)) : "—"}
+          hint={
+            opportunities.length > 0
+              ? `${opportunities.length} רעיונות`
+              : "אין"
+          }
           tone="watch"
           active={lens === "opportunities"}
           dimmed={lens !== null && lens !== "opportunities"}
           onClick={() => toggleLens("opportunities")}
         />
-        <IcTile
-          icon={<TrendingDown className="size-4" />}
-          label="חריגים"
-          count={anomalies.length}
-          tone="danger"
-          active={lens === "anomalies"}
-          dimmed={lens !== null && lens !== "anomalies"}
-          onClick={() => toggleLens("anomalies")}
+        <FicCard
+          icon={<Wallet className="size-4" />}
+          eyebrow="תחזית סוף חודש"
+          headline={ILS.format(Math.round(eomBalance))}
+          hint={eomBalance < 0 ? "בגרעון" : "יציב"}
+          tone={eomBalance < 0 ? "danger" : "safe"}
+          active={lens === "forecast"}
+          dimmed={lens !== null && lens !== "forecast"}
+          onClick={() => toggleLens("forecast")}
         />
-        <IcTile
+        <FicCard
           icon={<CalendarClock className="size-4" />}
-          label="השבוע הקרוב"
-          count={week.length}
+          eyebrow="השבוע הקרוב"
+          headline={String(week.length)}
+          hint={
+            week.length > 0
+              ? `${ILS.format(Math.round(sumWeek(week)))} סה״כ`
+              : "אין חיובים"
+          }
           tone="cyan"
           active={lens === "week"}
           dimmed={lens !== null && lens !== "week"}
           onClick={() => toggleLens("week")}
         />
-        <IcTile
-          icon={<CreditCard className="size-4" />}
-          label="חיובים"
-          count={commitments.length}
-          tone="purple"
-          active={lens === "commitments"}
-          dimmed={lens !== null && lens !== "commitments"}
-          onClick={() => toggleLens("commitments")}
-        />
-        <IcTile
+        <FicCard
           icon={<Bot className="size-4" />}
-          label="המלצות AI"
-          count={recs.length}
+          eyebrow="המלצות AI"
+          headline={String(recs.length)}
+          hint={recs.length > 0 ? "לפתיחה" : "אין"}
           tone="gold"
           active={lens === "recs"}
           dimmed={lens !== null && lens !== "recs"}
           onClick={() => toggleLens("recs")}
+        />
+        <FicCard
+          icon={<LineChart className="size-4" />}
+          eyebrow="מגמות"
+          headline={trends.length > 0 ? `${trends.length}` : "—"}
+          hint={mom.length > 0 ? `${mom.length} חודשים` : "אין"}
+          tone="purple"
+          active={lens === "trends"}
+          dimmed={lens !== null && lens !== "trends"}
+          onClick={() => toggleLens("trends")}
         />
       </div>
 
@@ -247,7 +330,7 @@ export function InsightsTab() {
         {lens === "risks" ? (
           <InsightLens
             key="risks"
-            eyebrow="סיכונים · דורש תשומת לב"
+            eyebrow="סיכונים"
             rows={risks}
             now={now}
             tone="danger"
@@ -256,159 +339,247 @@ export function InsightsTab() {
         {lens === "opportunities" ? (
           <InsightLens
             key="opportunities"
-            eyebrow="הזדמנויות · חסוך יותר"
+            eyebrow="הזדמנויות לחיסכון"
             rows={opportunities}
             now={now}
             tone="watch"
           />
         ) : null}
-        {lens === "anomalies" ? (
-          <AnomaliesLens key="anomalies" rows={anomalies} />
+        {lens === "forecast" ? (
+          <ForecastLens key="forecast" eom={eomForecast} curve={curve} />
         ) : null}
-        {lens === "week" ? (
-          <WeekLens key="week" rows={week} />
-        ) : null}
-        {lens === "commitments" ? (
-          <CommitmentsLens
-            key="commitments"
-            insights={commitments}
-            now={now}
-          />
-        ) : null}
+        {lens === "week" ? <WeekLens key="week" rows={week} /> : null}
         {lens === "recs" ? (
-          <InsightLens
-            key="recs"
-            eyebrow="המלצות AI"
-            rows={recs}
-            now={now}
-            tone="gold"
-          />
+          <RecsCarousel key="recs" rows={recs} now={now} />
+        ) : null}
+        {lens === "trends" ? (
+          <TrendsLens key="trends" trends={trends} mom={mom} />
         ) : null}
       </AnimatePresence>
 
-      <DeltaCard delta={delta} />
+      <TimelineSection events={liveEvents} now={now} />
+
+      <SmartFooter events={liveEvents} now={now} />
 
       <CfoSandboxCard />
     </div>
   );
 }
 
-// ── Health hero ────────────────────────────────────────────
+// ── Hero CFO ──────────────────────────────────────────────
 
-function HealthHero({
+function HeroCfo({
   score,
   status,
-  risksCount,
-  oppsCount,
-  commitCount,
+  summaryLines,
+  curve,
+  greeting,
 }: {
   score: number;
   status: { label: string; tone: "safe" | "watch" | "danger" };
-  risksCount: number;
-  oppsCount: number;
-  commitCount: number;
+  summaryLines: Array<{ icon: string; text: string }>;
+  curve: LiquidityCurve | null;
+  greeting: string;
 }) {
   const reduced = useReducedMotion();
   const R = 62;
   const CIRC = 2 * Math.PI * R;
   const ratio = Math.max(0, Math.min(1, score / 100));
+
   return (
-    <section className="ic-hero" data-tone={status.tone} aria-label="מצב פיננסי כללי">
-      <span aria-hidden className="ic-hero-aurora" />
-      <div className="ic-hero-ring">
-        <svg viewBox="0 0 160 160" width="100%" height="100%">
-          <defs>
-            <linearGradient id="ic-hero-grad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="currentColor" stopOpacity="0.7" />
-              <stop offset="100%" stopColor="currentColor" stopOpacity="1" />
-            </linearGradient>
-          </defs>
-          <circle
-            cx="80"
-            cy="80"
-            r={R}
-            fill="none"
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth="10"
-          />
-          <motion.circle
-            cx="80"
-            cy="80"
-            r={R}
-            fill="none"
-            stroke="url(#ic-hero-grad)"
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={CIRC}
-            transform="rotate(-90 80 80)"
-            initial={reduced ? undefined : { strokeDashoffset: CIRC }}
-            animate={{ strokeDashoffset: CIRC * (1 - ratio) }}
-            transition={{ duration: reduced ? 0.12 : 1.1, ease: EASE }}
-          />
-        </svg>
-        <div className="ic-hero-ring-center">
-          <span className="ic-hero-eyebrow">SALLY · AI</span>
-          <span className="ic-hero-score" data-mono="true" dir="ltr">
-            {score}
-          </span>
-          <span className="ic-hero-of">/100</span>
+    <section className="fic-hero" data-tone={status.tone} aria-label="מרכז בקרה AI">
+      <span aria-hidden className="fic-hero-aurora" />
+      <div className="fic-hero-topline">
+        <span className="fic-hero-cfo">CFO BRAIN</span>
+        <span className="fic-hero-greeting">{greeting}</span>
+      </div>
+      <div className="fic-hero-body">
+        <div className="fic-hero-ring">
+          <svg viewBox="0 0 160 160" width="100%" height="100%">
+            <defs>
+              <linearGradient id="fic-hero-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="currentColor" stopOpacity="0.7" />
+                <stop offset="100%" stopColor="currentColor" stopOpacity="1" />
+              </linearGradient>
+            </defs>
+            <circle
+              cx="80"
+              cy="80"
+              r={R}
+              fill="none"
+              stroke="rgba(255,255,255,0.06)"
+              strokeWidth="11"
+            />
+            <motion.circle
+              cx="80"
+              cy="80"
+              r={R}
+              fill="none"
+              stroke="url(#fic-hero-grad)"
+              strokeWidth="11"
+              strokeLinecap="round"
+              strokeDasharray={CIRC}
+              transform="rotate(-90 80 80)"
+              initial={reduced ? undefined : { strokeDashoffset: CIRC }}
+              animate={{ strokeDashoffset: CIRC * (1 - ratio) }}
+              transition={{ duration: reduced ? 0.12 : 1.1, ease: EASE }}
+            />
+          </svg>
+          <div className="fic-hero-ring-center">
+            <span className="fic-hero-score" data-mono="true" dir="ltr">
+              {score}
+            </span>
+            <span className="fic-hero-of">/100</span>
+            <span className="fic-hero-status">{status.label}</span>
+          </div>
+        </div>
+        <div className="fic-hero-summary">
+          {summaryLines.map((ln, i) => (
+            <motion.div
+              key={ln.text + i}
+              className="fic-hero-summary-line"
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: Math.min(i * 0.06, 0.18),
+                duration: reduced ? 0.12 : 0.32,
+                ease: EASE,
+              }}
+            >
+              <span className="fic-hero-summary-icon" aria-hidden>
+                {ln.icon}
+              </span>
+              <span>{ln.text}</span>
+            </motion.div>
+          ))}
         </div>
       </div>
-      <div className="ic-hero-body">
-        <span className="ic-hero-status">{status.label}</span>
-        <span className="ic-hero-title">מצב פיננסי כללי</span>
-        <ul className="ic-hero-metrics">
-          <li>
-            <span className="ic-hero-metric-label">סיכונים</span>
-            <span
-              className="ic-hero-metric-value"
-              data-mono="true"
-              dir="ltr"
-            >
-              {risksCount}
-            </span>
-          </li>
-          <li>
-            <span className="ic-hero-metric-label">הזדמנויות</span>
-            <span
-              className="ic-hero-metric-value"
-              data-mono="true"
-              dir="ltr"
-            >
-              {oppsCount}
-            </span>
-          </li>
-          <li>
-            <span className="ic-hero-metric-label">חיובים</span>
-            <span
-              className="ic-hero-metric-value"
-              data-mono="true"
-              dir="ltr"
-            >
-              {commitCount}
-            </span>
-          </li>
-        </ul>
+      <div className="fic-hero-spark">
+        <Sparkline curve={curve} tone={status.tone} />
       </div>
     </section>
   );
 }
 
-// ── Tile ───────────────────────────────────────────────────
+function Sparkline({
+  curve,
+  tone,
+}: {
+  curve: LiquidityCurve | null;
+  tone: "safe" | "watch" | "danger";
+}) {
+  const reduced = useReducedMotion();
+  const shape = useMemo(() => {
+    if (!curve || curve.points.length === 0) return null;
+    const pts = curve.points;
+    const max = Math.max(...pts.map((p) => p.balance));
+    const min = Math.min(...pts.map((p) => p.balance));
+    const range = max - min || 1;
+    const W = 300;
+    const H = 60;
+    const x = (i: number) => (i / (pts.length - 1)) * W;
+    const y = (v: number) => H - ((v - min) / range) * H;
+    const path = pts
+      .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.balance).toFixed(1)}`)
+      .join(" ");
+    const area = `${path} L${W},${H} L0,${H} Z`;
+    return { path, area, W, H, min, max };
+  }, [curve]);
+  if (!shape) return null;
+  return (
+    <svg
+      viewBox={`0 0 ${shape.W} ${shape.H}`}
+      preserveAspectRatio="none"
+      className="fic-hero-spark-svg"
+      data-tone={tone}
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="fic-spark-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <motion.path
+        d={shape.area}
+        fill="url(#fic-spark-fill)"
+        initial={reduced ? undefined : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, ease: EASE }}
+      />
+      <motion.path
+        d={shape.path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={reduced ? undefined : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: reduced ? 0.12 : 1.0, ease: EASE }}
+      />
+    </svg>
+  );
+}
 
-function IcTile({
+// ── Chip row ──────────────────────────────────────────────
+
+const CHIPS: Array<{ key: Chip; label: string }> = [
+  { key: "risk", label: "Risk" },
+  { key: "cash", label: "Cash" },
+  { key: "savings", label: "Savings" },
+  { key: "forecast", label: "Forecast" },
+  { key: "ai", label: "AI" },
+];
+
+function ChipRow({
+  chip,
+  onPick,
+}: {
+  chip: Chip;
+  onPick: (c: Chip) => void;
+}) {
+  return (
+    <div className="fic-chips" role="tablist" aria-label="בחר מבט">
+      {CHIPS.map((c) => {
+        const active = chip === c.key;
+        return (
+          <motion.button
+            key={c.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            className="fic-chip"
+            data-active={active ? "true" : undefined}
+            onClick={() => onPick(c.key)}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: "spring", stiffness: 380, damping: 34 }}
+          >
+            {c.label}
+          </motion.button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── 6-tile grid ───────────────────────────────────────────
+
+function FicCard({
   icon,
-  label,
-  count,
+  eyebrow,
+  headline,
+  hint,
   tone,
   active,
   dimmed,
   onClick,
 }: {
   icon: React.ReactNode;
-  label: string;
-  count: number;
-  tone: "danger" | "watch" | "cyan" | "purple" | "gold" | "safe";
+  eyebrow: string;
+  headline: string;
+  hint: string;
+  tone: "danger" | "watch" | "safe" | "cyan" | "purple" | "gold";
   active: boolean;
   dimmed: boolean;
   onClick: () => void;
@@ -416,28 +587,30 @@ function IcTile({
   return (
     <motion.button
       type="button"
-      className="ic-tile"
+      className="fic-card"
       data-tone={tone}
       data-active={active ? "true" : undefined}
       data-dimmed={dimmed ? "true" : undefined}
       onClick={onClick}
       aria-expanded={active}
-      aria-label={`${label} · ${count}`}
+      aria-label={`${eyebrow} · ${headline}`}
       whileTap={{ scale: 0.97 }}
       transition={{ type: "spring", stiffness: 380, damping: 34 }}
     >
-      <span aria-hidden className="ic-tile-glyph">
+      <span aria-hidden className="fic-card-halo" />
+      <span aria-hidden className="fic-card-glyph">
         {icon}
       </span>
-      <span className="ic-tile-label">{label}</span>
-      <span className="ic-tile-count" data-mono="true" dir="ltr">
-        {count === 0 ? "אין" : count}
+      <span className="fic-card-eyebrow">{eyebrow}</span>
+      <span className="fic-card-headline" data-mono="true" dir="ltr">
+        {headline}
       </span>
+      <span className="fic-card-hint">{hint}</span>
     </motion.button>
   );
 }
 
-// ── Lenses ─────────────────────────────────────────────────
+// ── Lens frame ────────────────────────────────────────────
 
 function LensFrame({
   eyebrow,
@@ -452,7 +625,7 @@ function LensFrame({
   return (
     <motion.section
       layout
-      className="ic-lens"
+      className="fic-lens"
       initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
@@ -463,8 +636,8 @@ function LensFrame({
         duration: reduced ? 0.12 : undefined,
       }}
     >
-      <header className="ic-lens-head">
-        <span className="ic-lens-eyebrow">{eyebrow}</span>
+      <header className="fic-lens-head">
+        <span className="fic-lens-eyebrow">{eyebrow}</span>
         {right}
       </header>
       {children}
@@ -488,18 +661,18 @@ function InsightLens({
   if (rows.length === 0) {
     return (
       <LensFrame eyebrow={eyebrow}>
-        <div className="ic-mini-clean">אין פריטים בקטגוריה הזו.</div>
+        <div className="fic-clean">אין פריטים בקטגוריה הזו.</div>
       </LensFrame>
     );
   }
   return (
     <LensFrame eyebrow={eyebrow}>
-      <ul className="ic-mini-list">
+      <ul className="fic-rows">
         {visible.map((ins) => (
           <InsightRow key={ins.id} ins={ins} now={now} tone={tone} />
         ))}
       </ul>
-      {more > 0 ? <div className="ic-mini-more">+ עוד {more}</div> : null}
+      {more > 0 ? <div className="fic-more">+ עוד {more}</div> : null}
     </LensFrame>
   );
 }
@@ -517,22 +690,22 @@ function InsightRow({
   const resolved = status === "resolved";
   return (
     <li
-      className="ic-mini-row"
+      className="fic-row"
       data-tone={tone}
       data-resolved={resolved ? "true" : undefined}
     >
-      <span aria-hidden className="ic-mini-rail" />
-      <div className="ic-mini-body">
-        <span className="ic-mini-title">{ins.title}</span>
-        <span className="ic-mini-meta">{ins.body}</span>
+      <span aria-hidden className="fic-row-rail" />
+      <div className="fic-row-body">
+        <span className="fic-row-title">{ins.title}</span>
+        <span className="fic-row-meta">{ins.body}</span>
         {ins.action ? (
-          <span className="ic-mini-action">💡 {ins.action}</span>
+          <span className="fic-row-action">💡 {ins.action}</span>
         ) : null}
       </div>
       {!resolved ? (
         <button
           type="button"
-          className="ic-mini-cta"
+          className="fic-row-cta"
           onClick={() => {
             hapticTap();
             markResolved(ins.id);
@@ -542,50 +715,98 @@ function InsightRow({
           סמן כטופל
         </button>
       ) : (
-        <span aria-hidden className="ic-mini-cue">✓</span>
+        <span aria-hidden className="fic-row-cue">✓</span>
       )}
     </li>
   );
 }
 
-function AnomaliesLens({ rows }: { rows: SpendAnomaly[] }) {
-  const visible = rows.slice(0, 5);
-  const more = Math.max(0, rows.length - visible.length);
-  if (rows.length === 0) {
+function ForecastLens({
+  eom,
+  curve,
+}: {
+  eom: ReturnType<typeof forecastEndOfMonth> | null;
+  curve: LiquidityCurve | null;
+}) {
+  if (!eom) {
     return (
-      <LensFrame eyebrow="חריגים · לפי קטגוריה">
-        <div className="ic-mini-clean">אין חריגות מהותיות החודש.</div>
+      <LensFrame eyebrow="תחזית 30 ימים">
+        <div className="fic-clean">אין עדיין תחזית. הוסף עוגן בנק להתחלה.</div>
       </LensFrame>
     );
   }
   return (
-    <LensFrame eyebrow="חריגים · לפי קטגוריה">
-      <ul className="ic-mini-list">
-        {visible.map((a) => {
-          const cat = getCategory(a.category);
-          return (
-            <li
-              key={a.category}
-              className="ic-mini-row"
-              data-tone={a.severity === "alert" ? "danger" : "watch"}
-            >
-              <span aria-hidden className="ic-mini-rail" />
-              <div className="ic-mini-body">
-                <span className="ic-mini-title">{cat.label}</span>
-                <span className="ic-mini-meta">
-                  {a.ratio.toFixed(1)}× מהממוצע · +
-                  {ILS.format(Math.round(a.delta))}
-                </span>
-              </div>
-              <span className="ic-mini-amount" data-mono="true" dir="ltr">
-                {ILS.format(Math.round(a.thisMonth))}
-              </span>
-            </li>
-          );
-        })}
+    <LensFrame eyebrow="תחזית 30 ימים">
+      <div className="fic-forecast-chart">
+        <Sparkline curve={curve} tone={eom.forecast < 0 ? "danger" : "safe"} />
+      </div>
+      <ul className="fic-forecast-list">
+        <ForecastItem
+          label="יתרות עוגן"
+          value={eom.totalAnchors}
+          sign="+"
+          tone="safe"
+        />
+        <ForecastItem
+          label="הכנסות צפויות"
+          value={eom.expectedIncome}
+          sign="+"
+          tone="safe"
+        />
+        <ForecastItem
+          label="הוצאות קבועות"
+          value={eom.pendingFixed}
+          sign="−"
+          tone="watch"
+        />
+        <ForecastItem
+          label="הלוואות"
+          value={eom.pendingLoans}
+          sign="−"
+          tone="purple"
+        />
+        <ForecastItem
+          label="פרוסות אשראי"
+          value={eom.futureCardSlices}
+          sign="−"
+          tone="cyan"
+        />
+        <ForecastItem
+          label="תחזית סוף חודש"
+          value={eom.forecast}
+          sign={eom.forecast < 0 ? "−" : "+"}
+          tone={eom.forecast < 0 ? "danger" : "safe"}
+          emphasize
+        />
       </ul>
-      {more > 0 ? <div className="ic-mini-more">+ עוד {more}</div> : null}
     </LensFrame>
+  );
+}
+function ForecastItem({
+  label,
+  value,
+  sign,
+  tone,
+  emphasize,
+}: {
+  label: string;
+  value: number;
+  sign: "+" | "−";
+  tone: "safe" | "watch" | "danger" | "cyan" | "purple";
+  emphasize?: boolean;
+}) {
+  return (
+    <li
+      className="fic-forecast-item"
+      data-tone={tone}
+      data-emphasize={emphasize ? "true" : undefined}
+    >
+      <span className="fic-forecast-label">{label}</span>
+      <span className="fic-forecast-value" data-mono="true" dir="ltr">
+        {sign}
+        {ILS.format(Math.round(Math.abs(value)))}
+      </span>
+    </li>
   );
 }
 
@@ -602,27 +823,25 @@ function WeekLens({
   if (rows.length === 0) {
     return (
       <LensFrame eyebrow="השבוע הקרוב · 7 ימים">
-        <div className="ic-mini-clean">אין חיובים ידועים ב-7 הימים הבאים.</div>
+        <div className="fic-clean">אין חיובים ידועים ב-7 הימים הבאים.</div>
       </LensFrame>
     );
   }
   return (
     <LensFrame eyebrow="השבוע הקרוב · 7 ימים">
-      <ul className="ic-mini-list">
+      <ul className="fic-rows">
         {rows.map((r, i) => (
           <li
             key={`${r.label}-${i}`}
-            className="ic-mini-row"
+            className="fic-row"
             data-tone={r.kind === "loan" ? "purple" : "cyan"}
           >
-            <span aria-hidden className="ic-mini-rail" />
-            <div className="ic-mini-body">
-              <span className="ic-mini-title">{r.label}</span>
-              <span className="ic-mini-meta">
-                {DAY_FMT.format(r.date)}
-              </span>
+            <span aria-hidden className="fic-row-rail" />
+            <div className="fic-row-body">
+              <span className="fic-row-title">{r.label}</span>
+              <span className="fic-row-meta">{DAY_FMT.format(r.date)}</span>
             </div>
-            <span className="ic-mini-amount" data-mono="true" dir="ltr">
+            <span className="fic-row-amount" data-mono="true" dir="ltr">
               {ILS.format(Math.round(r.amount))}
             </span>
           </li>
@@ -632,55 +851,278 @@ function WeekLens({
   );
 }
 
-function CommitmentsLens({
-  insights,
+function RecsCarousel({
+  rows,
   now,
 }: {
-  insights: AiInsight[];
+  rows: AiInsight[];
   now: number;
 }) {
+  if (rows.length === 0) {
+    return (
+      <LensFrame eyebrow="המלצות AI">
+        <div className="fic-clean">אין המלצות פעילות כרגע.</div>
+      </LensFrame>
+    );
+  }
   return (
-    <LensFrame eyebrow="חיובים קבועים · תובנות + כללים">
-      <div className="ic-inner">
-        {insights.length === 0 ? (
-          <div className="ic-mini-clean">אין תובנות פעילות על חיובים.</div>
-        ) : (
-          <ul className="ic-mini-list">
-            {insights.slice(0, 4).map((ins) => (
-              <InsightRow
-                key={ins.id}
-                ins={ins}
-                now={now}
-                tone="watch"
-              />
-            ))}
-          </ul>
-        )}
-        <RecurringRulesPanel />
+    <LensFrame eyebrow="המלצות AI">
+      <div className="fic-carousel">
+        {rows.slice(0, 8).map((ins) => {
+          const status = statusOf(ins.id, now);
+          const resolved = status === "resolved";
+          const confidence = Math.round(ins.confidence * 100);
+          return (
+            <div
+              key={ins.id}
+              className="fic-carousel-card"
+              data-resolved={resolved ? "true" : undefined}
+            >
+              <span className="fic-carousel-eyebrow">
+                {confidence}% ביטחון
+              </span>
+              <span className="fic-carousel-title">{ins.title}</span>
+              <span className="fic-carousel-body">{ins.body}</span>
+              {ins.action ? (
+                <span className="fic-carousel-action">
+                  💡 {ins.action}
+                </span>
+              ) : null}
+              <div className="fic-carousel-cta">
+                {!resolved ? (
+                  <>
+                    <button
+                      type="button"
+                      className="fic-carousel-btn fic-carousel-btn-primary"
+                      onClick={() => {
+                        hapticTap();
+                        markResolved(ins.id);
+                      }}
+                    >
+                      החל
+                    </button>
+                    <button
+                      type="button"
+                      className="fic-carousel-btn"
+                      onClick={() => {
+                        hapticTap();
+                        markResolved(ins.id);
+                      }}
+                    >
+                      דחה
+                    </button>
+                  </>
+                ) : (
+                  <span className="fic-carousel-done">✓ הופעל</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </LensFrame>
   );
 }
 
-// ── Delta card ────────────────────────────────────────────
-
-function DeltaCard({
-  delta,
+function TrendsLens({
+  trends,
+  mom,
 }: {
-  delta: { direction: "up" | "down" | "flat"; label: string; hint: string };
+  trends: ReturnType<typeof categoryTrends>;
+  mom: ReturnType<typeof monthOverMonthTotals>;
 }) {
+  if (trends.length === 0 && mom.length === 0) {
+    return (
+      <LensFrame eyebrow="מגמות · חודשי">
+        <div className="fic-clean">אין עדיין נתוני מגמה.</div>
+      </LensFrame>
+    );
+  }
   return (
-    <section className="ic-delta" data-direction={delta.direction}>
-      <span aria-hidden className="ic-delta-glyph">
-        {delta.direction === "up" ? "↑" : delta.direction === "down" ? "↓" : "→"}
+    <LensFrame eyebrow="מגמות · חודשי">
+      {mom.length > 0 ? <MoMSpark points={mom} /> : null}
+      <ul className="fic-rows">
+        {trends.map((t) => {
+          const cat = safeCategory(t.category);
+          const dPct = t.deltaPct ?? 0;
+          const up = dPct > 0;
+          return (
+            <li
+              key={t.category}
+              className="fic-row"
+              data-tone={up ? "watch" : "safe"}
+            >
+              <span aria-hidden className="fic-row-rail" />
+              <div className="fic-row-body">
+                <span className="fic-row-title">{cat}</span>
+                <span className="fic-row-meta">
+                  {up ? "עלה" : "ירד"} {Math.abs(Math.round(dPct * 100))}%
+                </span>
+              </div>
+              <span className="fic-row-amount" data-mono="true" dir="ltr">
+                {up ? "+" : "−"}
+                {ILS.format(Math.round(Math.abs(t.delta)))}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </LensFrame>
+  );
+}
+
+function MoMSpark({
+  points,
+}: {
+  points: ReturnType<typeof monthOverMonthTotals>;
+}) {
+  const shape = useMemo(() => {
+    if (points.length === 0) return null;
+    const values = points.map((p) => p.total);
+    const max = Math.max(...values, 0);
+    const min = Math.min(...values, 0);
+    const range = max - min || 1;
+    const W = 300;
+    const H = 46;
+    const step = W / Math.max(1, values.length - 1);
+    const barW = Math.max(6, step * 0.5);
+    return values.map((v, i) => {
+      const x = i * step;
+      const height = Math.max(2, ((v - min) / range) * H);
+      const y = H - height;
+      return { x, y, height, barW, monthKey: points[i].monthKey };
+    });
+  }, [points]);
+  if (!shape) return null;
+  return (
+    <svg
+      viewBox={`0 0 300 46`}
+      className="fic-mom-spark"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      {shape.map((b, i) => (
+        <motion.rect
+          key={b.monthKey}
+          x={b.x - b.barW / 2}
+          y={b.y}
+          width={b.barW}
+          height={b.height}
+          rx="3"
+          fill="rgba(212, 175, 55, 0.6)"
+          initial={{ scaleY: 0, transformOrigin: `${b.x} 46px` }}
+          animate={{ scaleY: 1 }}
+          transition={{
+            delay: Math.min(i * 0.05, 0.25),
+            duration: 0.42,
+            ease: EASE,
+          }}
+        />
+      ))}
+    </svg>
+  );
+}
+
+// ── Timeline ──────────────────────────────────────────────
+
+function TimelineSection({
+  events,
+  now,
+}: {
+  events: ReturnType<typeof buildLiveEvents>;
+  now: number;
+}) {
+  if (events.length === 0) return null;
+  return (
+    <section className="fic-timeline" aria-label="ציר זמן חי">
+      <header className="fic-timeline-head">
+        <span className="fic-timeline-eyebrow">ציר זמן חי</span>
+        <span className="fic-timeline-count" data-mono="true" dir="ltr">
+          {events.length}
+        </span>
+      </header>
+      <ul className="fic-timeline-list">
+        {events.map((ev, i) => {
+          const tone: "safe" | "watch" | "danger" =
+            ev.kind === "incomeUpdate"
+              ? "safe"
+              : ev.kind === "ruleEnding"
+                ? "watch"
+                : "danger";
+          const glyph =
+            tone === "safe" ? "🟢" : tone === "watch" ? "🟡" : "🔴";
+          return (
+            <li
+              key={ev.id}
+              className="fic-timeline-item"
+              data-tone={tone}
+              style={{ animationDelay: `${Math.min(i * 60, 240)}ms` }}
+            >
+              <span aria-hidden className="fic-timeline-dot" />
+              <span aria-hidden className="fic-timeline-glyph">{glyph}</span>
+              <div className="fic-timeline-body">
+                <span className="fic-timeline-label">{ev.label}</span>
+                <span className="fic-timeline-when">
+                  {formatRelative(ev.at, now)}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+// ── Smart footer ──────────────────────────────────────────
+
+function SmartFooter({
+  events,
+  now,
+}: {
+  events: ReturnType<typeof buildLiveEvents>;
+  now: number;
+}) {
+  const today = events.filter((e) => now - e.at < 24 * 3600_000);
+  const posCount = today.filter((e) => e.kind === "incomeUpdate").length;
+  const attCount = today.filter(
+    (e) => e.kind === "cardCharge" || e.kind === "bankCharge",
+  ).length;
+  const riskCount = today.filter((e) => e.kind === "ruleEnding").length;
+  return (
+    <section
+      className="fic-footer"
+      data-direction={
+        riskCount > posCount ? "down" : posCount > 0 ? "up" : "flat"
+      }
+      aria-label="מה השתנה היום"
+    >
+      <span aria-hidden className="fic-footer-glyph">
+        {riskCount > posCount ? "↓" : posCount > 0 ? "↑" : "→"}
       </span>
-      <div className="ic-delta-body">
-        <span className="ic-delta-title">המצב השתנה מאז אתמול</span>
-        <span className="ic-delta-hint">{delta.label}</span>
-        <span className="ic-delta-sub">{delta.hint}</span>
+      <div className="fic-footer-body">
+        <span className="fic-footer-title">מה השתנה היום</span>
+        <span className="fic-footer-hint">
+          {today.length === 0
+            ? "לא זוהו אירועים חדשים ב-24 השעות האחרונות."
+            : composeFooterLine(posCount, attCount, riskCount, today.length)}
+        </span>
       </div>
     </section>
   );
+}
+function composeFooterLine(
+  pos: number,
+  att: number,
+  risk: number,
+  total: number,
+): string {
+  const parts: string[] = [];
+  if (pos > 0) parts.push(`${pos} חיוביים`);
+  if (att > 0) parts.push(`${att} דורש מבט`);
+  if (risk > 0) parts.push(`${risk} סיכונים`);
+  if (parts.length === 0) return `${total} אירועים`;
+  return parts.join(" · ");
 }
 
 // ── Compute helpers ──────────────────────────────────────
@@ -697,45 +1139,22 @@ function computeHealthScore(
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function computeDelta(
-  risks: AiInsight[],
-  opportunities: AiInsight[],
-): { direction: "up" | "down" | "flat"; label: string; hint: string } {
-  const urgentRisks = risks.filter((r) => r.severity === 3).length;
-  const total = risks.length + opportunities.length;
-  if (urgentRisks > 0) {
-    return {
-      direction: "down",
-      label: `${urgentRisks} סיכונים דחופים`,
-      hint: "דורש התייחסות מיידית",
-    };
+function sumOpportunityImpact(opps: AiInsight[]): number {
+  let sum = 0;
+  for (const o of opps) {
+    const m = o.body.match(/(\d[\d,]*)\s*₪|₪\s*(\d[\d,]*)/);
+    if (m) {
+      const num = Number((m[1] ?? m[2]).replace(/,/g, ""));
+      if (Number.isFinite(num)) sum += num;
+    }
   }
-  if (risks.length > opportunities.length) {
-    return {
-      direction: "down",
-      label: `${risks.length} סיכונים פעילים`,
-      hint: "שים לב לשבוע הקרוב",
-    };
-  }
-  if (opportunities.length > 0) {
-    return {
-      direction: "up",
-      label: `${opportunities.length} הזדמנויות חדשות`,
-      hint: "אפשר לחסוך יותר",
-    };
-  }
-  if (total === 0) {
-    return {
-      direction: "flat",
-      label: "המצב יציב",
-      hint: "אין שינוי מהותי ב-24 השעות האחרונות",
-    };
-  }
-  return {
-    direction: "up",
-    label: "המצב יציב",
-    hint: `${total} תובנות פעילות · הכל תחת שליטה`,
-  };
+  return sum;
+}
+
+function sumWeek(
+  week: Array<{ amount: number }>,
+): number {
+  return week.reduce((s, r) => s + r.amount, 0);
 }
 
 function collectUpcomingWeek(
@@ -797,3 +1216,139 @@ function startOfDay(d: Date): Date {
   x.setHours(0, 0, 0, 0);
   return x;
 }
+
+function safeCategory(id: string): string {
+  try {
+    return getCategory(id as CategoryId).label;
+  } catch {
+    return id;
+  }
+}
+
+function greetingFor(d: Date): string {
+  const h = d.getHours();
+  if (h < 5) return "לילה טוב · אני בשקט מעקב";
+  if (h < 11) return "בוקר טוב · מתחילים ביום שקט";
+  if (h < 17) return "צהריים טובים · בואו נסקור";
+  if (h < 21) return "ערב טוב · סיכום היום";
+  return "לילה טוב · יום מסתיים";
+}
+
+function composeSummaryLines(
+  chip: Chip,
+  now: number,
+  data: {
+    eomForecast: ReturnType<typeof forecastEndOfMonth> | null;
+    risks: AiInsight[];
+    opportunities: AiInsight[];
+    anomalies: SpendAnomaly[];
+    week: Array<{ label: string; amount: number; date: Date; kind: "rule" | "loan" }>;
+    savings: number;
+  },
+): Array<{ icon: string; text: string }> {
+  const lines: Array<{ icon: string; text: string }> = [];
+  const eom = data.eomForecast;
+
+  if (chip === "risk") {
+    const urgent = data.risks.filter((r) => r.severity === 3).length;
+    lines.push(
+      urgent > 0
+        ? { icon: "🚨", text: `${urgent} סיכונים דחופים דורשים התייחסות` }
+        : eom && eom.forecast >= 0
+          ? { icon: "✅", text: "אין סכנה למינוס החודש" }
+          : { icon: "⚠", text: "צפויה יתרה שלילית בסוף החודש" },
+    );
+    if (data.week.length > 0) {
+      const soon = data.week[0];
+      const days = Math.ceil(
+        (soon.date.getTime() - (now || soon.date.getTime())) / 86_400_000,
+      );
+      lines.push({
+        icon: "⚠",
+        text: `בעוד ${Math.max(0, days)} ימים יורדים ${data.week.length} חיובים`,
+      });
+    }
+    if (data.anomalies.length > 0) {
+      lines.push({
+        icon: "📉",
+        text: `${data.anomalies.length} חריגות מהותיות החודש`,
+      });
+    } else {
+      lines.push({ icon: "💰", text: `ניתן לחסוך ${ILS.format(Math.round(data.savings))}` });
+    }
+  } else if (chip === "cash") {
+    lines.push({
+      icon: "💧",
+      text: eom
+        ? `סוף חודש צפוי: ${ILS.format(Math.round(eom.forecast))}`
+        : "אין תחזית זמינה",
+    });
+    lines.push({
+      icon: "📥",
+      text: eom
+        ? `הכנסות נותרות: ${ILS.format(Math.round(eom.expectedIncome))}`
+        : "לא מוגדר",
+    });
+    lines.push({
+      icon: "📤",
+      text: eom
+        ? `יציאות נותרות: ${ILS.format(
+            Math.round(eom.pendingFixed + eom.pendingLoans + eom.futureCardSlices),
+          )}`
+        : "לא מוגדר",
+    });
+  } else if (chip === "savings") {
+    lines.push({
+      icon: "💰",
+      text: `${data.opportunities.length} הזדמנויות חיסכון`,
+    });
+    lines.push({
+      icon: "🎯",
+      text: `פוטנציאל חיסכון: ${ILS.format(Math.round(data.savings))}`,
+    });
+    if (data.opportunities.length > 0) {
+      lines.push({ icon: "💡", text: data.opportunities[0].title });
+    } else {
+      lines.push({ icon: "✅", text: "אין הזדמנויות חיסכון כרגע" });
+    }
+  } else if (chip === "forecast") {
+    lines.push({
+      icon: "📈",
+      text: eom
+        ? `יתרה צפויה בסוף החודש: ${ILS.format(Math.round(eom.forecast))}`
+        : "אין תחזית",
+    });
+    lines.push({
+      icon: "🗓️",
+      text: `${data.week.length} חיובים בשבוע הקרוב`,
+    });
+    lines.push({
+      icon: "🔮",
+      text: eom
+        ? `בחודש הבא: ${addMonths(currentMonthKey(), 1)}`
+        : "לא מוגדר",
+    });
+  } else {
+    // AI chip
+    lines.push({
+      icon: "🤖",
+      text: `Sally זיהתה ${data.risks.length + data.opportunities.length} תובנות פעילות`,
+    });
+    if (data.opportunities.length > 0) {
+      lines.push({ icon: "💡", text: data.opportunities[0].title });
+    }
+    if (data.risks.length > 0) {
+      lines.push({ icon: "⚠", text: data.risks[0].title });
+    }
+    while (lines.length < 3) {
+      lines.push({ icon: "✅", text: "המצב יציב" });
+    }
+  }
+  return lines.slice(0, 3);
+}
+
+void CreditCard;
+void Sparkles;
+void TrendingUp;
+void TrendingDown;
+void ChevronRight;
