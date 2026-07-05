@@ -86,10 +86,21 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
   const {
     control,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors, isSubmitting },
   } = useForm<RecurringRuleFormValues>({
     resolver: zodResolver(recurringRuleFormSchema),
-    mode: "onChange",
+    // Bug fix: `mode: "onChange"` combined with defaultValues that
+    // contain `undefined` for required fields (estimatedAmount +
+    // category during 'add') left RHF's `isValid` locked at false
+    // even after the user filled every visible field. The submit
+    // button gated on `!isValid` never enabled and the flow felt
+    // dead. Switch to `mode: "onBlur"` so validation still runs
+    // per-field, but we no longer gate the submit button on
+    // `isValid`. handleSubmit() will re-validate the whole form on
+    // click — if it fails, each field's error message renders
+    // inline exactly like before, but the user gets clear feedback
+    // instead of a permanently-disabled button.
+    mode: "onBlur",
     defaultValues: {
       label: initial?.label ?? "",
       category: initial?.category,
@@ -525,7 +536,7 @@ export function RuleForm({ initial, submitLabel, onSubmit, onCancel }: Props) {
         ) : null}
         <Button
           type="submit"
-          disabled={!isValid}
+          disabled={isSubmitting}
           className="h-9 bg-neon text-[#050505] hover:bg-neon/90 disabled:opacity-40"
         >
           {submitLabel}
