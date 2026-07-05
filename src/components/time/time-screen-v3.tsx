@@ -129,9 +129,17 @@ export function TimeScreenV3() {
         reduced={Boolean(reduced)}
       />
 
-      <StorySentence frame={frame} confidence={confidence} />
+      <StorySentence
+        frame={frame}
+        confidence={confidence}
+        activeKind={activeCheckpoint.kind}
+      />
 
-      <InsightGrid key={activeCheckpoint.kind} frame={frame} />
+      <InsightGrid
+        key={activeCheckpoint.kind}
+        frame={frame}
+        activeKind={activeCheckpoint.kind}
+      />
     </div>
   );
 }
@@ -517,13 +525,15 @@ function ConfidencePill({ confidence }: { confidence: Confidence }) {
 function StorySentence({
   frame,
   confidence,
+  activeKind,
 }: {
   frame: TimeFrame;
   confidence: Confidence;
+  activeKind: CheckpointKind;
 }) {
   const sentence = useMemo(
-    () => composeStory(frame, confidence),
-    [frame, confidence],
+    () => composeStory(frame, confidence, activeKind),
+    [frame, confidence, activeKind],
   );
   return (
     <p className="tm-story" dir="rtl">
@@ -532,9 +542,13 @@ function StorySentence({
   );
 }
 
-function composeStory(frame: TimeFrame, confidence: Confidence): string {
+function composeStory(
+  frame: TimeFrame,
+  confidence: Confidence,
+  activeKind: CheckpointKind,
+): string {
   const parts: string[] = [];
-  const events = eventsBetween(frame);
+  const events = eventsBetween(frame, activeKind);
   const outCount = events.filter((e) => e.amount < 0).length;
   const inCount = events.filter((e) => e.amount > 0).length;
   const salaryCount = events.filter(
@@ -573,7 +587,10 @@ function composeStory(frame: TimeFrame, confidence: Confidence): string {
 
 // ── Events helpers ─────────────────────────────────────────
 
-function eventsBetween(frame: TimeFrame): Array<{
+function eventsBetween(
+  frame: TimeFrame,
+  activeKind?: CheckpointKind,
+): Array<{
   whenISO: string;
   label: string;
   amount: number;
@@ -586,16 +603,51 @@ function eventsBetween(frame: TimeFrame): Array<{
   // loan/rule installments to dayIndex=0 for user traceability (so
   // LIVE can annotate the balance with "how did we get here?"). The
   // Time tiles must NOT surface those past events: the tile answers
-  // the question "from now until the checkpoint, what changes?".
-  // Two filters keep the lens honest:
-  //   1. Skip `informational` events — they're already inside the
-  //      anchor balance; showing them would double-count.
-  //   2. Skip events whose calendar date is before today's start of
-  //      day. Those are historical and belong to the balance ring,
-  //      not to a "what's still coming" list.
+  // the question "what happens INSIDE the checkpoint window".
+  //
+  // Filters applied in order:
+  //   1. Skip `informational` events — already inside anchor.
+  //   2. Skip events with calendar date before today's start of day
+  //      (they belong to the balance ring, not to a forward tile).
+  //   3. Per-checkpoint window filter — the point of THIS pass:
+  //      · day10  → only current-month events with day-of-month ≤ 10
+  //      · eom    → only current-month events (any day up to EOM)
+  //      · next2  → only next-month events with day-of-month ≤ 2
+  //      · next10 → only next-month events with day-of-month ≤ 10
+  //      · other  → default cumulative-to-cursor slice (LIVE, custom)
+  //      No cumulative bleed across the current-month → next-month
+  //      boundary; each tile shows the events that belong to its
+  //      own checkpoint's calendar month.
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startTs = startOfToday.getTime();
+  const nowYear = startOfToday.getFullYear();
+  const nowMonth = startOfToday.getMonth();
+  const nextMonthDate = new Date(nowYear, nowMonth + 1, 1);
+  const nextYear = nextMonthDate.getFullYear();
+  const nextMonth = nextMonthDate.getMonth();
+
+  function inWindow(eventTs: number): boolean {
+    if (!Number.isFinite(eventTs)) return false;
+    const d = new Date(eventTs);
+    const eY = d.getFullYear();
+    const eM = d.getMonth();
+    const eDay = d.getDate();
+    if (activeKind === "day10") {
+      return eY === nowYear && eM === nowMonth && eDay <= 10;
+    }
+    if (activeKind === "eom") {
+      return eY === nowYear && eM === nowMonth;
+    }
+    if (activeKind === "next2") {
+      return eY === nextYear && eM === nextMonth && eDay <= 2;
+    }
+    if (activeKind === "next10") {
+      return eY === nextYear && eM === nextMonth && eDay <= 10;
+    }
+    // Fallback (LIVE / custom / undefined) — cumulative up to cursor.
+    return true;
+  }
 
   const out: Array<{
     whenISO: string;
@@ -609,6 +661,7 @@ function eventsBetween(frame: TimeFrame): Array<{
       if (e.informational) continue;
       const eventTs = new Date(e.whenISO).getTime();
       if (Number.isFinite(eventTs) && eventTs < startTs) continue;
+      if (!inWindow(eventTs)) continue;
       out.push({
         whenISO: e.whenISO,
         label: e.label,
@@ -673,9 +726,18 @@ const LANES: LaneMeta[] = [
   },
 ];
 
-function InsightGrid({ frame }: { frame: TimeFrame }) {
+function InsightGrid({
+  frame,
+  activeKind,
+}: {
+  frame: TimeFrame;
+  activeKind: CheckpointKind;
+}) {
   const [openLane, setOpenLane] = useState<LaneKey | null>(null);
-  const events = useMemo(() => eventsBetween(frame), [frame]);
+  const events = useMemo(
+    () => eventsBetween(frame, activeKind),
+    [frame, activeKind],
+  );
 
   // Recompute per lane. Every number here is derived from
   // frame.curve[0..cursor] — so tiles ARE the story of the balance
