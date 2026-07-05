@@ -35,6 +35,7 @@ import { tap as hapticTap } from "@/lib/haptics";
 import { TapDiscoveryToast } from "@/components/dashboard/tap-discovery-toast";
 import { PortfolioHeroCard } from "@/components/home/portfolio-hero-card";
 import { PrimaryActionDock } from "@/components/home/primary-action-dock";
+import { IncomeActualSheet } from "@/components/income/income-actual-sheet";
 import { navigateToTab } from "@/lib/tab-nav";
 
 const lazy = (
@@ -148,6 +149,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
+  const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
   const cloudSync = useCloudSyncState();
 
   const showCurtain = Boolean(
@@ -276,7 +278,7 @@ export function DashboardTab() {
 
         <PrimaryActionDock
           onExpense={() => setOpen(true)}
-          onIncome={() => navigateToTab("setup", "incomes-mini-app")}
+          onIncome={() => setIncomeSheetOpen(true)}
           onTransfer={() => setWithdrawalOpen(true)}
           onCredit={() => navigateToTab("analytics")}
           onLoan={() => navigateToTab("setup", "loans-mini-app")}
@@ -286,6 +288,10 @@ export function DashboardTab() {
         <WithdrawalDialog
           open={withdrawalOpen}
           onOpenChange={setWithdrawalOpen}
+        />
+        <IncomeActualSheet
+          open={incomeSheetOpen}
+          onOpenChange={setIncomeSheetOpen}
         />
       </div>
     </SnapshotProvider>
