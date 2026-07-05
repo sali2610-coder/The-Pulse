@@ -21,25 +21,8 @@ import type { ExpenseEntry, RecurringRule } from "@/types/finance";
  */
 
 async function loadFreshStore() {
-  // Stub browser globals BEFORE importing store so Zustand's
-  // persist middleware sees a real localStorage instance.
-  if (typeof (globalThis as { localStorage?: Storage }).localStorage === "undefined") {
-    const memory = new Map<string, string>();
-    (globalThis as { localStorage?: Storage }).localStorage = {
-      getItem: (k: string) => memory.get(k) ?? null,
-      setItem: (k: string, v: string) => {
-        memory.set(k, v);
-      },
-      removeItem: (k: string) => {
-        memory.delete(k);
-      },
-      clear: () => memory.clear(),
-      key: () => null,
-      length: 0,
-    } as Storage;
-  } else {
-    localStorage.clear();
-  }
+  // Clear persistence between tests without polluting globalThis.
+  if (typeof localStorage !== "undefined") localStorage.clear();
   vi.resetModules();
   const mod = await import("@/lib/store");
   const cashMod = await import("@/lib/effective-cash-date");

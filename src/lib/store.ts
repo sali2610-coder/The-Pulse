@@ -452,30 +452,28 @@ export const useFinanceStore = create<State & Actions>()(
           occurredAt: input.occurredAt ?? input.chargeDate ?? now.toISOString(),
         };
 
-        // Bug fix (data integrity): manual entries must never be
-        // silently auto-matched to a recurring rule. findMatchingRule
-        // matches by (same category) + (amount within ±25% OR keyword
-        // match). For SMS / auto-import entries the user never picked
-        // the account, so a rule match is the correct source of truth
-        // for viaCardId + rule-paid state. For MANUAL entries the user
-        // explicitly picked category + accountId, and a silent rule
-        // link can:
-        //   1. flip an unrelated rule to 'paid' in the current month
-        //      (double-counted budget, wrong tick in obligations)
-        //   2. later reroute the entry to a WRONG card via
-        //      findCard() when the matched rule carries a
-        //      linkedCardId pointing at a different card (reported bug:
-        //      expense picked on card B ended up counted on card A).
-        // We keep auto-match ONLY for non-manual sources.
-        const shouldAutoMatch =
-          input.source !== undefined && input.source !== "manual";
-        const matched = shouldAutoMatch
-          ? findMatchingRule({
+        // Bug fix (data integrity): when the user MANUALLY picked an
+        // accountId (card / bank), do NOT silently auto-match a
+        // recurring rule. findMatchingRule works by (same category) +
+        // (amount within ±25% OR keyword match). Two failure modes we
+        // want to prevent for user-picked entries:
+        //   1. Wrong 'שודך אוטומטית' toast on an unrelated rule.
+        //   2. findCard rerouting the entry to the rule's linkedCardId,
+        //      silently discarding the user's card pick.
+        // For SMS / auto imports and for manual entries that don't
+        // supply an accountId, keep the existing auto-match contract —
+        // this is what upstream tests and the store-update-relink /
+        // expense-delete-flow flows expect. The guard is narrow on
+        // purpose.
+        const userPickedAccount =
+          input.source === "manual" && Boolean(input.accountId);
+        const matched = userPickedAccount
+          ? undefined
+          : findMatchingRule({
               entry,
               rules: get().rules,
               statuses: get().statuses,
-            })
-          : undefined;
+            });
 
         const finalEntry = matched
           ? { ...entry, matchedRuleId: matched.id }
