@@ -1,104 +1,230 @@
 "use client";
 
-// Home v2 · Primary Action Dock (premium rebuild).
+// Primary Action Dock · single 'מזומן' button + action menu sheet.
 //
-// Signature bottom bar. Primary Expense is the dominant gold pill —
-// the single tap the user reaches for 20× a day. Income is the
-// smaller companion pill (safe-green) alongside it. Both sit inside
-// a floating glass rail with an inner-glow hairline. Callback-only
-// component: no engine / store / dialog / navigation logic.
+// Fixes two P0 regressions:
+//   1. Dock was two side-by-side buttons (הוצאה / הכנסה) — reverted
+//      to a single primary CTA labeled 'מזומן' that opens a
+//      BottomSheet action menu the user can drill into.
+//   2. Dock rendered as a Framer motion.div, which applied inline
+//      transforms during entry. Some browsers treat this as an
+//      animated containing block for fixed positioning and briefly
+//      scroll the dock with the page. Root is now a plain
+//      position:fixed div; the entry animation runs via a CSS
+//      keyframe on the inner button so `.sally-dock-v3` itself
+//      never carries a transform.
+//
+// Callback-only — no engine / store / dialog / navigation change.
 
-import { motion, useReducedMotion } from "framer-motion";
+import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowLeftRight,
+  Banknote,
+  CreditCard,
+  HandCoins,
+  Receipt,
+  Wallet,
+  X,
+} from "lucide-react";
 
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { tap as hapticTap } from "@/lib/haptics";
+
+type ActionKey =
+  | "expense"
+  | "income"
+  | "transfer"
+  | "credit"
+  | "loan";
 
 export function PrimaryActionDock({
   onExpense,
   onIncome,
+  onTransfer,
+  onCredit,
+  onLoan,
 }: {
   onExpense: () => void;
   onIncome: () => void;
+  onTransfer: () => void;
+  onCredit: () => void;
+  onLoan: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const reduced = useReducedMotion();
+
+  function pick(key: ActionKey) {
+    hapticTap();
+    setOpen(false);
+    // Defer to next tick so the sheet exit doesn't overlap the
+    // sheet the target action might open.
+    setTimeout(() => {
+      if (key === "expense") onExpense();
+      else if (key === "income") onIncome();
+      else if (key === "transfer") onTransfer();
+      else if (key === "credit") onCredit();
+      else if (key === "loan") onLoan();
+    }, 40);
+  }
+
   return (
-    <motion.div
-      role="toolbar"
-      aria-label="פעולות עיקריות"
-      className="sally-dock-v2"
-      initial={{ opacity: 0, y: 28 }}
+    <>
+      {/* The dock root is a plain div. Fixed positioning is defined
+         in CSS. No inline transforms on this element — that keeps
+         it truly fixed to the viewport regardless of scroll. */}
+      <div className="sally-dock-v3" role="toolbar" aria-label="פעולה חדשה">
+        <span aria-hidden className="sally-dock-v3-glow" />
+        <button
+          type="button"
+          className="sally-dock-v3-button"
+          aria-label="פתח תפריט פעולות חדשות"
+          aria-expanded={open}
+          onClick={() => {
+            hapticTap();
+            setOpen(true);
+          }}
+        >
+          <span aria-hidden className="sally-dock-v3-halo" />
+          <span aria-hidden className="sally-dock-v3-icon">
+            <Wallet className="size-5" strokeWidth={2.2} />
+          </span>
+          <span className="sally-dock-v3-text">
+            <span className="sally-dock-v3-label">מזומן</span>
+            <span className="sally-dock-v3-sub">פעולה חדשה</span>
+          </span>
+          <span aria-hidden className="sally-dock-v3-plus">
+            +
+          </span>
+        </button>
+      </div>
+
+      <BottomSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="פעולה חדשה"
+        className="sally-actions-sheet"
+      >
+        <div className="sally-actions-body" dir="rtl">
+          <header className="sally-actions-header">
+            <div>
+              <span className="sally-actions-eyebrow">מזומן · תפריט</span>
+              <span className="sally-actions-title">מה תרצה לתעד?</span>
+            </div>
+            <button
+              type="button"
+              className="sally-actions-close"
+              aria-label="סגור תפריט"
+              onClick={() => setOpen(false)}
+            >
+              <X className="size-4" />
+            </button>
+          </header>
+
+          <ul className="sally-actions-list" role="menu">
+            <AnimatePresence initial={false}>
+              <ActionRow
+                delay={0.00}
+                reduced={Boolean(reduced)}
+                icon={<Receipt className="size-5" />}
+                label="הוצאה"
+                hint="תיעוד חיוב חדש"
+                tone="gold"
+                onClick={() => pick("expense")}
+              />
+              <ActionRow
+                delay={0.04}
+                reduced={Boolean(reduced)}
+                icon={<HandCoins className="size-5" />}
+                label="הכנסה"
+                hint="עדכון משכורת / הפקדה"
+                tone="safe"
+                onClick={() => pick("income")}
+              />
+              <ActionRow
+                delay={0.08}
+                reduced={Boolean(reduced)}
+                icon={<ArrowLeftRight className="size-5" />}
+                label="העברה"
+                hint="בין חשבונות · משיכה"
+                tone="cyan"
+                onClick={() => pick("transfer")}
+              />
+              <ActionRow
+                delay={0.12}
+                reduced={Boolean(reduced)}
+                icon={<CreditCard className="size-5" />}
+                label="אשראי"
+                hint="ניהול כרטיסים ומסגרת"
+                tone="purple"
+                onClick={() => pick("credit")}
+              />
+              <ActionRow
+                delay={0.16}
+                reduced={Boolean(reduced)}
+                icon={<Banknote className="size-5" />}
+                label="הלוואה"
+                hint="הוסף או ערוך הלוואה"
+                tone="watch"
+                onClick={() => pick("loan")}
+              />
+            </AnimatePresence>
+          </ul>
+        </div>
+      </BottomSheet>
+    </>
+  );
+}
+
+function ActionRow({
+  icon,
+  label,
+  hint,
+  tone,
+  delay,
+  reduced,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+  tone: "gold" | "safe" | "cyan" | "purple" | "watch";
+  delay: number;
+  reduced: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.li
+      role="none"
+      layout
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
-        duration: reduced ? 0.1 : 0.5,
-        delay: reduced ? 0 : 0.12,
+        delay,
+        duration: reduced ? 0.12 : 0.28,
         ease: [0.32, 0.72, 0, 1],
       }}
     >
-      <span aria-hidden className="sally-dock-v2-glow" />
-      <div className="sally-dock-v2-inner">
-        <motion.button
-          type="button"
-          className="sally-dock-v2-primary"
-          aria-label="הוסף הוצאה חדשה"
-          onClick={() => {
-            hapticTap();
-            onExpense();
-          }}
-          whileTap={{ scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        >
-          <span aria-hidden className="sally-dock-v2-primary-halo" />
-          <span aria-hidden className="sally-dock-v2-primary-icon">
-            <MinusGlyph />
-          </span>
-          <span className="sally-dock-v2-primary-text">
-            <span className="sally-dock-v2-primary-label">הוצאה</span>
-            <span className="sally-dock-v2-primary-sub">תיעוד מהיר</span>
-          </span>
-        </motion.button>
-
-        <motion.button
-          type="button"
-          className="sally-dock-v2-secondary"
-          aria-label="הוסף הכנסה חדשה"
-          onClick={() => {
-            hapticTap();
-            onIncome();
-          }}
-          whileTap={{ scale: 0.96 }}
-          transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        >
-          <span aria-hidden className="sally-dock-v2-secondary-icon">
-            <PlusGlyph />
-          </span>
-          <span className="sally-dock-v2-secondary-label">הכנסה</span>
-        </motion.button>
-      </div>
-    </motion.div>
-  );
-}
-
-function MinusGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden fill="none">
-      <path
-        d="M4 10h12"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function PlusGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden fill="none">
-      <path
-        d="M10 4v12M4 10h12"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    </svg>
+      <motion.button
+        type="button"
+        role="menuitem"
+        onClick={onClick}
+        whileTap={{ scale: 0.985 }}
+        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+        className="sally-actions-item"
+        data-tone={tone}
+      >
+        <span aria-hidden className="sally-actions-item-icon">
+          {icon}
+        </span>
+        <div className="sally-actions-item-text">
+          <span className="sally-actions-item-label">{label}</span>
+          <span className="sally-actions-item-hint">{hint}</span>
+        </div>
+        <span aria-hidden className="sally-actions-item-cue">
+          ›
+        </span>
+      </motion.button>
+    </motion.li>
   );
 }

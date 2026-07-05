@@ -277,6 +277,9 @@ export function DashboardTab() {
         <PrimaryActionDock
           onExpense={() => setOpen(true)}
           onIncome={() => navigateToTab("setup", "incomes-mini-app")}
+          onTransfer={() => setWithdrawalOpen(true)}
+          onCredit={() => navigateToTab("analytics")}
+          onLoan={() => navigateToTab("setup", "loans-mini-app")}
         />
 
         <ExpenseDialog open={open} onOpenChange={setOpen} />

@@ -4467,183 +4467,6 @@ button.sally-glass {
   text-align: center;
 }
 
-/* ── Home v2 · Primary Action Dock (rebuilt v2) ──────────── */
-
-.sally-dock-v2 {
-  position: fixed;
-  inset-inline: 0;
-  inset-block-end: 0;
-  padding-inline: 16px;
-  padding-block-end: calc(env(safe-area-inset-bottom) + 14px);
-  z-index: 50;
-  pointer-events: none;
-  display: flex;
-  justify-content: center;
-}
-.sally-dock-v2-glow {
-  position: absolute;
-  inset-inline: 0;
-  inset-block-end: 0;
-  height: 160px;
-  background:
-    radial-gradient(60% 100% at 50% 100%, rgba(0, 0, 0, 0.65), transparent 70%);
-  pointer-events: none;
-  z-index: -1;
-}
-.sally-dock-v2-inner {
-  pointer-events: auto;
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  width: 100%;
-  max-width: 460px;
-  padding: 6px;
-  border-radius: 9999px;
-  background: rgba(10, 10, 12, 0.78);
-  border: 1px solid rgba(212, 175, 55, 0.24);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 28px 60px -22px rgba(0, 0, 0, 0.75),
-    0 12px 28px -14px rgba(212, 175, 55, 0.24);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-}
-
-/* Primary — dominant Expense CTA */
-.sally-dock-v2-primary {
-  position: relative;
-  flex: 2 1 auto;
-  min-width: 0;
-  height: 58px;
-  padding-inline: 20px;
-  border-radius: 9999px;
-  border: 0;
-  background:
-    linear-gradient(180deg, var(--sally-gold-loud, #E4C158), rgba(212, 175, 55, 0.92));
-  color: #0A0A0C;
-  font-family: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.08) inset,
-    0 14px 26px -14px rgba(212, 175, 55, 0.7);
-  overflow: hidden;
-  transition: filter 240ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-.sally-dock-v2-primary:hover { filter: brightness(1.05); }
-.sally-dock-v2-primary:focus-visible {
-  outline: 2px solid var(--sally-gold-loud, #E4C158);
-  outline-offset: 3px;
-}
-.sally-dock-v2-primary-halo {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(80% 120% at 0% 0%, rgba(255, 255, 255, 0.35), transparent 55%);
-  pointer-events: none;
-}
-.sally-dock-v2-primary-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9999px;
-  background: rgba(10, 10, 12, 0.16);
-  color: #0A0A0C;
-  flex-shrink: 0;
-  z-index: 1;
-}
-.sally-dock-v2-primary-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  line-height: 1.05;
-  z-index: 1;
-}
-.sally-dock-v2-primary-label {
-  font-size: 15.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.sally-dock-v2-primary-sub {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(10, 10, 12, 0.62);
-}
-
-/* Secondary — Income companion */
-.sally-dock-v2-secondary {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 58px;
-  padding-inline: 16px;
-  border-radius: 9999px;
-  border: 1px solid rgba(52, 211, 153, 0.28);
-  background: rgba(52, 211, 153, 0.08);
-  color: var(--sally-safe, #34D399);
-  font-family: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition:
-    background-color 240ms cubic-bezier(0.32, 0.72, 0, 1),
-    border-color 240ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-.sally-dock-v2-secondary:hover {
-  background: rgba(52, 211, 153, 0.14);
-  border-color: rgba(52, 211, 153, 0.42);
-}
-.sally-dock-v2-secondary:focus-visible {
-  outline: 2px solid var(--sally-safe, #34D399);
-  outline-offset: 3px;
-}
-.sally-dock-v2-secondary-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 9999px;
-  background: rgba(52, 211, 153, 0.2);
-  color: var(--sally-safe, #34D399);
-  flex-shrink: 0;
-}
-.sally-dock-v2-secondary-label {
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-}
-
-/* Home content bottom padding so dock doesn't overlap last card */
-@media (max-width: 640px) {
-  main {
-    padding-block-end: calc(env(safe-area-inset-bottom) + 112px);
-  }
-}
-@media (min-width: 641px) {
-  main {
-    padding-block-end: calc(env(safe-area-inset-bottom) + 100px);
-  }
-}
-
-@media (max-width: 380px) {
-  .sally-dock-v2-inner { padding: 4px; gap: 6px; }
-  .sally-dock-v2-primary,
-  .sally-dock-v2-secondary { height: 54px; }
-  .sally-dock-v2-primary { padding-inline: 16px; }
-  .sally-dock-v2-primary-label { font-size: 14.5px; }
-  .sally-dock-v2-primary-sub { font-size: 9.5px; }
-  .sally-dock-v2-secondary-label { font-size: 13.5px; }
-}
 
 
 /* ── Home v2 · Add-Expense sheet polish ─────────────────── */
@@ -7713,4 +7536,285 @@ button.sally-glass {
   .fic-hero-score { font-size: 32px; }
   .fic-hero-summary-line { font-size: 11.5px; }
   .fic-carousel-card { flex: 0 0 92%; }
+}
+
+/* ── Primary Action Dock v3 · single 'מזומן' button ─────────── */
+/* Root is a plain div (no framer transform) so position:fixed is
+   never inside a transformed containing block. Fixed for real. */
+
+.sally-dock-v3 {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding-inline: 16px;
+  padding-block-end: calc(env(safe-area-inset-bottom) + 14px);
+  z-index: 60;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+}
+.sally-dock-v3-glow {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 160px;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(60% 100% at 50% 100%, rgba(0, 0, 0, 0.70), transparent 70%);
+}
+
+.sally-dock-v3-button {
+  pointer-events: auto;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 8px 20px 8px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(212, 175, 55, 0.36);
+  background:
+    linear-gradient(180deg, rgba(20, 18, 12, 0.92), rgba(10, 10, 12, 0.9));
+  color: var(--sally-ink-1, #F6F6F6);
+  cursor: pointer;
+  overflow: hidden;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.4) inset,
+    0 28px 60px -22px rgba(0, 0, 0, 0.75),
+    0 12px 28px -14px rgba(212, 175, 55, 0.34);
+  animation: sally-dock-v3-in 480ms cubic-bezier(0.32, 0.72, 0, 1) both,
+    sally-dock-v3-breath 6s ease-in-out 480ms infinite;
+  transition: filter 240ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes sally-dock-v3-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes sally-dock-v3-breath {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.04); }
+}
+.sally-dock-v3-button:hover { filter: brightness(1.08); }
+.sally-dock-v3-button:active { transform: scale(0.985); }
+.sally-dock-v3-button:focus-visible {
+  outline: 2px solid var(--sally-gold-loud, #E4C158);
+  outline-offset: 3px;
+}
+.sally-dock-v3-halo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(80% 100% at 0% 0%, rgba(212, 175, 55, 0.28), transparent 60%);
+  pointer-events: none;
+}
+
+.sally-dock-v3-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, var(--sally-gold-loud, #E4C158), rgba(212, 175, 55, 0.92));
+  color: #0A0A0C;
+  flex-shrink: 0;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 8px 22px -10px rgba(212, 175, 55, 0.65);
+}
+.sally-dock-v3-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.05;
+}
+.sally-dock-v3-label {
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--sally-ink-1, #F6F6F6);
+}
+.sally-dock-v3-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.55));
+}
+.sally-dock-v3-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: rgba(212, 175, 55, 0.14);
+  color: var(--sally-gold-loud, #E4C158);
+  font-size: 18px;
+  font-weight: 600;
+  margin-inline-start: 6px;
+  border: 1px solid rgba(212, 175, 55, 0.32);
+}
+
+/* Home content bottom padding so dock never covers the last card */
+@media (max-width: 640px) {
+  main {
+    padding-block-end: calc(env(safe-area-inset-bottom) + 118px);
+  }
+}
+@media (min-width: 641px) {
+  main {
+    padding-block-end: calc(env(safe-area-inset-bottom) + 104px);
+  }
+}
+@media (max-width: 380px) {
+  .sally-dock-v3-button { min-height: 56px; padding: 6px 16px 6px 6px; gap: 10px; }
+  .sally-dock-v3-icon { width: 42px; height: 42px; }
+  .sally-dock-v3-label { font-size: 14.5px; }
+  .sally-dock-v3-sub { font-size: 9.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sally-dock-v3-button { animation: none; }
+}
+
+/* ── Actions menu sheet ─────────────────────────────────── */
+
+.sally-actions-sheet {
+  padding-inline: 22px !important;
+  padding-block-start: 8px !important;
+}
+.sally-actions-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-block-end: 8px;
+}
+.sally-actions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block-end: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.sally-actions-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sally-actions-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--sally-gold-soft, #D4AF37);
+}
+.sally-actions-title {
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--sally-ink-1, #F6F6F6);
+  line-height: 1.15;
+}
+.sally-actions-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--sally-ink-2, rgba(255, 255, 255, 0.8));
+  cursor: pointer;
+  transition: background-color 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sally-actions-close:hover { background: rgba(255, 255, 255, 0.06); }
+
+.sally-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.sally-actions-item {
+  display: grid;
+  grid-template-columns: 46px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.006));
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+  transition:
+    border-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sally-actions-item:hover { border-color: rgba(212, 175, 55, 0.28); }
+.sally-actions-item:focus-visible {
+  outline: 2px solid var(--sally-gold-loud, #E4C158);
+  outline-offset: 3px;
+}
+.sally-actions-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+}
+.sally-actions-item[data-tone="gold"] .sally-actions-item-icon {
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--sally-gold-loud, #E4C158);
+}
+.sally-actions-item[data-tone="safe"] .sally-actions-item-icon {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--sally-safe, #34D399);
+}
+.sally-actions-item[data-tone="cyan"] .sally-actions-item-icon {
+  background: rgba(117, 245, 255, 0.10);
+  color: #75F5FF;
+}
+.sally-actions-item[data-tone="purple"] .sally-actions-item-icon {
+  background: rgba(167, 139, 250, 0.14);
+  color: #A78BFA;
+}
+.sally-actions-item[data-tone="watch"] .sally-actions-item-icon {
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--sally-watch, #FBBF24);
+}
+.sally-actions-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.sally-actions-item-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--sally-ink-1, #F6F6F6);
+  letter-spacing: -0.005em;
+}
+.sally-actions-item-hint {
+  font-size: 11.5px;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.6));
+  letter-spacing: 0.005em;
+}
+.sally-actions-item-cue {
+  font-size: 18px;
+  color: var(--sally-ink-4, rgba(255, 255, 255, 0.5));
 }
