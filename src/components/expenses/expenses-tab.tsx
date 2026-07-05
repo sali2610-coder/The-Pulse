@@ -24,7 +24,6 @@ import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
-import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { navigateToTab } from "@/lib/tab-nav";
 import { tap as hapticTap } from "@/lib/haptics";
 import { ChevronLeft, Sparkles } from "lucide-react";
@@ -131,23 +130,18 @@ export function ExpensesTab() {
         title="ניתוחים גרפיים"
         subtitle="פילוח קטגוריות + מפת חום ימי החודש — אינטראקטיביים"
       />
-      <DashboardSection
-        storageKey="expenses.analytics"
-        title="ניתוחים גרפיים"
-        subtitle="פילוח קטגוריות + חום ימי החודש — אינטראקטיביים"
-        defaultCollapsed
-      >
-        <div className="sm:col-span-6">
+      <div className="ex-analytics">
+        <div className="ex-slot">
           <Safe name="CategoryDonut">
             <CategoryDonut />
           </Safe>
         </div>
-        <div className="sm:col-span-6">
+        <div className="ex-slot">
           <Safe name="HeatmapMini">
             <HeatmapMini />
           </Safe>
         </div>
-      </DashboardSection>
+      </div>
 
       {process.env.NODE_ENV !== "production" ? (
         <div className="ex-slot">
