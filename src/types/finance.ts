@@ -67,6 +67,13 @@ export type Loan = {
   /** Legacy v6 field. New loans don't need this — the runtime computes
    *  remaining = totalPayments − paidCount. */
   remainingBalance?: number;
+  /** Original loan amount the user actually received in cash — the
+   *  "principal". Optional field added in the Home loan details flow
+   *  so users can see interest cost = (monthlyInstallment ×
+   *  totalPayments) − principalAmount. Purely display; the forecast
+   *  / liquidity engines continue to project cash flow from
+   *  monthlyInstallment × schedule. */
+  principalAmount?: number;
   active: boolean;
   createdAt: string;
 };

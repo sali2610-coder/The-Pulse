@@ -100,6 +100,8 @@ type AddLoanInput = {
   startMonth?: number;
   startYear?: number;
   totalPayments?: number;
+  /** Original principal actually received. Display-only. */
+  principalAmount?: number;
 };
 
 type AddIncomeInput = {
@@ -961,6 +963,10 @@ export const useFinanceStore = create<State & Actions>()(
           startMonth: input.startMonth,
           startYear: input.startYear,
           totalPayments: total,
+          principalAmount:
+            input.principalAmount !== undefined
+              ? safeNumber(input.principalAmount)
+              : undefined,
           active: true,
           createdAt: new Date().toISOString(),
         };
@@ -994,6 +1000,28 @@ export const useFinanceStore = create<State & Actions>()(
                     : {}),
                   ...("dayOfMonth" in patch && patch.dayOfMonth !== undefined
                     ? { dayOfMonth: clampDay(patch.dayOfMonth) }
+                    : {}),
+                  ...("startMonth" in patch &&
+                  patch.startMonth !== undefined
+                    ? { startMonth: patch.startMonth }
+                    : {}),
+                  ...("startYear" in patch && patch.startYear !== undefined
+                    ? { startYear: patch.startYear }
+                    : {}),
+                  ...("totalPayments" in patch &&
+                  patch.totalPayments !== undefined
+                    ? {
+                        totalPayments: Math.max(
+                          1,
+                          Math.floor(patch.totalPayments),
+                        ),
+                      }
+                    : {}),
+                  ...("principalAmount" in patch &&
+                  patch.principalAmount !== undefined
+                    ? {
+                        principalAmount: safeNumber(patch.principalAmount),
+                      }
                     : {}),
                 }
               : l,

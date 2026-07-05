@@ -34,7 +34,7 @@ import {
   Wallet,
 } from "lucide-react";
 
-import { LoanFullScreenEdit } from "@/components/loans/loan-fullscreen-edit";
+import { LoanDetailsSheet } from "@/components/loans/loan-details-sheet";
 import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import {
@@ -215,7 +215,7 @@ export function ObligationsDashboard() {
         ) : null}
       </AnimatePresence>
 
-      <LoanFullScreenEdit
+      <LoanDetailsSheet
         loanId={editingLoanId}
         open={loanEditorOpen}
         onOpenChange={(o) => {
