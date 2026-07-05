@@ -8316,3 +8316,159 @@ button.sally-glass {
 .ld-btn-ghost:hover {
   background: rgba(255, 255, 255, 0.04);
 }
+
+/* ── Expenses tab · premium rebuild (UX/UI only) ────────────── */
+
+.ex-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-block-end: 120px;
+}
+.ex-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ex-slot:empty { display: none; }
+
+/* KPI chip row — 2 cols on mobile, 3 cols ≥ 560px */
+.ex-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 560px) {
+  .ex-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.ex-kpi {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.006));
+  min-height: 62px;
+}
+.ex-kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--sally-ink-2, rgba(255, 255, 255, 0.85));
+}
+.ex-kpi[data-tone="gold"] .ex-kpi-icon {
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--sally-gold-loud, #E4C158);
+}
+.ex-kpi[data-tone="cyan"] .ex-kpi-icon {
+  background: rgba(117, 245, 255, 0.10);
+  color: #75F5FF;
+}
+.ex-kpi[data-tone="purple"] .ex-kpi-icon {
+  background: rgba(167, 139, 250, 0.14);
+  color: #A78BFA;
+}
+.ex-kpi[data-tone="safe"] .ex-kpi-icon {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--sally-safe, #34D399);
+}
+.ex-kpi[data-tone="watch"] .ex-kpi-icon {
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--sally-watch, #FBBF24);
+}
+.ex-kpi[data-tone="danger"] .ex-kpi-icon {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--sally-danger, #F87171);
+}
+.ex-kpi-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.ex-kpi-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sally-ink-1, #F6F6F6);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ex-kpi-hint {
+  font-size: 10.5px;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.55));
+  letter-spacing: 0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ex-kpi-count {
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--sally-ink-1, #F6F6F6);
+}
+.ex-kpi[data-tone="gold"] .ex-kpi-count { color: var(--sally-gold-loud, #E4C158); }
+.ex-kpi[data-tone="cyan"] .ex-kpi-count { color: #75F5FF; }
+.ex-kpi[data-tone="purple"] .ex-kpi-count { color: #A78BFA; }
+.ex-kpi[data-tone="safe"] .ex-kpi-count { color: var(--sally-safe, #34D399); }
+.ex-kpi[data-tone="watch"] .ex-kpi-count { color: var(--sally-watch, #FBBF24); }
+.ex-kpi[data-tone="danger"] .ex-kpi-count { color: var(--sally-danger, #F87171); }
+
+/* Forecast pointer CTA */
+.ex-forecast-cta {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(212, 175, 55, 0.24);
+  background:
+    linear-gradient(180deg, rgba(212, 175, 55, 0.08), rgba(255, 255, 255, 0.006));
+  color: var(--sally-ink-1, #F6F6F6);
+  cursor: pointer;
+  text-align: start;
+  transition:
+    border-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.ex-forecast-cta:hover {
+  border-color: rgba(212, 175, 55, 0.42);
+  background:
+    linear-gradient(180deg, rgba(212, 175, 55, 0.14), rgba(255, 255, 255, 0.006));
+}
+.ex-forecast-cta:focus-visible {
+  outline: 2px solid var(--sally-gold-loud, #E4C158);
+  outline-offset: 2px;
+}
+.ex-forecast-cta-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--sally-gold-loud, #E4C158);
+}
+.ex-forecast-cta-text {
+  font-size: 12.5px;
+  color: var(--sally-ink-2, rgba(255, 255, 255, 0.85));
+  letter-spacing: -0.005em;
+}
+.ex-forecast-cta-strong {
+  font-weight: 700;
+  color: var(--sally-gold-loud, #E4C158);
+}

@@ -1,13 +1,24 @@
 "use client";
 
-// Phase 254 — "הוצאות" tab.
-// Phase 270 — default-collapsed recurring section + anomaly-gated
-// summary chip.
-// Phase 365 — CFO forecast container removed from the top. That
-// story now belongs entirely to the זמן tab (TimeScreen). Expenses
-// opens straight on "where is the money going?" — categories +
-// cards + recurring. A single quiet header line points to זמן for
-// users who want the forecast.
+// Expenses tab — UX/UI-only rebuild in the Portfolio Home / Time
+// Machine visual language (dark glass · gold hairline dividers ·
+// tone-tinted chips · premium touch surfaces).
+//
+// Zero engine / store / calculation / dialog logic touched:
+//   • PendingTray, ExpensesCommitmentsCockpit, CategorySpendCard,
+//     CardsHierarchyCard, CategoryDonut, HeatmapMini all mount the
+//     same components with the same props they had before.
+//   • Every existing data path, card-assignment engine, credit
+//     logic, and quick-expense wiring is untouched.
+//
+// What changed here is only:
+//   1. Grid rhythm — tighter gaps, sections separated by the same
+//      .sally-section-header gold hairline divider used on Home
+//      and Time.
+//   2. New KPI chip row (ExpensesKpiRow, tone-tinted mini cards)
+//      replacing the old dense strip.
+//   3. Forecast pointer chip restyled with the same gold accent as
+//      Time-tab callouts.
 
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
@@ -18,6 +29,7 @@ import { navigateToTab } from "@/lib/tab-nav";
 import { tap as hapticTap } from "@/lib/haptics";
 import { ChevronLeft, Sparkles } from "lucide-react";
 import { ExpensesCommitmentsCockpit } from "@/components/expenses/expenses-commitments-cockpit";
+import { ExpensesKpiRow } from "@/components/expenses/expenses-kpi-row";
 import { FinancialDebugPanel } from "@/components/dev/financial-debug-panel";
 import { FinancialAuditReport } from "@/components/dev/financial-audit-report";
 
@@ -43,11 +55,6 @@ const PendingTray = lazy(() =>
       m.PendingTray as unknown as React.ComponentType<Record<string, unknown>>,
   })),
 );
-// Phase 365 — CfoSummary + HealthScoreCard slots removed from the
-// Expenses tab to stop duplicating the זמן story.
-// Phase 366 — LiquidityTimelineCard slot removed for the same
-// reason. The Time tab is the canonical liquidity surface.
-// Phase 304 — interactive analytics widgets.
 const CategoryDonut = lazy(() =>
   import("@/components/dashboard/category-donut").then((m) => ({
     default:
@@ -67,57 +74,63 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function ExpensesTab() {
   return (
-    <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
-      {/* Pending tray surfaces only when there are items needing review.
-          Phase 276 — `empty:hidden` collapses the wrapper when the
-          lazy child renders null so the grid stays tight. */}
-      <div className="sm:col-span-6 empty:hidden">
+    <div className="ex-root" dir="rtl">
+      {/* Pending tray surfaces only when there are items needing
+         review. Collapsed via `empty:hidden` when the child renders
+         null so the layout stays tight. */}
+      <div className="ex-slot empty:hidden">
         <Safe name="PendingTray">
           <PendingTray />
         </Safe>
       </div>
 
-      {/* Phase 376 — Commitments Cockpit V2. ADDITION-only summary
-         layer at the top. Inline-expand-only — never a modal, never
-         a drawer, never navigation. Existing cards below stay
-         exactly as they were. */}
-      <div className="sm:col-span-6 empty:hidden">
+      {/* Hero — same ExpensesCommitmentsCockpit, wrapped in the
+         section grid. Zero visual regression inside; only the
+         surrounding rhythm was tightened. */}
+      <div className="ex-slot empty:hidden">
         <Safe name="ExpensesCommitmentsCockpit">
           <ExpensesCommitmentsCockpit />
         </Safe>
       </div>
 
-      {/* Phase 365 — quiet header. Forecast lives in the זמן tab; a
-         single tap takes the user there without crowding this view
-         with a duplicate summary. */}
-      <div className="sm:col-span-6">
+      {/* KPI chip row — new. Six tone-tinted mini cards derived
+         from live store selectors. Read-only. */}
+      <div className="ex-slot">
+        <Safe name="ExpensesKpiRow">
+          <ExpensesKpiRow />
+        </Safe>
+      </div>
+
+      {/* Forecast pointer chip — restyled to match Time-tab
+         callouts. */}
+      <div className="ex-slot">
         <ForecastHeader />
       </div>
 
-      {/* Categories lead — "where is my money going?" answered first. */}
-      <div className="sm:col-span-6">
+      <SectionHeader
+        title="לאן הולך הכסף"
+        subtitle="פילוח לפי קטגוריה — כולל תשלומים פרוסים"
+      />
+      <div className="ex-slot">
         <Safe name="CategorySpendCard">
           <CategorySpendCard />
         </Safe>
       </div>
 
-      {/* Cards breakdown follows — same question, card-aware lens. */}
-      <div className="sm:col-span-6">
+      <SectionHeader
+        title="חלוקה לפי כרטיסי אשראי"
+        subtitle="לחץ כרטיס לפתיחת פירוט חיובים · מסגרת · לחץ"
+      />
+      <div className="ex-slot">
         <Safe name="CardsHierarchyCard">
           <CardsHierarchyCard />
         </Safe>
       </div>
 
-      {/* Phase 383 — "חיובים שיורדים אוטומטית" moved to the
-         Insights tab (inside the "חיובים קבועים והלוואות" folder).
-         Expenses = money. Insights = analysis. */}
-
-      {/* Phase 275 — liquidity timeline kept here but folded behind
-         a quiet accordion. Useful but visually heavy when always
-         expanded. */}
-      {/* Phase 304 — interactive analytics. Donut for category
-         drilldown, heatmap for day-level exploration. Both are
-         clickable: tap a slice / day to see the full breakdown. */}
+      <SectionHeader
+        title="ניתוחים גרפיים"
+        subtitle="פילוח קטגוריות + מפת חום ימי החודש — אינטראקטיביים"
+      />
       <DashboardSection
         storageKey="expenses.analytics"
         title="ניתוחים גרפיים"
@@ -136,18 +149,8 @@ export function ExpensesTab() {
         </div>
       </DashboardSection>
 
-      {/* Phase 366 — "ציר נזילות 35 ימים" folder removed from
-         Expenses. Liquidity forecast is the זמן tab's job; keeping
-         a second timeline here was visual load without new
-         information. The LiquidityTimelineCard component still
-         exists on disk for other consumers; only the UI slot is
-         dropped from this tab. */}
-
-      {/* Phase 392 — dev-only audit + debug panels. Render only in
-         non-production so the user can verify exactly which
-         transactions land in which container. */}
       {process.env.NODE_ENV !== "production" ? (
-        <div className="sm:col-span-6">
+        <div className="ex-slot">
           <Safe name="FinancialDebugPanel">
             <FinancialDebugPanel />
           </Safe>
@@ -160,6 +163,24 @@ export function ExpensesTab() {
   );
 }
 
+function SectionHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <header className="sally-section-header" dir="rtl" aria-label={title}>
+      <div className="sally-section-header-text">
+        <span className="sally-section-header-title">{title}</span>
+        <span className="sally-section-header-sub">{subtitle}</span>
+      </div>
+      <span aria-hidden className="sally-section-header-divider" />
+    </header>
+  );
+}
+
 function ForecastHeader() {
   return (
     <button
@@ -168,19 +189,21 @@ function ForecastHeader() {
         hapticTap();
         navigateToTab("history");
       }}
-      className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-right transition-colors hover:border-white/16"
+      className="ex-forecast-cta"
       dir="rtl"
       aria-label="פתח את זמן — תחזית מלאה"
     >
-      <ChevronLeft className="size-4 text-muted-foreground" aria-hidden />
-      <span className="flex flex-1 items-center gap-2 text-right">
-        <Sparkles className="size-3.5 text-gold/80" aria-hidden />
-        <span className="text-[12.5px] text-foreground/80">
-          תחזית סוף החודש חיה בלשונית{" "}
-          <span className="font-semibold text-foreground">זמן</span>
-        </span>
+      <span aria-hidden className="ex-forecast-cta-glyph">
+        <Sparkles className="size-3.5" />
       </span>
+      <span className="ex-forecast-cta-text">
+        תחזית סוף החודש חיה בלשונית{" "}
+        <span className="ex-forecast-cta-strong">זמן</span>
+      </span>
+      <ChevronLeft
+        className="size-4 text-muted-foreground"
+        aria-hidden
+      />
     </button>
   );
 }
-
