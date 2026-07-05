@@ -206,6 +206,22 @@ function findCard(
   entry: ExpenseEntry,
   rules?: RecurringRule[],
 ): Account | null {
+  // Bug fix (data integrity): when the user MANUALLY picked a card
+  // (entry.source === "manual" and entry.accountId is set), their
+  // choice must win. The previous priority let a matched rule's
+  // linkedCardId reroute a card-B pick onto card A whenever an
+  // amount collision auto-matched an unrelated rule. Rule-based
+  // override still applies to non-manual entries (SMS / import),
+  // which historically arrived without an accountId and rely on the
+  // rule link to know which card settled them.
+  const manualExplicit =
+    entry.source === "manual" && Boolean(entry.accountId);
+  if (manualExplicit) {
+    const matched = accounts.find(
+      (a) => a.id === entry.accountId && a.kind === "card",
+    );
+    if (matched) return matched;
+  }
   // Phase 400 — rule's linkedCardId overrides entry.accountId for
   // matched entries. Without this, editing a recurring rule's card
   // link in Settings leaves the legacy entry pointing at the old

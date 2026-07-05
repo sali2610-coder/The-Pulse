@@ -452,11 +452,30 @@ export const useFinanceStore = create<State & Actions>()(
           occurredAt: input.occurredAt ?? input.chargeDate ?? now.toISOString(),
         };
 
-        const matched = findMatchingRule({
-          entry,
-          rules: get().rules,
-          statuses: get().statuses,
-        });
+        // Bug fix (data integrity): manual entries must never be
+        // silently auto-matched to a recurring rule. findMatchingRule
+        // matches by (same category) + (amount within ±25% OR keyword
+        // match). For SMS / auto-import entries the user never picked
+        // the account, so a rule match is the correct source of truth
+        // for viaCardId + rule-paid state. For MANUAL entries the user
+        // explicitly picked category + accountId, and a silent rule
+        // link can:
+        //   1. flip an unrelated rule to 'paid' in the current month
+        //      (double-counted budget, wrong tick in obligations)
+        //   2. later reroute the entry to a WRONG card via
+        //      findCard() when the matched rule carries a
+        //      linkedCardId pointing at a different card (reported bug:
+        //      expense picked on card B ended up counted on card A).
+        // We keep auto-match ONLY for non-manual sources.
+        const shouldAutoMatch =
+          input.source !== undefined && input.source !== "manual";
+        const matched = shouldAutoMatch
+          ? findMatchingRule({
+              entry,
+              rules: get().rules,
+              statuses: get().statuses,
+            })
+          : undefined;
 
         const finalEntry = matched
           ? { ...entry, matchedRuleId: matched.id }
