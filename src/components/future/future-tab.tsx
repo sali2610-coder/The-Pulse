@@ -51,7 +51,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function FutureTab() {
   return (
-    <div className="flex flex-col gap-6 pb-28 sm:pb-32">
+    <div className="flex flex-col gap-3 pb-28 sm:pb-32">
       <Safe name="TimeScreenV3">
         <TimeScreenV3 />
       </Safe>
@@ -64,7 +64,7 @@ export function FutureTab() {
         title="תחזית תזרים החודש"
         subtitle="פירוט חודשי — צפוי מול בפועל"
       />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-6">
         <div className="sm:col-span-6">
           <Safe name="MonthlyCashflowCard">
             <MonthlyCashflowCard />
@@ -76,7 +76,7 @@ export function FutureTab() {
         title="התחייבויות והשבוע הקרוב"
         subtitle="חיובים בהמתנה לפי מקור וטווח קצר"
       />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-6">
         <div className="sm:col-span-6">
           <Safe name="ObligationsAndWeek">
             <ObligationsAndWeek />
