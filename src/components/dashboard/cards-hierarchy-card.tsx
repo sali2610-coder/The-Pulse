@@ -127,7 +127,10 @@ export function CardsHierarchyCard() {
   if (!hydrated || !ctx || !report) return null;
   if (folders.length === 0) {
     return (
-      <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
+      <section
+        className="glass-card chc-card flex flex-col gap-3 rounded-3xl p-5"
+        data-polish="v2"
+      >
         <SectionHeader icon={<CreditCard />} title="כרטיסי אשראי לפי חודש" />
         <CardEmpty
           icon={<Layers className="size-4" />}
@@ -222,10 +225,14 @@ function FolderRow({
   const color = TIER_COLOR[folder.kind];
   return (
     <li
-      className="overflow-hidden rounded-2xl border border-white/8 bg-black/25"
-      style={{
-        background: `linear-gradient(180deg, ${color}08 0%, rgba(0,0,0,0.25) 80%)`,
-      }}
+      className="chc-folder overflow-hidden rounded-2xl border border-white/8 bg-black/25"
+      data-open={open ? "true" : undefined}
+      style={
+        {
+          background: `linear-gradient(180deg, ${color}08 0%, rgba(0,0,0,0.25) 80%)`,
+          "--chc-tone": color,
+        } as React.CSSProperties
+      }
     >
       <button
         type="button"
@@ -234,7 +241,7 @@ function FolderRow({
           tap();
         }}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/3"
+        className="chc-folder-head flex w-full items-center justify-between gap-3 px-4 py-3 text-start transition-colors hover:bg-white/3"
       >
         <div className="flex min-w-0 items-center gap-2.5">
           <span
@@ -287,7 +294,7 @@ function FolderRow({
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden border-t border-white/8"
+            className="chc-folder-body overflow-hidden border-t border-white/8"
           >
             <div className="flex flex-col gap-3 p-4">
               {/* Phase 298 — Stat tiles are now toggleable filters.

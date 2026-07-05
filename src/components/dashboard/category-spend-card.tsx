@@ -227,7 +227,10 @@ export function CategorySpendCard() {
   const isEmpty = report.byCategory.length === 0;
 
   return (
-    <section className="glass-card flex flex-col gap-3 rounded-3xl p-5">
+    <section
+      className="glass-card csp-card flex flex-col gap-3 rounded-3xl p-5"
+      data-polish="v2"
+    >
       <SectionHeader
         icon={<PieChart />}
         title="לאן הולך הכסף"
@@ -244,15 +247,17 @@ export function CategorySpendCard() {
 
       <SegmentedPreview report={report} />
 
-      <div className="flex flex-wrap gap-2">
+      <div className="csp-segment" role="tablist" aria-label="בחר חודש">
         {presets.map((p) => {
           const active = revealedKey === p.key;
           return (
             <button
               key={p.key}
               type="button"
+              role="tab"
+              aria-selected={active}
+              data-active={active ? "true" : undefined}
               data-no-min-tap
-              aria-pressed={active}
               onClick={() => {
                 tap();
                 if (active) {
@@ -262,11 +267,7 @@ export function CategorySpendCard() {
                 setMonthKey(p.monthKey);
                 setRevealedKey(p.key);
               }}
-              className={`text-caption rounded-full px-3 py-1.5 transition-colors ${
-                active
-                  ? "bg-[color:var(--neon)]/25 text-[color:var(--neon)]"
-                  : "border border-white/10 bg-white/5 text-muted-foreground hover:text-foreground"
-              }`}
+              className="csp-segment-btn"
             >
               {p.label}
             </button>

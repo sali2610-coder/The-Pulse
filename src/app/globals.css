@@ -8488,3 +8488,136 @@ button.sally-glass {
 @media (prefers-reduced-motion: reduce) {
   .ex-analytics { animation: none; }
 }
+
+/* ── Expenses · CategorySpendCard polish (v2) ─────────────── */
+/* Scoped to .csp-card. Improves depth, glow, segmented month
+   picker + progress bar. Zero logic change. */
+
+.csp-card[data-polish="v2"] {
+  border-radius: 24px !important;
+  border: 1px solid rgba(212, 175, 55, 0.16) !important;
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(212, 175, 55, 0.05), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
+    var(--surface, rgba(10, 10, 12, 0.55)) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 54px -30px rgba(0, 0, 0, 0.7) !important;
+  padding: 18px !important;
+}
+
+/* Segmented month picker */
+.csp-segment {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.csp-segment::-webkit-scrollbar { display: none; }
+.csp-segment-btn {
+  flex: 1 0 auto;
+  min-height: 34px;
+  padding-inline: 14px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.65));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.csp-segment-btn:hover {
+  color: var(--sally-ink-1, #F6F6F6);
+}
+.csp-segment-btn:active { transform: scale(0.97); }
+.csp-segment-btn[data-active="true"] {
+  background: linear-gradient(180deg, var(--sally-gold-loud, #E4C158), rgba(212, 175, 55, 0.88));
+  color: #0A0A0C;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 8px 20px -10px rgba(212, 175, 55, 0.55);
+}
+.csp-segment-btn:focus-visible {
+  outline: 2px solid var(--sally-gold-loud, #E4C158);
+  outline-offset: 2px;
+}
+
+/* Progress bar polish inside category rows */
+.csp-card[data-polish="v2"] .h-1.w-full.bg-white\/5 {
+  height: 3px !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-radius: 9999px !important;
+  overflow: hidden;
+}
+.csp-card[data-polish="v2"] .h-1.w-full.bg-white\/5 > * {
+  border-radius: 9999px !important;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* ── Expenses · CardsHierarchyCard polish (v2) ────────────── */
+.chc-card[data-polish="v2"] {
+  border-radius: 24px !important;
+  border: 1px solid rgba(117, 245, 255, 0.14) !important;
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(117, 245, 255, 0.055), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
+    var(--surface, rgba(10, 10, 12, 0.55)) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 54px -30px rgba(0, 0, 0, 0.7) !important;
+  padding: 18px !important;
+}
+
+/* Per-card folder tile */
+.chc-folder {
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--chc-tone, #75F5FF) 5%, transparent),
+      rgba(0, 0, 0, 0.28)
+    ) !important;
+  transition:
+    border-color 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.chc-folder:hover {
+  border-color: color-mix(in srgb, var(--chc-tone, #75F5FF) 28%, rgba(255, 255, 255, 0.12));
+}
+.chc-folder[data-open="true"] {
+  border-color: color-mix(in srgb, var(--chc-tone, #75F5FF) 45%, transparent) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 22px 44px -22px color-mix(in srgb, var(--chc-tone, #75F5FF) 55%, transparent);
+}
+.chc-folder-head {
+  min-height: 60px;
+  transition: background-color 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.chc-folder-head:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+.chc-folder-head:focus-visible {
+  outline: 2px solid var(--chc-tone, #75F5FF);
+  outline-offset: 3px;
+}
+
+/* Expanded drawer */
+.chc-folder-body {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--chc-tone, #75F5FF) 3%, transparent),
+      rgba(0, 0, 0, 0.25)
+    );
+}
