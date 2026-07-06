@@ -286,6 +286,7 @@ function ModeButton({
       type="button"
       role="tab"
       aria-selected={active}
+      aria-label={label}
       onClick={onClick}
       className="bc-mode"
       data-active={active}
@@ -329,6 +330,7 @@ function ExpandableRow({
         className="bc-row-head"
         onClick={onToggle}
         aria-expanded={open}
+        aria-label={`${label} · ${value}`}
       >
         <span className="bc-row-label">{label}</span>
         <span className="bc-row-right">
