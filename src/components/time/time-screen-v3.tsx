@@ -558,26 +558,29 @@ function composeStory(
     (e) => e.amount < 0 && e.kind === "loan",
   ).length;
 
-  if (outCount > 0) {
-    parts.push(`עד הצ׳קפוינט צפויות לרדת ${outCount} התחייבויות.`);
+  if (events.length === 0) {
+    parts.push("אין שינוי במעבר הזה.");
   } else {
-    parts.push("אין חיובים עד הצ׳קפוינט.");
-  }
-  if (salaryCount > 0) {
-    parts.push(
-      salaryCount === 1
-        ? "נותרה משכורת אחת בדרך."
-        : `נותרו ${salaryCount} משכורות בדרך.`,
-    );
-  } else if (inCount === 0) {
-    parts.push("לא צפויות הכנסות נוספות.");
-  }
-  if (loanCount > 0) {
-    parts.push(
-      loanCount === 1
-        ? "הלוואה אחת עדיין לא ירדה."
-        : `${loanCount} הלוואות עדיין לא ירדו.`,
-    );
+    if (outCount > 0) {
+      parts.push(`במעבר הזה יורדות ${outCount} התחייבויות.`);
+    }
+    if (salaryCount > 0) {
+      parts.push(
+        salaryCount === 1
+          ? "נכנסת משכורת אחת."
+          : `נכנסות ${salaryCount} משכורות.`,
+      );
+    }
+    if (loanCount > 0) {
+      parts.push(
+        loanCount === 1
+          ? "הלוואה אחת יורדת."
+          : `${loanCount} הלוואות יורדות.`,
+      );
+    }
+    if (outCount === 0 && inCount > 0 && salaryCount === 0) {
+      parts.push("נכנסת הכנסה נוספת.");
+    }
   }
   if (confidence === "safe") parts.push("המצב יציב.");
   else if (confidence === "watch") parts.push("שים לב למרווח הצפוף.");
@@ -599,54 +602,61 @@ function eventsBetween(
   if (!frame.curve) return [];
   const cursor = frame.cursorOffset;
 
-  // The liquidity curve attaches past-month debits and past-month
-  // loan/rule installments to dayIndex=0 for user traceability (so
-  // LIVE can annotate the balance with "how did we get here?"). The
-  // Time tiles must NOT surface those past events: the tile answers
-  // the question "what happens INSIDE the checkpoint window".
+  // Delta model — each checkpoint shows ONLY the events that fall
+  // between the previous checkpoint's end and the current one. No
+  // cumulative bleed. Windows (inclusive on both ends):
+  //   · day10  → today.startOfDay          … end-of-day 10 (current month)
+  //   · eom    → start-of-day 11           … end-of-day last-of-current-month
+  //   · next2  → start-of-day 1 (next mo.) … end-of-day 2 (next month)
+  //   · next10 → start-of-day 3 (next mo.) … end-of-day 10 (next month)
+  //   · other  → fallback cumulative-to-cursor slice (LIVE / custom).
   //
-  // Filters applied in order:
-  //   1. Skip `informational` events — already inside anchor.
-  //   2. Skip events with calendar date before today's start of day
-  //      (they belong to the balance ring, not to a forward tile).
-  //   3. Per-checkpoint window filter — the point of THIS pass:
-  //      · day10  → only current-month events with day-of-month ≤ 10
-  //      · eom    → only current-month events (any day up to EOM)
-  //      · next2  → only next-month events with day-of-month ≤ 2
-  //      · next10 → only next-month events with day-of-month ≤ 10
-  //      · other  → default cumulative-to-cursor slice (LIVE, custom)
-  //      No cumulative bleed across the current-month → next-month
-  //      boundary; each tile shows the events that belong to its
-  //      own checkpoint's calendar month.
+  // If "today" already sits past day 10, the day10 window collapses
+  // to empty; the seed hides that checkpoint anyway so it will not
+  // display cards for events that already happened.
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startTs = startOfToday.getTime();
   const nowYear = startOfToday.getFullYear();
   const nowMonth = startOfToday.getMonth();
+  const eomCurrent = new Date(nowYear, nowMonth + 1, 0);
+  eomCurrent.setHours(23, 59, 59, 999);
   const nextMonthDate = new Date(nowYear, nowMonth + 1, 1);
   const nextYear = nextMonthDate.getFullYear();
   const nextMonth = nextMonthDate.getMonth();
 
-  function inWindow(eventTs: number): boolean {
-    if (!Number.isFinite(eventTs)) return false;
-    const d = new Date(eventTs);
-    const eY = d.getFullYear();
-    const eM = d.getMonth();
-    const eDay = d.getDate();
-    if (activeKind === "day10") {
-      return eY === nowYear && eM === nowMonth && eDay <= 10;
-    }
-    if (activeKind === "eom") {
-      return eY === nowYear && eM === nowMonth;
-    }
-    if (activeKind === "next2") {
-      return eY === nextYear && eM === nextMonth && eDay <= 2;
-    }
-    if (activeKind === "next10") {
-      return eY === nextYear && eM === nextMonth && eDay <= 10;
-    }
-    // Fallback (LIVE / custom / undefined) — cumulative up to cursor.
-    return true;
+  function endOfDay(y: number, m: number, day: number): number {
+    const d = new Date(y, m, day, 23, 59, 59, 999);
+    return d.getTime();
+  }
+  function startOfDay(y: number, m: number, day: number): number {
+    const d = new Date(y, m, day, 0, 0, 0, 0);
+    return d.getTime();
+  }
+
+  let fromTs: number;
+  let toTs: number;
+  if (activeKind === "day10") {
+    fromTs = startTs;
+    toTs = endOfDay(nowYear, nowMonth, 10);
+  } else if (activeKind === "eom") {
+    // If today's date is already past day 10, the eom window still
+    // spans from "today" through EOM — nothing that already happened
+    // gets surfaced (startTs guards).
+    const day11Start = startOfDay(nowYear, nowMonth, 11);
+    fromTs = Math.max(startTs, day11Start);
+    toTs = eomCurrent.getTime();
+  } else if (activeKind === "next2") {
+    fromTs = startOfDay(nextYear, nextMonth, 1);
+    toTs = endOfDay(nextYear, nextMonth, 2);
+  } else if (activeKind === "next10") {
+    fromTs = startOfDay(nextYear, nextMonth, 3);
+    toTs = endOfDay(nextYear, nextMonth, 10);
+  } else {
+    // Fallback (LIVE / custom / undefined) — cumulative up to cursor
+    // from today.
+    fromTs = startTs;
+    toTs = Number.POSITIVE_INFINITY;
   }
 
   const out: Array<{
@@ -660,8 +670,11 @@ function eventsBetween(
     for (const e of p.events) {
       if (e.informational) continue;
       const eventTs = new Date(e.whenISO).getTime();
-      if (Number.isFinite(eventTs) && eventTs < startTs) continue;
-      if (!inWindow(eventTs)) continue;
+      if (!Number.isFinite(eventTs)) continue;
+      // Drop anything before today so a past-anchored event never
+      // pollutes a forward-looking delta card.
+      if (eventTs < startTs) continue;
+      if (eventTs < fromTs || eventTs > toTs) continue;
       out.push({
         whenISO: e.whenISO,
         label: e.label,
@@ -673,6 +686,23 @@ function eventsBetween(
   return out.sort(
     (a, b) => new Date(a.whenISO).getTime() - new Date(b.whenISO).getTime(),
   );
+}
+
+/** Human-friendly label for the previous checkpoint, used in the
+ *  delta caption ("שינויים מאז..."). */
+function previousCheckpointLabel(k: CheckpointKind): string {
+  switch (k) {
+    case "day10":
+      return "היום";
+    case "eom":
+      return "ה-10 בחודש";
+    case "next2":
+      return "סוף החודש";
+    case "next10":
+      return "ה-2 בחודש הבא";
+    default:
+      return "התחנה הקודמת";
+  }
 }
 // ── Insight grid ──────────────────────────────────────────
 
@@ -753,10 +783,17 @@ function InsightGrid({
   }, [events]);
   const cursorDate = new Date(frame.cursorISO);
 
+  // Delta model — hide lanes with no events. If everything is zero,
+  // show a brief "no change" note instead of empty tile grid.
+  const activeLanes = LANES.filter(
+    (l) => (perLane.get(l.key) ?? []).length > 0,
+  );
+  const prevLabel = previousCheckpointLabel(activeKind);
+
   return (
     <div className="tm-insight-wrap" data-open={openLane ?? undefined}>
       <div className="tm-insight-caption" dir="rtl">
-        <span>מה השפיע על היתרה עד</span>
+        <span>שינויים מאז {prevLabel}</span>
         <span
           className="tm-insight-caption-date"
           data-mono="true"
@@ -765,30 +802,36 @@ function InsightGrid({
           {DATE_FMT.format(cursorDate)}
         </span>
       </div>
-      <div className="tm-insight-grid">
-        {LANES.map((lane) => {
-          const rows = perLane.get(lane.key) ?? [];
-          const total = rows.reduce(
-            (s, r) => s + Math.abs(r.amount),
-            0,
-          );
-          const isOpen = openLane === lane.key;
-          const isDimmed = openLane !== null && !isOpen;
-          return (
-            <InsightTile
-              key={lane.key}
-              lane={lane}
-              rows={rows}
-              total={total}
-              active={isOpen}
-              dimmed={isDimmed}
-              onToggle={() =>
-                setOpenLane((prev) => (prev === lane.key ? null : lane.key))
-              }
-            />
-          );
-        })}
-      </div>
+      {activeLanes.length === 0 ? (
+        <div className="tm-insight-empty" dir="rtl">
+          אין שינוי במעבר הזה. המסך שקט.
+        </div>
+      ) : (
+        <div className="tm-insight-grid">
+          {activeLanes.map((lane) => {
+            const rows = perLane.get(lane.key) ?? [];
+            const total = rows.reduce(
+              (s, r) => s + Math.abs(r.amount),
+              0,
+            );
+            const isOpen = openLane === lane.key;
+            const isDimmed = openLane !== null && !isOpen;
+            return (
+              <InsightTile
+                key={lane.key}
+                lane={lane}
+                rows={rows}
+                total={total}
+                active={isOpen}
+                dimmed={isDimmed}
+                onToggle={() =>
+                  setOpenLane((prev) => (prev === lane.key ? null : lane.key))
+                }
+              />
+            );
+          })}
+        </div>
+      )}
 
       <AnimatePresence initial={false} mode="wait">
         {openLane ? (
@@ -797,6 +840,7 @@ function InsightGrid({
             lane={LANES.find((l) => l.key === openLane) as LaneMeta}
             rows={perLane.get(openLane) ?? []}
             cursorISO={frame.cursorISO}
+            fromLabel={prevLabel}
           />
         ) : null}
       </AnimatePresence>
@@ -869,10 +913,12 @@ function LaneExpansion({
   lane,
   rows,
   cursorISO,
+  fromLabel,
 }: {
   lane: LaneMeta;
   rows: ReturnType<typeof eventsBetween>;
   cursorISO: string;
+  fromLabel: string;
 }) {
   const reduced = useReducedMotion();
   const total = rows.reduce((s, r) => s + Math.abs(r.amount), 0);
@@ -897,7 +943,7 @@ function LaneExpansion({
         <div className="tm-lane-head-text">
           <span className="tm-lane-eyebrow">{lane.eyebrow}</span>
           <span className="tm-lane-window">
-            עד {DATE_FMT.format(cursorDate)}
+            מאז {fromLabel} · עד {DATE_FMT.format(cursorDate)}
           </span>
         </div>
         <div className="tm-lane-head-right">
@@ -911,7 +957,7 @@ function LaneExpansion({
         </div>
       </header>
       {rows.length === 0 ? (
-        <div className="tm-lane-empty">אין אירועים עד הצ׳קפוינט.</div>
+        <div className="tm-lane-empty">אין אירועים במעבר הזה.</div>
       ) : (
         <ul className="tm-lane-list">
           {rows.map((r, i) => (
