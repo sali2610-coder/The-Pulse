@@ -416,7 +416,29 @@ export function useHomeData(): HomeData {
     const now = ctx.now;
 
     const live = Math.round(curve.points[0]?.balance ?? snapshot.currentBalance);
-    const eom = Math.round(snapshot.projectedBalanceOnFirstOfNextMonth);
+    // Phase X — single source of truth for EOM.
+    //
+    // Home used to pull EOM from
+    // `snapshot.projectedBalanceOnFirstOfNextMonth`, which subtracts
+    // an EXTRA `max(0, monthlyBudget − actualSpent)` "discretionary
+    // reserve" on top of every scheduled event (income + rules +
+    // loans + card slices). Time Machine, by contrast, reads the
+    // liquidity-curve balance at the EOM date — a real forecast of
+    // scheduled events with no phantom reserve. The two answers
+    // diverged whenever the budget had leftover headroom, giving
+    // the user "יתרה חיה 3,306 / סוף חודש −11,545" — a −7,000ish
+    // gap that matched the unused budget exactly. UI/data-binding
+    // bug, not an engine bug.
+    //
+    // Now Home reads the SAME liquidity-curve EOM as Time Machine.
+    // Snapshot is kept purely as a defensive fallback if the curve
+    // was too short to cover EOM (shouldn't happen at 45d horizon
+    // but the guard is free).
+    const _eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59);
+    const _eomPoint = pickCurvePointForDate(curve, _eomDate);
+    const eom = Math.round(
+      _eomPoint?.balance ?? snapshot.projectedBalanceOnFirstOfNextMonth,
+    );
     const eomBudget = Math.round(monthlyBudget || 0);
     const safetyState =
       eom < 0
@@ -483,8 +505,7 @@ export function useHomeData(): HomeData {
       curve,
       dayWithinMonth(addMonths(monthKey, 1), 10),
     );
-    const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59);
-    const eomPoint = pickCurvePointForDate(curve, eomDate);
+    const eomPoint = _eomPoint;
 
     const makeCp = (
       key: HomeCheckpoint["key"],
