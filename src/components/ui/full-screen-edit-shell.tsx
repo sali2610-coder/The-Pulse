@@ -19,7 +19,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Trash2, X } from "lucide-react";
 
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { tap as hapticTap } from "@/lib/haptics";
@@ -33,12 +33,27 @@ export function FullScreenEditShell({
   onOpenChange,
   title,
   children,
+  hasDraft,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   children: ReactNode;
+  /** When true, close confirms before discarding — used by consumers
+   *  that let the user type input and don't want an accidental tap
+   *  on ❌ to blow away a half-filled draft. */
+  hasDraft?: boolean;
 }) {
+  function confirmClose() {
+    if (hasDraft) {
+      const ok =
+        typeof window === "undefined"
+          ? true
+          : window.confirm("לזרוק את השינויים בטיוטה?");
+      if (!ok) return;
+    }
+    onOpenChange(false);
+  }
   return (
     <BottomSheet
       open={open}
@@ -49,6 +64,20 @@ export function FullScreenEditShell({
       noHandle
     >
       <div className="flex h-full min-h-0 flex-col gap-4" dir="rtl">
+        {/* Top bar — always visible ❌ close in the corner + centered
+           title. Consumers can also render their own hero below. */}
+        <div className="fs-topbar">
+          <button
+            type="button"
+            className="fs-close"
+            onClick={confirmClose}
+            aria-label="סגור"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <span className="fs-topbar-title">{title}</span>
+          <span aria-hidden className="fs-topbar-spacer" />
+        </div>
         {children}
       </div>
     </BottomSheet>
@@ -67,6 +96,7 @@ export function FullScreenHero({
   onAmountChange,
   amountLabel = "סכום",
   amountReadOnly = false,
+  subtitle,
 }: {
   icon: LucideIcon;
   tone: string;
@@ -75,6 +105,10 @@ export function FullScreenHero({
   onAmountChange?: (v: string) => void;
   amountLabel?: string;
   amountReadOnly?: boolean;
+  /** Optional supporting sentence rendered under the label. Turns
+   *  the hero from an icon-only header into a Premium Composer
+   *  header with a short "why am I here" line. */
+  subtitle?: string;
 }) {
   return (
     <div className="flex flex-col items-center gap-5 pt-2" dir="rtl">
@@ -85,17 +119,22 @@ export function FullScreenHero({
           transition={{ type: "spring", stiffness: 300, damping: 22 }}
           className="flex size-24 items-center justify-center rounded-3xl"
           style={{
-            background: `${tone}22`,
+            background: `linear-gradient(180deg, ${tone}26, ${tone}0f)`,
             color: tone,
-            boxShadow: `0 0 36px -12px ${tone}66, 0 1px 0 rgba(255,255,255,0.04) inset`,
+            boxShadow: `0 0 44px -14px ${tone}77, 0 1px 0 rgba(255,255,255,0.06) inset`,
           }}
           aria-hidden
         >
           <Icon className="size-12" strokeWidth={1.4} />
         </motion.span>
-        <span className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+        <span className="text-[12.5px] uppercase tracking-[0.3em] text-muted-foreground">
           {label}
         </span>
+        {subtitle ? (
+          <span className="max-w-[32ch] text-center text-[12.5px] leading-relaxed text-muted-foreground/85">
+            {subtitle}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-col items-center gap-1 pb-1">
@@ -121,9 +160,9 @@ export function FullScreenHero({
               textShadow: `0 0 28px ${tone}44`,
             }}
           />
-          <span className="text-[24px] text-muted-foreground">₪</span>
+          <span className="text-[26px] text-muted-foreground">₪</span>
         </div>
-        <span className="text-[10.5px] uppercase tracking-[0.3em] text-muted-foreground">
+        <span className="text-[11.5px] uppercase tracking-[0.3em] text-muted-foreground">
           {amountLabel}
         </span>
       </div>
@@ -154,8 +193,8 @@ export function FieldRow({
 }) {
   if (stacked) {
     return (
-      <li className="flex flex-col gap-1.5 px-3.5 py-2.5">
-        <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+      <li className="flex flex-col gap-2 px-4 py-3">
+        <span className="text-[12.5px] uppercase tracking-[0.22em] text-muted-foreground">
           {label}
         </span>
         {children}
@@ -163,8 +202,8 @@ export function FieldRow({
     );
   }
   return (
-    <li className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-      <span className="shrink-0 text-[12px] uppercase tracking-[0.22em] text-muted-foreground">
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
+      <span className="shrink-0 text-[13.5px] uppercase tracking-[0.22em] text-muted-foreground">
         {label}
       </span>
       <span className="flex flex-1 justify-end">{children}</span>
@@ -360,12 +399,13 @@ export function FullScreenFooter({
           onPrimary();
         }}
         disabled={primaryDisabled}
-        className="h-12 rounded-2xl text-[14.5px] font-semibold transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label={primaryLabel}
+        className="fs-primary h-14 rounded-2xl text-[16px] font-semibold transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
         style={{
           background: "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
           color: "#1A140A",
           boxShadow:
-            "0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 22px -6px rgba(212,175,55,0.55)",
+            "0 1px 0 rgba(255,255,255,0.45) inset, 0 10px 28px -8px rgba(212,175,55,0.65)",
         }}
       >
         {primaryLabel}

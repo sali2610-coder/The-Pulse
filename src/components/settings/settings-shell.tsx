@@ -13,8 +13,8 @@
 // One sheet at a time. Escape / drag-down / backdrop tap all
 // route through the shared BottomSheet primitive.
 
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Bell,
   ChevronLeft,
@@ -37,10 +37,10 @@ import {
   Type,
   UserCircle2,
   Wallet,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
-import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useFinanceStore } from "@/lib/store";
 import { useDevMode } from "@/lib/use-dev-mode";
 import { currentMonthKey } from "@/lib/dates";
@@ -599,19 +599,73 @@ function SheetShell({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  // Deliberately NOT a Dialog — mini-apps mounted inside can open
+  // their OWN Dialog (FullScreenEditShell / BottomSheet) without a
+  // focus-trap fight. A plain overlay preserves the Apple-Pay
+  // aesthetic (bottom drawer + backdrop blur + spring) while
+  // staying inert with respect to nested modal primitives.
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
   return (
-    <BottomSheet
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-      title={title}
-      className="set-sheet"
-    >
-      <div className="set-sheet-body" dir="rtl">
-        {children}
-      </div>
-    </BottomSheet>
+    <AnimatePresence>
+      {open ? (
+        <div
+          className="set-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+        >
+          <motion.button
+            type="button"
+            aria-label="סגור"
+            className="set-overlay-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0.12 : 0.24 }}
+            onClick={onClose}
+          />
+          <motion.div
+            className="set-overlay-panel"
+            initial={reduced ? { opacity: 0 } : { y: "100%" }}
+            animate={reduced ? { opacity: 1 } : { y: 0 }}
+            exit={reduced ? { opacity: 0 } : { y: "100%" }}
+            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            dir="rtl"
+          >
+            <div className="set-overlay-head">
+              <button
+                type="button"
+                className="set-overlay-close"
+                onClick={onClose}
+                aria-label="סגור"
+              >
+                <X className="size-4" strokeWidth={2} />
+              </button>
+              <span className="set-overlay-title">{title}</span>
+              <span aria-hidden className="set-overlay-spacer" />
+            </div>
+            <div className="set-overlay-body">
+              <div className="set-sheet-body">{children}</div>
+            </div>
+          </motion.div>
+        </div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
