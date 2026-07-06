@@ -16,7 +16,7 @@
 //
 // Callback-only — no engine / store / dialog / navigation change.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeftRight,
@@ -54,6 +54,83 @@ export function PrimaryActionDock({
   const [open, setOpen] = useState(false);
   const reduced = useReducedMotion();
 
+  // ── Dock behavior — no logic change, only position/state:
+  //   • compact   — user is scrolling down (reading content); dock
+  //                 shrinks + dims to stay out of the way
+  //   • hidden    — a BottomSheet / Dialog is open; the dock slides
+  //                 below the safe area so it never sits on top of
+  //                 sheet Save/Cancel controls
+  //   • idle      — user paused / scrolled up; dock returns to full
+  //                 premium state
+  const [compact, setCompact] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Scroll-driven compact mode. rAF-throttled so it's cheap on the
+  // main thread even at 60+ scroll events / sec.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let lastY = window.scrollY;
+    let accumulated = 0;
+    let frame = 0;
+    let pending = false;
+    const HIDE_DELTA = 24;
+    const SHOW_DELTA = 16;
+    const evaluate = () => {
+      pending = false;
+      const y = window.scrollY;
+      const dy = y - lastY;
+      lastY = y;
+      if (y < 80) {
+        setCompact(false);
+        accumulated = 0;
+        return;
+      }
+      accumulated += dy;
+      if (accumulated > HIDE_DELTA) {
+        setCompact(true);
+        accumulated = 0;
+      } else if (accumulated < -SHOW_DELTA) {
+        setCompact(false);
+        accumulated = 0;
+      }
+    };
+    const onScroll = () => {
+      if (pending) return;
+      pending = true;
+      frame = requestAnimationFrame(evaluate);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // Sheet / dialog presence detector. Base UI's Dialog sets
+  // aria-modal + role="dialog" on the popup when open; we watch the
+  // DOM for any such element and hide the dock while it exists so
+  // it never covers Save / Cancel controls in a sheet.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const check = () => {
+      const found = document.querySelector(
+        '[role="dialog"][data-open], [role="dialog"][data-state="open"], [role="alertdialog"][data-open]',
+      );
+      setSheetOpen(Boolean(found));
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-state", "data-open", "role"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const dockState = sheetOpen ? "hidden" : compact ? "compact" : "idle";
+
   function pick(key: ActionKey) {
     hapticTap();
     setOpen(false);
@@ -73,7 +150,13 @@ export function PrimaryActionDock({
       {/* The dock root is a plain div. Fixed positioning is defined
          in CSS. No inline transforms on this element — that keeps
          it truly fixed to the viewport regardless of scroll. */}
-      <div className="sally-dock-v3" role="toolbar" aria-label="פעולה חדשה">
+      <div
+        className="sally-dock-v3"
+        role="toolbar"
+        aria-label="פעולה חדשה"
+        data-state={dockState}
+        aria-hidden={dockState === "hidden" ? "true" : undefined}
+      >
         <span aria-hidden className="sally-dock-v3-glow" />
         <button
           type="button"

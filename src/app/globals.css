@@ -7552,6 +7552,55 @@ button.sally-glass {
   pointer-events: none;
   display: flex;
   justify-content: center;
+  transition:
+    transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform, opacity;
+}
+/* Dock STATE — no logic change, only position + opacity + scale:
+   idle    : default premium presence.
+   compact : user is scrolling down; shrink + soften so the dock
+             does not steal attention from the content below.
+   hidden  : a BottomSheet / Dialog is open; slide off below the
+             safe area so Save / Cancel controls in the sheet are
+             never covered. pointer-events off + aria-hidden. */
+.sally-dock-v3[data-state="compact"] .sally-dock-v3-button {
+  opacity: 0.85;
+  transform: scale(0.9);
+}
+.sally-dock-v3[data-state="compact"] .sally-dock-v3-sub,
+.sally-dock-v3[data-state="compact"] .sally-dock-v3-plus {
+  opacity: 0;
+  transform: translateX(6px);
+  transition:
+    opacity 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sally-dock-v3[data-state="hidden"] {
+  transform: translateY(calc(100% + env(safe-area-inset-bottom) + 24px));
+  opacity: 0;
+  pointer-events: none !important;
+}
+.sally-dock-v3-button {
+  transition:
+    opacity 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    filter 240ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sally-dock-v3-sub,
+.sally-dock-v3-plus {
+  transition:
+    opacity 260ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sally-dock-v3,
+  .sally-dock-v3-button,
+  .sally-dock-v3-sub,
+  .sally-dock-v3-plus {
+    transition: none !important;
+  }
 }
 .sally-dock-v3-glow {
   position: absolute;
