@@ -1,22 +1,29 @@
 "use client";
 
-// Phase 415 — Budget Control mini-dashboard.
+// Settings · Budget Control mini-app.
 //
-// Not a form. Live sliders + KPI cards + simulated outcome. User
-// drags the budget cap or safety buffer and every number recomputes
-// in real time so the trade-off is visible BEFORE save.
+// UI-only rebuild. Same store surface (setMonthlyBudget /
+// setBudgetMode / setBudgetSafetyBuffer) and same source of
+// truth (buildDailyBudgetView) so Home / Time / Insights /
+// forecast all react without engine changes.
+//
+// Layout:
+//   • Compact hero card — budget amount, "נותר היום",
+//     "צפוי לסוף חודש", status pill.
+//   • Segmented toggle: אוטומטי · ידני (with layoutId pill).
+//   • Two expandable rows — tap to reveal slider:
+//       - תקרת תקציב (manual only)
+//       - כרית ביטחון
+//   • Smart inline alert only when state is tight/deficit.
+//   • Right-aligned "שמור שינויים" pill.
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ChevronDown, Target, Wallet, AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Sliders, Target, Wallet } from "lucide-react";
+import { toast } from "sonner";
 
 import { useFinanceStore } from "@/lib/store";
 import { buildDailyBudgetView } from "@/lib/daily-budget-view";
-import {
-  MiniAppHero,
-  MiniAppStatusHero,
-  type MiniAppKpi,
-} from "@/components/ui/mini-app-shell";
-import { toast } from "sonner";
 import { success as hapticSuccess, tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
@@ -24,8 +31,16 @@ const ILS = new Intl.NumberFormat("he-IL", {
   currency: "ILS",
   maximumFractionDigits: 0,
 });
+const EASE = [0.32, 0.72, 0, 1] as const;
 
-const TONE = "#F87171";
+type Mode = "auto" | "manual";
+type Panel = "cap" | "buffer" | null;
+
+const STATUS = {
+  calm: { label: "תקין", tone: "safe" },
+  tight: { label: "לשים לב", tone: "watch" },
+  deficit: { label: "חריגה", tone: "danger" },
+} as const;
 
 export function BudgetMiniApp() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
@@ -44,12 +59,13 @@ export function BudgetMiniApp() {
     (s) => s.setBudgetSafetyBuffer,
   );
 
-  // Local draft state — sliders edit these. "שמור" pushes to store.
-  const [draftMode, setDraftMode] = useState<"manual" | "auto">(storedMode);
+  const [draftMode, setDraftMode] = useState<Mode>(storedMode);
   const [draftBudget, setDraftBudget] = useState<number>(storedBudget);
-  const [draftBuffer, setDraftBuffer] = useState<number>(
-    storedBuffer * 100,
-  ); // percent
+  const [draftBufferPct, setDraftBufferPct] = useState<number>(
+    Math.round(storedBuffer * 100),
+  );
+  const [panel, setPanel] = useState<Panel>(null);
+  const reduced = useReducedMotion();
 
   const view = useMemo(() => {
     if (!hydrated) return null;
@@ -65,221 +81,284 @@ export function BudgetMiniApp() {
 
   if (!hydrated || !view) return null;
 
-  // Live simulation — what daily allowance + EOM look like at draft.
-  const expectedIncomeAcc = view.expectedIncome;
-  const totalCommitmentsAcc = view.totalCommitments;
   const monthlyFreeBalance =
-    view.currentBankBalance + expectedIncomeAcc - totalCommitmentsAcc;
+    view.currentBankBalance + view.expectedIncome - view.totalCommitments;
   const simulatedCap =
     draftMode === "auto"
       ? Math.max(
           0,
           Math.floor(
             monthlyFreeBalance *
-              Math.max(0, Math.min(0.95, 1 - draftBuffer / 100)),
+              Math.max(0, Math.min(0.95, 1 - draftBufferPct / 100)),
           ),
         )
       : draftBudget;
-  const perDay =
+  const simulatedPerDay =
     view.anchorOffset > 0 ? Math.floor(simulatedCap / view.anchorOffset) : 0;
 
   const dirty =
     draftMode !== storedMode ||
     (draftMode === "manual" && draftBudget !== storedBudget) ||
-    draftBuffer / 100 !== storedBuffer;
+    draftBufferPct / 100 !== storedBuffer;
 
   function handleSave() {
     hapticTap();
     setBudgetMode(draftMode);
     if (draftMode === "manual") setMonthlyBudget(draftBudget);
     else setMonthlyBudget(0);
-    setBudgetSafetyBuffer(draftBuffer / 100);
+    setBudgetSafetyBuffer(draftBufferPct / 100);
     hapticSuccess();
     toast.success("התקציב נשמר");
   }
 
-  const kpis: MiniAppKpi[] = [
-    {
-      label: "תקציב חודשי מדומה",
-      value: ILS.format(simulatedCap),
-      tone: TONE,
-      emphasis: true,
-      caption:
-        draftMode === "auto" ? "חישוב אוטומטי לפי האג״ז" : "הגדרה ידנית",
-    },
-    {
-      label: "מותר היום",
-      value: ILS.format(perDay),
-      tone: "#34D399",
-      caption: `כל יום עד ${view.anchorOffset} ימים`,
-    },
-    {
-      label: "פנוי לחודש",
-      value: ILS.format(Math.round(monthlyFreeBalance)),
-      tone: "#A78BFA",
-      caption: "בנק + הכנסה צפויה − התחייבויות",
-    },
-  ];
+  const status = STATUS[view.state];
+  const showAlert = view.state === "deficit" || view.state === "tight";
+
+  function togglePanel(next: Panel) {
+    hapticTap();
+    setPanel((prev) => (prev === next ? null : next));
+  }
+
+  function selectMode(next: Mode) {
+    if (next === draftMode) return;
+    hapticTap();
+    setDraftMode(next);
+    // Collapse the manual-only panel if switching to auto.
+    if (next === "auto" && panel === "cap") setPanel(null);
+  }
 
   return (
-    <div className="flex flex-col gap-3" dir="rtl">
-      <MiniAppHero
-        title="בקרת תקציב"
-        subtitle="גרור את הסליידרים. הצפי לכל יום + לסוף החודש מתעדכן בלייב."
-        kpis={kpis}
-      />
+    <div className="bc-mini" dir="rtl">
+      {/* Hero */}
+      <div className="bc-hero" data-tone={status.tone} role="group">
+        <div className="bc-hero-row">
+          <span className="bc-hero-eyebrow">תקציב חודשי</span>
+          <span className={`bc-hero-status bc-tone-${status.tone}`}>
+            {status.label}
+          </span>
+        </div>
+        <span className="bc-hero-amount" data-mono="true" dir="ltr">
+          {ILS.format(simulatedCap)}
+        </span>
+        <div className="bc-hero-stats">
+          <div className="bc-hero-stat">
+            <span className="bc-hero-stat-label">נותר היום</span>
+            <span className="bc-hero-stat-value" data-mono="true" dir="ltr">
+              {ILS.format(simulatedPerDay)}
+            </span>
+          </div>
+          <div className="bc-hero-stat">
+            <span className="bc-hero-stat-label">צפוי לסוף חודש</span>
+            <span className="bc-hero-stat-value" data-mono="true" dir="ltr">
+              {ILS.format(view.forecastBankAtAnchor)}
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* Mode toggle */}
-      <section className="flex flex-col gap-2 rounded-3xl border border-white/8 bg-white/[0.03] p-3">
-        <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-          מצב
-        </span>
-        <div className="grid grid-cols-2 gap-2">
-          <ModeCard
-            active={draftMode === "auto"}
-            onClick={() => setDraftMode("auto")}
-            icon={Target}
-            title="אוטומטי"
-            description="Pulse מחשב תקציב חודשי לפי היתרה והאג״ז."
-          />
-          <ModeCard
-            active={draftMode === "manual"}
-            onClick={() => setDraftMode("manual")}
-            icon={Wallet}
-            title="ידני"
-            description="אני קובע סכום מקסימום החודש."
-          />
-        </div>
-      </section>
+      <div className="bc-modes" role="tablist" aria-label="מצב תקציב">
+        <ModeButton
+          active={draftMode === "auto"}
+          onClick={() => selectMode("auto")}
+          icon={<Target className="size-3.5" />}
+          label="אוטומטי"
+        />
+        <ModeButton
+          active={draftMode === "manual"}
+          onClick={() => selectMode("manual")}
+          icon={<Wallet className="size-3.5" />}
+          label="ידני"
+        />
+      </div>
+      <p className="bc-mode-hint">
+        {draftMode === "auto"
+          ? "Pulse מחשב לפי יתרה, הכנסות והתחייבויות."
+          : "אני קובע סכום מקסימום לחודש."}
+      </p>
 
-      {/* Manual cap slider */}
-      {draftMode === "manual" ? (
-        <section className="flex flex-col gap-3 rounded-3xl border border-white/8 bg-white/[0.03] p-4">
-          <header className="flex items-baseline justify-between">
-            <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              תקרת תקציב חודשית
-            </span>
-            <span
-              data-mono="true"
-              dir="ltr"
-              className="text-[18px] font-light text-foreground"
-              style={{ color: TONE, textShadow: `0 0 18px ${TONE}55` }}
-            >
-              {ILS.format(draftBudget)}
-            </span>
-          </header>
+      {/* Expandable rows */}
+      <div className="bc-rows">
+        {draftMode === "manual" ? (
+          <ExpandableRow
+            label="תקרת תקציב"
+            value={ILS.format(draftBudget)}
+            open={panel === "cap"}
+            onToggle={() => togglePanel("cap")}
+            reduced={reduced ?? false}
+          >
+            <input
+              type="range"
+              min={0}
+              max={30000}
+              step={50}
+              value={draftBudget}
+              onChange={(e) => setDraftBudget(Number(e.target.value))}
+              className="bc-slider"
+              aria-label="תקרת תקציב חודשית"
+            />
+            <p className="bc-hint">
+              ~ {ILS.format(simulatedPerDay)} ליום · אם תעבור, Pulse יסמן.
+            </p>
+          </ExpandableRow>
+        ) : null}
+
+        <ExpandableRow
+          label="כרית ביטחון"
+          value={`${draftBufferPct}%`}
+          open={panel === "buffer"}
+          onToggle={() => togglePanel("buffer")}
+          reduced={reduced ?? false}
+        >
           <input
             type="range"
             min={0}
-            max={30000}
-            step={50}
-            value={draftBudget}
-            onChange={(e) => setDraftBudget(Number(e.target.value))}
-            className="w-full"
-            aria-label="תקרת תקציב חודשית"
+            max={40}
+            step={1}
+            value={draftBufferPct}
+            onChange={(e) => setDraftBufferPct(Number(e.target.value))}
+            className="bc-slider"
+            aria-label="כרית ביטחון באחוזים"
           />
-          <p className="text-[11px] text-muted-foreground">
-            ב-{view.anchorOffset} הימים הבאים, מותר ~ {ILS.format(perDay)} ביום.
-            אם תעבור את התקרה, Pulse יסמן באדום.
+          <p className="bc-hint">
+            שומר על אחוז מהיתרה בצד לסוף חודש. תקציב מדומה:{" "}
+            <span data-mono="true" dir="ltr">
+              {ILS.format(simulatedCap)}
+            </span>
           </p>
-        </section>
-      ) : null}
+        </ExpandableRow>
+      </div>
 
-      {/* Safety buffer */}
-      <section className="flex flex-col gap-3 rounded-3xl border border-white/8 bg-white/[0.03] p-4">
-        <header className="flex items-baseline justify-between">
-          <span className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            כרית ביטחון
-          </span>
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-[15px] font-medium text-foreground"
+      {/* Smart alert (only when tight/deficit) */}
+      <AnimatePresence>
+        {showAlert ? (
+          <motion.div
+            key="bc-alert"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: reduced ? 0.12 : 0.28, ease: EASE }}
+            className="bc-alert"
+            data-tone={view.state === "deficit" ? "danger" : "watch"}
+            role="status"
           >
-            {draftBuffer}%
-          </span>
-        </header>
-        <input
-          type="range"
-          min={0}
-          max={40}
-          step={1}
-          value={draftBuffer}
-          onChange={(e) => setDraftBuffer(Number(e.target.value))}
-          className="w-full"
-          aria-label="כרית ביטחון באחוזים"
-        />
-        <p className="text-[11px] text-muted-foreground">
-          המערכת תשמור את האחוז הזה צד בכל סוף חודש כדי לא להגיע ל-₪0.
-          תקציב מדומה: {ILS.format(simulatedCap)}.
-        </p>
-      </section>
+            <span aria-hidden className="bc-alert-icon">
+              <AlertTriangle className="size-3.5" />
+            </span>
+            <span className="bc-alert-text">
+              {view.state === "deficit"
+                ? `חריגה של ${ILS.format(view.deficit)} מהיתרה הצפויה.`
+                : `היום הוצאת ${ILS.format(view.spentToday)} מתוך ${ILS.format(view.perDay)}.`}
+            </span>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-      <MiniAppStatusHero
-        tone={view.state === "deficit" ? "#F87171" : "#34D399"}
-        icon={Sliders}
-        title={view.state === "deficit" ? "תקציב ממש צפוף" : "מצב טוב"}
-        detail={`היום הוצאת ${ILS.format(view.spentToday)} מתוך ${ILS.format(view.perDay)} מותרים. צפי לסוף החודש: ${ILS.format(view.forecastBankAtAnchor)}.`}
-      />
-
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={!dirty}
-        className="h-12 rounded-2xl text-[14.5px] font-semibold transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          background: "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
-          color: "#1A140A",
-          boxShadow:
-            "0 1px 0 rgba(255,255,255,0.4) inset, 0 8px 22px -6px rgba(212,175,55,0.55)",
-        }}
-      >
-        שמור שינויים
-      </button>
+      {/* Save */}
+      <div className="bc-save-row">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty}
+          className="bc-save"
+          aria-label="שמור שינויים"
+        >
+          שמור שינויים
+        </button>
+      </div>
     </div>
   );
 }
 
-function ModeCard({
+function ModeButton({
   active,
   onClick,
-  icon: Icon,
-  title,
-  description,
+  icon,
+  label,
 }: {
   active: boolean;
   onClick: () => void;
-  icon: typeof Target;
-  title: string;
-  description: string;
+  icon: React.ReactNode;
+  label: string;
 }) {
   return (
     <button
       type="button"
-      onClick={() => {
-        hapticTap();
-        onClick();
-      }}
-      className="flex flex-col gap-1 rounded-2xl border p-3 text-right transition-colors"
-      style={{
-        background: active ? `${TONE}1f` : "rgba(0,0,0,0.30)",
-        borderColor: active ? `${TONE}66` : "rgba(255,255,255,0.10)",
-        boxShadow: active ? `0 8px 22px -10px ${TONE}66` : undefined,
-      }}
-      dir="rtl"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className="bc-mode"
+      data-active={active}
     >
-      <span
-        aria-hidden
-        className="inline-flex size-7 items-center justify-center rounded-xl"
-        style={{
-          background: active ? `${TONE}33` : "rgba(255,255,255,0.05)",
-          color: active ? TONE : "rgba(255,255,255,0.65)",
-        }}
-      >
-        <Icon className="size-4" strokeWidth={1.6} />
+      {active ? (
+        <motion.span
+          layoutId="bc-mode-pill"
+          className="bc-mode-pill"
+          transition={{ type: "spring", stiffness: 380, damping: 34 }}
+        />
+      ) : null}
+      <span className="bc-mode-content">
+        <span aria-hidden className="bc-mode-icon">
+          {icon}
+        </span>
+        <span className="bc-mode-label">{label}</span>
       </span>
-      <span className="text-[13px] font-medium text-foreground">{title}</span>
-      <span className="text-[11px] text-muted-foreground">{description}</span>
     </button>
+  );
+}
+
+function ExpandableRow({
+  label,
+  value,
+  open,
+  onToggle,
+  reduced,
+  children,
+}: {
+  label: string;
+  value: string;
+  open: boolean;
+  onToggle: () => void;
+  reduced: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bc-row" data-open={open}>
+      <button
+        type="button"
+        className="bc-row-head"
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <span className="bc-row-label">{label}</span>
+        <span className="bc-row-right">
+          <span className="bc-row-value" data-mono="true" dir="ltr">
+            {value}
+          </span>
+          <motion.span
+            aria-hidden
+            className="bc-row-chev"
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: reduced ? 0.12 : 0.24, ease: EASE }}
+          >
+            <ChevronDown className="size-3.5" />
+          </motion.span>
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduced ? 0.12 : 0.32, ease: EASE }}
+            className="bc-row-body-wrap"
+          >
+            <div className="bc-row-body">{children}</div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
   );
 }
