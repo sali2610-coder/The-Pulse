@@ -1,64 +1,48 @@
 "use client";
 
-// Phase 410 — Loans folder as a mini-app.
+// Settings · Loans mini-app.
 //
-// Pilot consumer of the MiniAppShell primitives. Replaces the
-// admin-style LoansPanel with a premium "Loan Manager" view:
-//   • Hero KPI strip: monthly outflow + total remaining +
-//     debt-free month.
-//   • "+ הוסף הלוואה" CTA opens the Phase 409 LoanFullScreenEdit.
-//   • Per-loan card with icon tone, primary "/חודש" amount,
-//     "נותר ₪X" secondary, progress bar (paymentNumber / totalPayments),
-//     status pill (פעיל / מסתיים בקרוב / מתחיל בקרוב).
+// UI-only rebuild. Mirrors the compact card language already
+// shipped on Home (ObligationsDashboard loan lane) so switching
+// between Home and Settings feels like the same object seen from
+// two angles. Data pipeline unchanged: reads store.loans/rules/
+// accounts via summarizeLoans + buildObligationsOverview, writes
+// via store.addLoan/updateLoan/toggleLoan/deleteLoan through the
+// existing full-screen editor.
 //
-// Tap a card → opens LoanFullScreenEdit in edit mode.
-// Engine math untouched — same summarizeLoans + buildObligationsOverview
-// outputs the LoanSummaryCard already consumes on the dashboard.
+// Layout:
+//   • 2 tone-tinted KPI tiles (monthly outflow · total remaining)
+//   • Prominent gold "הוסף הלוואה" CTA
+//   • One card per loan (name, monthly, remaining balance driven
+//     by principal when available, paid/total, next charge,
+//     status pill). Tap → LoanFullScreenEdit (edit mode).
+//   • Add tap → LoanFullScreenEdit (add mode; principalAmount +
+//     auto-summary block already wired).
 
 import { useMemo, useState } from "react";
-import { Banknote, BadgeCheck, CalendarCheck2 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Banknote, Plus } from "lucide-react";
 
 import { useFinanceStore } from "@/lib/store";
-import { currentMonthKey, monthIndex } from "@/lib/dates";
+import { currentMonthKey } from "@/lib/dates";
 import { summarizeLoans } from "@/lib/loan-summary";
 import {
   buildObligationsOverview,
-  LOAN_STATUS_LABEL,
   type LoanRow,
-  type LoanStatus,
 } from "@/lib/obligations-overview";
-import {
-  MiniAppAddCta,
-  MiniAppEmpty,
-  MiniAppHero,
-  MiniAppListCard,
-  MiniAppSectionLabel,
-  type MiniAppKpi,
-} from "@/components/ui/mini-app-shell";
 import { LoanFullScreenEdit } from "@/components/loans/loan-fullscreen-edit";
+import { tap as hapticTap } from "@/lib/haptics";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
   currency: "ILS",
   maximumFractionDigits: 0,
 });
-
-const HEB_MONTH = new Intl.DateTimeFormat("he-IL", {
-  month: "long",
-  year: "numeric",
+const DATE_FMT = new Intl.DateTimeFormat("he-IL", {
+  day: "2-digit",
+  month: "2-digit",
 });
-
-const STATUS_TONE: Record<LoanStatus, string> = {
-  active: "#A78BFA",
-  "ending-soon": "#34D399",
-  "starting-soon": "#F6D970",
-};
-
-function formatMonthKey(mk: string): string {
-  const [y, m] = mk.split("-").map(Number);
-  if (!y || !m) return mk;
-  return HEB_MONTH.format(new Date(y, m - 1, 1));
-}
+const EASE = [0.32, 0.72, 0, 1] as const;
 
 export function LoansMiniApp() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
@@ -75,111 +59,79 @@ export function LoansMiniApp() {
   }, [hydrated, loans, monthKey]);
   const overview = useMemo(() => {
     if (!hydrated) return null;
-    return buildObligationsOverview({
-      loans,
-      rules,
-      accounts,
-      monthKey,
-    });
+    return buildObligationsOverview({ loans, rules, accounts, monthKey });
   }, [hydrated, loans, rules, accounts, monthKey]);
 
   if (!hydrated || !summary || !overview) return null;
 
   const rows = overview.loans;
-  const active = rows.filter((r) => r.status !== "starting-soon");
-  const upcoming = rows.filter((r) => r.status === "starting-soon");
-
-  const monthsToDebtFree =
-    summary.debtFreeMonthKey !== undefined
-      ? monthIndex(summary.debtFreeMonthKey) - monthIndex(monthKey)
-      : undefined;
-
-  const kpis: MiniAppKpi[] = [
-    {
-      label: "תשלום חודשי",
-      value: ILS.format(summary.totalMonthly),
-      tone: "#A78BFA",
-      emphasis: true,
-      caption:
-        summary.activeCount === 0
-          ? "אין הלוואות פעילות"
-          : summary.activeCount === 1
-            ? "הלוואה אחת פעילה"
-            : `${summary.activeCount} הלוואות פעילות`,
-    },
-    {
-      label: "נותר לתשלום",
-      value: ILS.format(summary.totalRemaining),
-      tone: "#F87171",
-    },
-    {
-      label: "חופשי מחוב",
-      value: summary.debtFreeMonthKey
-        ? formatMonthKey(summary.debtFreeMonthKey)
-        : "—",
-      tone: "#34D399",
-      caption:
-        monthsToDebtFree !== undefined && monthsToDebtFree > 0
-          ? `עוד ${monthsToDebtFree} חודשים`
-          : undefined,
-    },
-  ];
 
   function openAdd() {
+    hapticTap();
     setEditLoanId(null);
     setEditOpen(true);
   }
-
   function openEdit(id: string) {
+    hapticTap();
     setEditLoanId(id);
     setEditOpen(true);
   }
 
   return (
-    <div className="flex flex-col gap-3" dir="rtl">
-      <MiniAppHero
-        title="מנהל ההלוואות"
-        subtitle="עקוב אחרי כל הלוואה, נותר לתשלום והחודש שתיגמר"
-        kpis={kpis}
-      />
+    <div className="ln-mini" dir="rtl">
+      <div className="ln-kpis" role="group" aria-label="סיכום הלוואות">
+        <Kpi
+          label="תשלום חודשי"
+          value={ILS.format(summary.totalMonthly)}
+          tone="purple"
+          caption={
+            summary.activeCount === 0
+              ? "אין הלוואות פעילות"
+              : summary.activeCount === 1
+                ? "הלוואה אחת פעילה"
+                : `${summary.activeCount} הלוואות פעילות`
+          }
+        />
+        <Kpi
+          label="נותר לתשלום"
+          value={ILS.format(summary.totalRemaining)}
+          tone="danger"
+        />
+      </div>
+
+      <button
+        type="button"
+        className="ln-add"
+        onClick={openAdd}
+        aria-label="הוסף הלוואה"
+      >
+        <span className="ln-add-icon" aria-hidden>
+          <Plus className="size-4" strokeWidth={2.2} />
+        </span>
+        <span className="ln-add-label">הוסף הלוואה</span>
+      </button>
 
       {rows.length === 0 ? (
-        <MiniAppEmpty
-          icon={Banknote}
-          title="עוד אין הלוואות"
-          body="הוסף הלוואה ראשונה כדי לקבל מסלול תשלום, תאריך סיום וצפי לחופש מחוב."
-          cta={{ label: "הוסף הלוואה", onClick: openAdd }}
-        />
+        <div className="ln-empty">
+          <span className="ln-empty-icon" aria-hidden>
+            <Banknote className="size-5" strokeWidth={1.6} />
+          </span>
+          <p className="ln-empty-title">עוד אין הלוואות</p>
+          <p className="ln-empty-body">
+            הוסף הלוואה ראשונה כדי לראות תשלום חודשי, יתרה נותרת ותאריך סיום.
+          </p>
+        </div>
       ) : (
-        <>
-          <MiniAppAddCta label="הוסף הלוואה" onClick={openAdd} />
-
-          {active.length > 0 ? (
-            <>
-              <MiniAppSectionLabel>פעילות עכשיו</MiniAppSectionLabel>
-              <ul className="flex flex-col gap-2">
-                {active.map((row) => (
-                  <li key={row.loan.id}>
-                    <LoanCard row={row} onClick={() => openEdit(row.loan.id)} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-
-          {upcoming.length > 0 ? (
-            <>
-              <MiniAppSectionLabel>מתחילות בקרוב</MiniAppSectionLabel>
-              <ul className="flex flex-col gap-2">
-                {upcoming.map((row) => (
-                  <li key={row.loan.id}>
-                    <LoanCard row={row} onClick={() => openEdit(row.loan.id)} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-        </>
+        <ul className="ln-list">
+          {rows.map((row, idx) => (
+            <LoanCard
+              key={row.loan.id}
+              row={row}
+              delay={idx * 0.04}
+              onClick={() => openEdit(row.loan.id)}
+            />
+          ))}
+        </ul>
       )}
 
       <LoanFullScreenEdit
@@ -194,63 +146,148 @@ export function LoansMiniApp() {
   );
 }
 
-function LoanCard({
-  row,
-  onClick,
+function Kpi({
+  label,
+  value,
+  tone,
+  caption,
 }: {
-  row: LoanRow;
-  onClick: () => void;
+  label: string;
+  value: string;
+  tone: "purple" | "danger";
+  caption?: string;
 }) {
-  const Icon = row.status === "ending-soon" ? BadgeCheck : Banknote;
-  const tone = STATUS_TONE[row.status];
-  const total = row.loan.totalPayments;
-  const remaining = row.remainingPayments;
-  const paid =
-    total !== undefined && remaining !== undefined
-      ? Math.max(0, total - remaining)
-      : undefined;
-  const progress =
-    paid !== undefined && total !== undefined && total > 0
-      ? paid / total
-      : undefined;
-  const progressLabel =
-    paid !== undefined && total !== undefined
-      ? `${paid}/${total} תשלומים שולמו`
-      : undefined;
-  const nextChargeLabel = (() => {
-    const d = row.nextChargeDate;
-    const day = d.getDate();
-    const m = HEB_MONTH.format(d);
-    return `כל ${day} ל${m.split(" ")[0]} · התשלום הבא ${day}/${
-      d.getMonth() + 1
-    }`;
-  })();
-  const subtitle =
-    row.loan.dayOfMonth
-      ? `יום ${row.loan.dayOfMonth} בכל חודש${
-          row.endMonthKey ? ` · מסתיים ${formatMonthKey(row.endMonthKey)}` : ""
-        }`
-      : nextChargeLabel;
   return (
-    <MiniAppListCard
-      icon={Icon}
-      tone={tone}
-      title={row.loan.label}
-      subtitle={subtitle}
-      primaryValue={`−${ILS.format(row.monthlyAmount)}`}
-      primaryCaption="/חודש"
-      progress={progress}
-      progressLabel={progressLabel}
-      status={{ tone, label: LOAN_STATUS_LABEL[row.status] }}
-      onClick={onClick}
-    />
+    <div className="ln-kpi" data-tone={tone}>
+      <span className="ln-kpi-label">{label}</span>
+      <span className="ln-kpi-value" data-mono="true" dir="ltr">
+        {value}
+      </span>
+      {caption ? <span className="ln-kpi-caption">{caption}</span> : null}
+    </div>
   );
 }
 
-function _UnusedCalendarRef(): null {
-  // Tree-shake guard so the lucide import that future variants will
-  // reuse stays in the chunk.
-  void CalendarCheck2;
-  return null;
+function LoanCard({
+  row,
+  delay,
+  onClick,
+}: {
+  row: LoanRow;
+  delay: number;
+  onClick: () => void;
+}) {
+  const reduced = useReducedMotion();
+  const loan = row.loan;
+  const total = loan.totalPayments;
+  const paid =
+    total !== undefined && row.remainingPayments !== undefined
+      ? Math.max(0, total - row.remainingPayments)
+      : null;
+  const progress =
+    total !== undefined && paid !== null && total > 0
+      ? Math.max(0, Math.min(1, paid / total))
+      : null;
+
+  const statusTone =
+    row.status === "ending-soon"
+      ? "watch"
+      : row.status === "starting-soon"
+        ? "safe"
+        : loan.active
+          ? "neutral"
+          : "muted";
+  const statusLabel =
+    row.status === "ending-soon"
+      ? "לקראת סיום"
+      : row.status === "starting-soon"
+        ? "מתחיל בקרוב"
+        : loan.active
+          ? "פעיל"
+          : "מושהה";
+
+  // Home rule: lead with the actual principal ("לקחתי בפועל").
+  // Fall back to remainingBalance if principal not set.
+  const principal = loan.principalAmount;
+  const primaryLabel = principal !== undefined ? "לקחתי בפועל" : "יתרה נוכחית";
+  const primaryValue =
+    principal !== undefined
+      ? ILS.format(principal)
+      : ILS.format(row.monthlyAmount * (row.remainingPayments ?? 0));
+
+  return (
+    <motion.li
+      layout
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: reduced ? 0.12 : 0.42, ease: EASE }}
+      className="ln-card"
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className="ln-card-surface"
+        aria-label={`ערוך את ההלוואה ${loan.label}`}
+      >
+        <div className="ln-card-head">
+          <span aria-hidden className="ln-card-icon">
+            <Banknote className="size-5" strokeWidth={1.6} />
+          </span>
+          <div className="ln-card-titles">
+            <span className="ln-card-title">{loan.label}</span>
+            <span className="ln-card-sub">
+              {row.paymentLabel
+                ? `תשלום ${row.paymentLabel}`
+                : loan.active
+                  ? "הלוואה פעילה"
+                  : "הלוואה מושהית"}
+            </span>
+          </div>
+          <span className={`ln-card-status ln-tone-${statusTone}`}>
+            {statusLabel}
+          </span>
+        </div>
+
+        <div className="ln-card-money">
+          <div className="ln-card-money-block">
+            <span className="ln-card-money-label">{primaryLabel}</span>
+            <span className="ln-card-money-value" data-mono="true" dir="ltr">
+              {primaryValue}
+            </span>
+          </div>
+          <div className="ln-card-money-block">
+            <span className="ln-card-money-label">חיוב חודשי</span>
+            <span className="ln-card-money-value" data-mono="true" dir="ltr">
+              {ILS.format(loan.monthlyInstallment)}
+            </span>
+          </div>
+          <div className="ln-card-money-block">
+            <span className="ln-card-money-label">חיוב הבא</span>
+            <span className="ln-card-money-value" data-mono="true" dir="ltr">
+              {DATE_FMT.format(row.nextChargeDate)}
+            </span>
+          </div>
+        </div>
+
+        {progress !== null ? (
+          <div className="ln-card-progress">
+            <div className="ln-card-progress-track">
+              <motion.div
+                className="ln-card-progress-fill"
+                initial={{ width: reduced ? `${progress * 100}%` : 0 }}
+                animate={{ width: `${progress * 100}%` }}
+                transition={{ duration: reduced ? 0.12 : 0.9, ease: EASE }}
+              />
+            </div>
+            <div className="ln-card-progress-labels">
+              <span data-mono="true" dir="ltr">
+                {paid}/{total}
+              </span>
+              <span>{Math.round((progress ?? 0) * 100)}% שולם</span>
+            </div>
+          </div>
+        ) : null}
+      </button>
+    </motion.li>
+  );
 }
-void _UnusedCalendarRef;

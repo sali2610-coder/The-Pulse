@@ -88,6 +88,9 @@ function EditBody({
   const [amount, setAmount] = useState(
     loan ? String(loan.monthlyInstallment ?? 0) : "",
   );
+  const [principal, setPrincipal] = useState<string>(
+    loan?.principalAmount !== undefined ? String(loan.principalAmount) : "",
+  );
   const [dayOfMonth, setDayOfMonth] = useState<number>(loan?.dayOfMonth ?? 1);
   const [totalPayments, setTotalPayments] = useState<number>(
     loan?.totalPayments ?? 24,
@@ -100,10 +103,23 @@ function EditBody({
   );
 
   const monthly = Number(amount || 0);
+  const principalNumber = Number(principal || 0);
   const canSave = label.trim().length > 0 && monthly > 0 && dayOfMonth > 0;
+
+  // Auto-derived summary — reads from current draft inputs so the
+  // user sees the arithmetic in real time before saving. Purely
+  // display; store persists monthlyInstallment × totalPayments as
+  // the schedule and principalAmount as an optional display field.
+  const totalRepay = monthly * (totalPayments || 0);
+  const interestCost =
+    principalNumber > 0 ? Math.max(0, totalRepay - principalNumber) : 0;
+  const monthlyInterest =
+    totalPayments > 0 ? Math.round(interestCost / totalPayments) : 0;
 
   function handleSave() {
     if (!canSave) return;
+    const principalPatch =
+      principalNumber > 0 ? { principalAmount: principalNumber } : {};
     if (loan) {
       updateLoan(loan.id, {
         label: label.trim(),
@@ -112,6 +128,7 @@ function EditBody({
         startMonth,
         startYear,
         totalPayments,
+        ...principalPatch,
       });
       toast.success("ההלוואה עודכנה");
     } else {
@@ -122,6 +139,7 @@ function EditBody({
         startMonth,
         startYear,
         totalPayments,
+        ...principalPatch,
       });
       toast.success("הלוואה נוספה");
     }
@@ -179,6 +197,20 @@ function EditBody({
             />
           </FieldRow>
 
+          <FieldRow label="סכום שלקחתי בפועל" stacked>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={principal}
+              onChange={(e) => setPrincipal(e.target.value)}
+              min={0}
+              step={100}
+              placeholder="₪ קרן ההלוואה (ללא ריבית)"
+              className="w-full rounded-xl border border-white/8 bg-black/25 px-3 py-2 text-end text-[13.5px] text-foreground placeholder:text-muted-foreground/60 focus:border-white/16 focus:outline-none"
+              dir="ltr"
+            />
+          </FieldRow>
+
           <FieldRow label="מספר תשלומים">
             <FullScreenStepper
               value={totalPayments}
@@ -219,6 +251,38 @@ function EditBody({
             />
           </FieldRow>
         </FullScreenFieldList>
+
+        {monthly > 0 && totalPayments > 0 ? (
+          <div className="ln-derived" dir="rtl" aria-label="חישוב אוטומטי">
+            <div className="ln-derived-title">חישוב אוטומטי</div>
+            <div className="ln-derived-grid">
+              <div className="ln-derived-cell">
+                <span className="ln-derived-label">סה״כ תשלום</span>
+                <span className="ln-derived-value" data-mono="true" dir="ltr">
+                  ₪ {Math.round(totalRepay).toLocaleString("he-IL")}
+                </span>
+              </div>
+              <div className="ln-derived-cell">
+                <span className="ln-derived-label">
+                  {principalNumber > 0 ? "ריבית כוללת" : "ריבית — הזן קרן"}
+                </span>
+                <span className="ln-derived-value" data-mono="true" dir="ltr">
+                  {principalNumber > 0
+                    ? `₪ ${Math.round(interestCost).toLocaleString("he-IL")}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="ln-derived-cell">
+                <span className="ln-derived-label">ריבית משוערת לחודש</span>
+                <span className="ln-derived-value" data-mono="true" dir="ltr">
+                  {principalNumber > 0
+                    ? `₪ ${monthlyInterest.toLocaleString("he-IL")}`
+                    : "—"}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </FullScreenBody>
 
       <FullScreenFooter
