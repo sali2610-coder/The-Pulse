@@ -11,14 +11,13 @@
 
 import { useState } from "react";
 import {
+  Bell,
   BellRing,
   CreditCard,
   Database,
   FileDown,
   HandCoins,
   Landmark,
-  Lightbulb,
-  ListChecks,
   PiggyBank,
   Repeat,
   ShieldCheck,
@@ -38,7 +37,7 @@ import { NotificationsMiniApp } from "@/components/settings/notifications-mini-a
 import { ShortcutMiniApp } from "@/components/settings/shortcut-mini-app";
 import { IncomeMiniApp } from "@/components/income/income-mini-app";
 import { RecurringMiniApp } from "@/components/recurring/recurring-mini-app";
-import { InsightsInboxMiniApp } from "./insights-inbox-mini-app";
+import { AlertsCenter } from "./alerts-center";
 import { BackupsCard } from "./backups-card";
 import { CloudSyncCard } from "./cloud-sync-card";
 import { ReceiptScanCard } from "./receipt-scan-card";
@@ -158,18 +157,17 @@ export function SettingsTab() {
         <BudgetMiniApp />
       </SettingsAccordion>
 
-      {/* Phase 416 — merged inbox. The two prior folders (הצעות
-         חכמות + בדיקות ומנויים) lived next to each other and asked
-         the user the same question (אשר / דחה תובנה). One folder,
-         one chip filter, one feed. */}
+      {/* Smart Alerts Center — auto-generated feed sourced from
+         the existing engine detectors. No filters, no approval
+         flow, no manual settings. */}
       <SettingsAccordion
         {...mutex}
-        storageKey="settings.insights-inbox"
-        title="תובנות לאישור"
-        subtitle="חיובים חוזרים, מנויים שזוהו, שחיקת קצב, חוקים רדומים"
-        icon={<Lightbulb className="size-4" />}
+        storageKey="settings.alerts-center"
+        title="מרכז התראות חכם"
+        subtitle="חיובים חריגים, יעדים, חריגות תקציב — אוטומטי"
+        icon={<Bell className="size-4" />}
       >
-        <InsightsInboxMiniApp />
+        <AlertsCenter />
       </SettingsAccordion>
 
       {/* Phase 417 — "פעילות החודש" removed from Settings. The
