@@ -33,9 +33,16 @@ import {
 import { soft as hapticSoft } from "@/lib/haptics";
 import { SPRING_SOFT } from "@/lib/motion-tokens";
 
-const THRESHOLD = 0.32;
-const VELOCITY_TRIGGER = 450;
+const THRESHOLD = 0.28;
+const VELOCITY_TRIGGER = 420;
 const INTENT_DISTANCE = 20;
+/** Peek reveals ~5% of each neighbor so the user always knows
+ *  another station lives beyond the current one. Matches the
+ *  Apple Wallet / Music playing-card feel. */
+const PEEK_PCT = 0.05;
+/** Horizontal gap between panels — narrow enough to feel like
+ *  a single sheet stack, wide enough to see the seam. */
+const GAP_PX = 10;
 
 type Station = {
   id: string;
@@ -60,6 +67,17 @@ export function SubPager({
   const panels = Children.toArray(children);
   const count = panels.length;
 
+  // Panel is slightly narrower than the viewport so both neighbors
+  // peek in from the sides — the "yes, more here" hint.
+  const peekPx = width * PEEK_PCT;
+  const panelWidth = Math.max(0, width - peekPx * 2);
+  const stride = panelWidth + GAP_PX;
+  const trackOriginX = peekPx;
+
+  function xForIndex(i: number): number {
+    return trackOriginX - i * stride;
+  }
+
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -72,14 +90,15 @@ export function SubPager({
 
   useEffect(() => {
     if (width === 0) return;
-    const target = -activeIndex * width;
+    const target = xForIndex(activeIndex);
     const controls = animate(
       x,
       target,
       reduced ? { duration: 0.12 } : SPRING_SOFT,
     );
     return () => controls.stop();
-  }, [activeIndex, width, x, reduced]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, width, reduced]);
 
   const gesture = useRef({
     active: false,
@@ -128,11 +147,14 @@ export function SubPager({
     } else {
       e.stopPropagation();
     }
-    const min = -width * (count - 1);
-    const max = 0;
+    // Rubber band at both edges. Bounds derived from the new
+    // peek-aware geometry so the first / last panels tug back
+    // naturally instead of clipping.
+    const min = xForIndex(count - 1);
+    const max = xForIndex(0);
     let next = g.baseX + dx;
-    if (next > max) next = max + (next - max) * 0.35;
-    else if (next < min) next = min + (next - min) * 0.35;
+    if (next > max) next = max + (next - max) * 0.32;
+    else if (next < min) next = min + (next - min) * 0.32;
     x.set(next);
     g.lastX = e.clientX;
     g.lastTime = e.timeStamp;
@@ -163,17 +185,23 @@ export function SubPager({
     const dx = e.clientX - g.startX;
     const dt = Math.max(1, e.timeStamp - g.lastTime);
     const vx = ((e.clientX - g.lastX) / dt) * 1000;
+    // Threshold + velocity trigger both drive commit — either 28%
+    // of the panel width crossed OR a decisive flick.
     let target = activeIndex;
-    if (dx < -width * THRESHOLD || vx < -VELOCITY_TRIGGER) {
+    if (dx < -panelWidth * THRESHOLD || vx < -VELOCITY_TRIGGER) {
       target = Math.min(count - 1, activeIndex + 1);
-    } else if (dx > width * THRESHOLD || vx > VELOCITY_TRIGGER) {
+    } else if (dx > panelWidth * THRESHOLD || vx > VELOCITY_TRIGGER) {
       target = Math.max(0, activeIndex - 1);
     }
     if (target !== activeIndex) {
       hapticSoft();
       onIndexChange(target);
     } else {
-      animate(x, -activeIndex * width, reduced ? { duration: 0.12 } : SPRING_SOFT);
+      animate(
+        x,
+        xForIndex(activeIndex),
+        reduced ? { duration: 0.12 } : SPRING_SOFT,
+      );
     }
   }
 
@@ -195,14 +223,20 @@ export function SubPager({
       >
         <motion.div
           className="sp-track"
-          style={{ x, width: width * Math.max(1, count) }}
+          style={{
+            x,
+            width: panelWidth * Math.max(1, count) + GAP_PX * Math.max(0, count - 1),
+            gap: `${GAP_PX}px`,
+          }}
         >
           {panels.map((child, i) => (
             <SubPanel
               key={i}
-              width={width}
+              width={panelWidth}
+              stride={stride}
               x={x}
               index={i}
+              trackOriginX={trackOriginX}
               isActive={i === activeIndex}
             >
               {child}
@@ -210,30 +244,34 @@ export function SubPager({
           ))}
         </motion.div>
       </div>
-      <SubPagerDots count={count} activeIndex={activeIndex} />
+      <SubPagerRail count={count} activeIndex={activeIndex} />
     </div>
   );
 }
 
 function SubPanel({
   width,
+  stride,
   x,
   index,
+  trackOriginX,
   isActive,
   children,
 }: {
   width: number;
+  stride: number;
   x: MotionValue<number>;
   index: number;
+  trackOriginX: number;
   isActive: boolean;
   children: React.ReactNode;
 }) {
   const distance = useTransform(x, (v) => {
-    if (width === 0) return 0;
-    return Math.abs(v + index * width) / width;
+    if (stride === 0) return 0;
+    return Math.abs(v + index * stride - trackOriginX) / stride;
   });
-  const opacity = useTransform(distance, (d) => Math.max(0.42, 1 - d * 0.6));
-  const scale = useTransform(distance, (d) => Math.max(0.98, 1 - d * 0.02));
+  const opacity = useTransform(distance, (d) => Math.max(0.5, 1 - d * 0.5));
+  const scale = useTransform(distance, (d) => Math.max(0.97, 1 - d * 0.03));
   return (
     <motion.div
       className="sp-panel"
@@ -280,18 +318,28 @@ function SubPagerBar({
   );
 }
 
-function SubPagerDots({
+function SubPagerRail({
   count,
   activeIndex,
 }: {
   count: number;
   activeIndex: number;
 }) {
+  const segmentPct = count > 0 ? 100 / count : 100;
   return (
-    <div className="sp-dots" aria-hidden>
-      {Array.from({ length: count }).map((_, i) => (
-        <span key={i} className="sp-dot" data-active={i === activeIndex} />
-      ))}
+    <div className="sp-rail" aria-hidden>
+      <div className="sp-rail-track">
+        <span
+          className="sp-rail-fill"
+          style={{
+            width: `${segmentPct}%`,
+            insetInlineStart: `${activeIndex * segmentPct}%`,
+          }}
+        />
+      </div>
+      <span className="sp-rail-caption" data-mono="true" dir="ltr">
+        {activeIndex + 1}/{count}
+      </span>
     </div>
   );
 }
