@@ -252,31 +252,22 @@ export function DashboardTab() {
             <StationTitle id="hs-activity" eyebrow="3 / 4">
               פעילות החודש
             </StationTitle>
-            <div className="home-station-body">
-              <div className="empty:hidden">
-                <Safe name="CopilotCard">
-                  <CopilotCard />
-                </Safe>
-              </div>
-              <div className="empty:hidden">
-                <Safe name="RecentActivity">
-                  <RecentActivity />
-                </Safe>
-              </div>
+            <div className="home-station-body home-station-body-activity">
+              <Safe name="RecentActivity">
+                <RecentActivity />
+              </Safe>
             </div>
           </section>
 
-          {/* ── Station 4 · Health Center ──────────────────────── */}
+          {/* ── Station 4 · Health Center (טייס פיננסי inside) ── */}
           <section className="home-station" aria-labelledby="hs-health">
             <StationTitle id="hs-health" eyebrow="4 / 4">
               בריאות פיננסית
             </StationTitle>
-            <div className="home-station-body">
-              <div className="empty:hidden">
-                <Safe name="PendingTray">
-                  <PendingTray />
-                </Safe>
-              </div>
+            <div className="home-station-body home-station-body-health">
+              <Safe name="CopilotCard">
+                <CopilotCard />
+              </Safe>
               <div className="empty:hidden">
                 <Safe name="AttentionBanner">
                   <AttentionBanner />
@@ -285,6 +276,11 @@ export function DashboardTab() {
               <Safe name="WatchLauncher">
                 <WatchLauncher />
               </Safe>
+              <div className="empty:hidden">
+                <Safe name="PendingTray">
+                  <PendingTray />
+                </Safe>
+              </div>
             </div>
           </section>
         </SubPager>

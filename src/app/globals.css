@@ -11624,7 +11624,8 @@ button.sally-glass {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 12px 0 6px;
+  padding-block: 14px;
+  padding-block-end: max(env(safe-area-inset-bottom), 14px);
   position: relative;
   z-index: 2;
 }
@@ -11718,9 +11719,23 @@ button.sally-glass {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* Soft mask at the bottom so any content that would clip
+     fades out gracefully instead of showing a hard cut. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 92%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0, #000 92%, transparent 100%);
 }
 .home-station-body > * { min-height: 0; }
 .home-station-body > *:first-child { flex-shrink: 0; }
+/* Activity station: single hero (RecentActivity) takes the whole
+   viewport height. */
+.home-station-body-activity > * { flex: 1; min-height: 0; }
+/* Health station: CopilotCard hero + supporting cards. Copilot
+   claims the top 40% max so watch surfaces stay reachable. */
+.home-station-body-health > *:first-child {
+  flex: 0 0 auto;
+  max-height: 42%;
+  overflow: hidden;
+}
 
 /* ───────────────────────────────────────────────────────────
    App · Header gear + Settings Center overlay
