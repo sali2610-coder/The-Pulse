@@ -11599,7 +11599,13 @@ button.sally-glass {
   flex: 0 0 auto;
   will-change: transform, opacity;
   transform-origin: 50% 40%;
-  min-height: 260px;
+  /* One station = one screen. Chrome above the pager totals to
+     ~205px on standard mobile (safe-area + header + tabs + rail).
+     Content that would overflow is compacted by the components
+     themselves, not by adding scroll. */
+  height: calc(100dvh - 205px);
+  min-height: 320px;
+  overflow: hidden;
 }
 
 /* Wallet-style rail — thin segmented track with a gold pill
@@ -11650,14 +11656,17 @@ button.sally-glass {
 .home-sub-shell {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .home-station {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 4px;
+  height: 100%;
+  overflow: hidden;
 }
+.home-station > * { min-height: 0; }
 
 /* ───────────────────────────────────────────────────────────
    App · Header gear + Settings Center overlay

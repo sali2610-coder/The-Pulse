@@ -205,13 +205,14 @@ export function SubPager({
     }
   }
 
+  // Sub-bar chip nav removed by design (Nav V3): only the rail
+  // + peek edges hint at additional stations. `stations` is kept
+  // for aria-label mapping on panels.
+  const _stationLabels = stations;
+  void _stationLabels;
+
   return (
     <div className="sp-wrap" dir="rtl">
-      <SubPagerBar
-        stations={stations}
-        activeIndex={activeIndex}
-        onChange={onIndexChange}
-      />
       <div
         ref={viewportRef}
         className="sp-viewport"
@@ -289,33 +290,11 @@ function SubPanel({
   );
 }
 
-function SubPagerBar({
-  stations,
-  activeIndex,
-  onChange,
-}: {
-  stations: Station[];
-  activeIndex: number;
-  onChange: (i: number) => void;
-}) {
-  return (
-    <div className="sp-bar" role="tablist" aria-label="תחנות">
-      {stations.map((s, i) => (
-        <button
-          key={s.id}
-          type="button"
-          role="tab"
-          aria-selected={i === activeIndex}
-          data-active={i === activeIndex}
-          className="sp-bar-chip"
-          onClick={() => onChange(i)}
-          aria-label={s.label}
-        >
-          <span>{s.label}</span>
-        </button>
-      ))}
-    </div>
-  );
+// SubPagerBar removed — kept as a comment for future callers that
+// might want a text-nav variant. For Nav V3 the rail-only mode is
+// the default.
+function _SubPagerBarUnused(): null {
+  return null;
 }
 
 function SubPagerRail({

@@ -200,17 +200,9 @@ export function DashboardTab() {
             <h2 id="hs-overview" className="sr-only">
               סקירה פיננסית
             </h2>
-            <SectionHeader
-              title="חיובים קבועים והלוואות"
-              subtitle="שירותים שיורדים אוטומטית כל חודש"
-            />
             <Safe name="ObligationsDashboard">
               <ObligationsDashboard />
             </Safe>
-            <SectionHeader
-              title="הכנסות"
-              subtitle="משכורות, פריסה והכנסה צפויה"
-            />
             <Safe name="IncomeLauncher">
               <IncomeLauncher />
             </Safe>
@@ -221,10 +213,6 @@ export function DashboardTab() {
             <h2 id="hs-activity" className="sr-only">
               פעילות החודש
             </h2>
-            <SectionHeader
-              title="פעילות החודש"
-              subtitle="הפעולות האחרונות + טייס פיננסי"
-            />
             <div className="empty:hidden">
               <Safe name="CopilotCard">
                 <CopilotCard />
@@ -252,10 +240,6 @@ export function DashboardTab() {
                 <AttentionBanner />
               </Safe>
             </div>
-            <SectionHeader
-              title="בדיקות, מנויים וחריגות"
-              subtitle="התראות, מנויים חשודים ופריטים לאישור"
-            />
             <Safe name="WatchLauncher">
               <WatchLauncher />
             </Safe>
