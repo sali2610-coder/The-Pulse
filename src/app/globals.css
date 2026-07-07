@@ -11525,6 +11525,109 @@ button.sally-glass {
   will-change: transform, opacity, filter;
 }
 
+/* ── App · Nested Sub-Pager (.sp-*) — inside a top tab, breaks
+   content into short focused stations. Bar + viewport + dots. */
+.sp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sp-bar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sp-bar::-webkit-scrollbar { display: none; }
+.sp-bar-chip {
+  flex: 1;
+  min-width: 68px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.6));
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    background 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sp-bar-chip:hover {
+  color: var(--sally-ink-1, #F6F6F6);
+  background: rgba(255, 255, 255, 0.03);
+}
+.sp-bar-chip[data-active="true"] {
+  color: var(--sally-ink-1, #F6F6F6);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--sally-gold-loud, #E4C158) 22%, rgba(255, 255, 255, 0.05)),
+      color-mix(in srgb, var(--sally-gold-loud, #E4C158) 8%, rgba(255, 255, 255, 0.01)));
+  border-color: color-mix(in srgb, var(--sally-gold-loud, #E4C158) 30%, transparent);
+  box-shadow: 0 0 18px -8px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 55%, transparent);
+}
+.sp-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  touch-action: pan-y;
+  border-radius: 20px;
+}
+.sp-track {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  will-change: transform;
+}
+.sp-panel {
+  flex: 0 0 auto;
+  will-change: transform, opacity;
+  transform-origin: 50% 40%;
+  min-height: 260px;
+}
+.sp-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding-block-start: 4px;
+}
+.sp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+  transition:
+    width 240ms cubic-bezier(0.32, 0.72, 0, 1),
+    background 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sp-dot[data-active="true"] {
+  width: 20px;
+  background: var(--sally-gold-loud, #E4C158);
+  box-shadow: 0 0 12px -2px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 60%, transparent);
+}
+
+.home-sub-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.home-station {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+}
+
 /* ───────────────────────────────────────────────────────────
    App · Header gear + Settings Center overlay
    ─────────────────────────────────────────────────────────── */

@@ -37,6 +37,7 @@ import { PortfolioHeroCard } from "@/components/home/portfolio-hero-card";
 import { PrimaryActionDock } from "@/components/home/primary-action-dock";
 import { IncomeActualSheet } from "@/components/income/income-actual-sheet";
 import { navigateToTab } from "@/lib/tab-nav";
+import { SubPager } from "@/components/app/sub-pager";
 
 const lazy = (
   loader: () => Promise<{
@@ -146,10 +147,18 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
 
+const HOME_STATIONS = [
+  { id: "portfolio", label: "פורטפוליו" },
+  { id: "overview", label: "סקירה" },
+  { id: "activity", label: "פעילות" },
+  { id: "health", label: "בריאות" },
+] as const;
+
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
+  const [station, setStation] = useState(0);
   const cloudSync = useCloudSyncState();
 
   const showCurtain = Boolean(
@@ -165,116 +174,93 @@ export function DashboardTab() {
   return (
     <SnapshotProvider>
       <TapDiscoveryToast />
-      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
-        {/* ── Critical banners — render only when relevant.
-            Phase 276 — `empty:hidden` collapses the wrapper div when
-            the lazy-loaded child renders null so the grid doesn't
-            accumulate phantom rows (each empty row was still adding
-            a gap-4 between visible cards). */}
-        {/* ── Portfolio Hero · single dominant Home card.
-            Replaced legacy StaleAnchorsBanner / TodayPulseCard /
-            HeroSpendableCard / HeroInsightCard. Component files
-            preserved on disk; only unmounted from Home. */}
-        <div className="sm:col-span-6">
-          <Safe name="PortfolioHeroCard">
-            <PortfolioHeroCard />
-          </Safe>
-        </div>
+      <div className="home-sub-shell pb-28">
+        <SubPager
+          stations={HOME_STATIONS as unknown as { id: string; label: string }[]}
+          activeIndex={station}
+          onIndexChange={setStation}
+        >
+          {/* ── Station 1 · Portfolio ───────────────────────────── */}
+          <section className="home-station" aria-labelledby="hs-portfolio">
+            <h2 id="hs-portfolio" className="sr-only">
+              פורטפוליו
+            </h2>
+            <Safe name="PortfolioHeroCard">
+              <PortfolioHeroCard />
+            </Safe>
+            <div className="empty:hidden">
+              <Safe name="WelcomeSetupCard">
+                <WelcomeSetupCard />
+              </Safe>
+            </div>
+          </section>
 
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="WelcomeSetupCard">
-            <WelcomeSetupCard />
-          </Safe>
-        </div>
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="PendingTray">
-            <PendingTray />
-          </Safe>
-        </div>
+          {/* ── Station 2 · Financial Overview ─────────────────── */}
+          <section className="home-station" aria-labelledby="hs-overview">
+            <h2 id="hs-overview" className="sr-only">
+              סקירה פיננסית
+            </h2>
+            <SectionHeader
+              title="חיובים קבועים והלוואות"
+              subtitle="שירותים שיורדים אוטומטית כל חודש"
+            />
+            <Safe name="ObligationsDashboard">
+              <ObligationsDashboard />
+            </Safe>
+            <SectionHeader
+              title="הכנסות"
+              subtitle="משכורות, פריסה והכנסה צפויה"
+            />
+            <Safe name="IncomeLauncher">
+              <IncomeLauncher />
+            </Safe>
+          </section>
 
-        {/* Phase 294 — Attention Center entry banner. Renders only
-           when there's at least one item; opens the bottom sheet
-           that lists pending confirmations, AI risks, and recurring
-           review items. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="AttentionBanner">
-            <AttentionBanner />
-          </Safe>
-        </div>
+          {/* ── Station 3 · Monthly Activity ───────────────────── */}
+          <section className="home-station" aria-labelledby="hs-activity">
+            <h2 id="hs-activity" className="sr-only">
+              פעילות החודש
+            </h2>
+            <SectionHeader
+              title="פעילות החודש"
+              subtitle="הפעולות האחרונות + טייס פיננסי"
+            />
+            <div className="empty:hidden">
+              <Safe name="CopilotCard">
+                <CopilotCard />
+              </Safe>
+            </div>
+            <div className="empty:hidden">
+              <Safe name="RecentActivity">
+                <RecentActivity />
+              </Safe>
+            </div>
+          </section>
 
-        {/* Phase — TimeRecapCard removed from Home mount; component
-           file preserved on disk. Portfolio Hero now carries the
-           live-forecast surface at the top of the tab. */}
-
-        {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="CopilotCard">
-            <CopilotCard />
-          </Safe>
-        </div>
-
-        {/* Visual separator between hero stack and grouped sections —
-           gives the L1 cards breathing room before L2 starts. */}
-        <div className="sm:col-span-6 h-1" aria-hidden />
-
-        {/* ── Sections — collapsed by default with a summary chip ──
-            Phase 285 — "תזרים עתידי" removed from Home. The full
-            forward-looking surfaces (MonthlyCashflowCard,
-            LiquidityCurveCard, CashflowBucketsCard,
-            UpcomingOutflowsCard, ForecastTimelineCard) all still
-            render inside the dedicated "עתידי" tab. Home stays
-            focused on today / now / immediate state. */}
-
-        {/* Phase 286 — "כרטיסי אשראי" section removed from Home. The
-           CardsHierarchyCard, CardsPressureCard, ActiveInstallmentsCard
-           experience still ships inside the "הוצאות" tab. Home stays
-           focused on executive overview. */}
-
-        <SectionHeader
-          title="חיובים קבועים והלוואות"
-          subtitle="שירותים שיורדים אוטומטית כל חודש"
-        />
-        <div className="sm:col-span-6">
-          <Safe name="ObligationsDashboard">
-            <ObligationsDashboard />
-          </Safe>
-        </div>
-
-        <SectionHeader
-          title="הכנסות"
-          subtitle="משכורות, פריסה והכנסה צפויה"
-        />
-        <div className="sm:col-span-6">
-          <Safe name="IncomeLauncher">
-            <IncomeLauncher />
-          </Safe>
-        </div>
-
-        <SectionHeader
-          title="בדיקות, מנויים וחריגות"
-          subtitle="התראות, מנויים חשודים ופריטים לאישור"
-        />
-        <div className="sm:col-span-6">
-          <Safe name="WatchLauncher">
-            <WatchLauncher />
-          </Safe>
-        </div>
-
-        {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
-           CopilotCard ("טייס פיננסי") was promoted to the executive
-           hero slot at the top of Home (above the hero stack), and
-           RecentActivity stays as a single compact preview below.
-           Every other card it used to host (HeroEomCard, PulseBar,
-           SmartSummaryCard, SpentThisMonthCard, AccountBridgeCard,
-           ExpectedBalanceCard, DailyInsightsCard) is a duplicate of
-           data already surfaced in Expenses / Future / Insights and
-           is no longer mounted on Home. Components remain on disk so
-           other tabs that import them keep working. */}
-        <div className="sm:col-span-6 empty:hidden">
-          <Safe name="RecentActivity">
-            <RecentActivity />
-          </Safe>
-        </div>
+          {/* ── Station 4 · Health Center ──────────────────────── */}
+          <section className="home-station" aria-labelledby="hs-health">
+            <h2 id="hs-health" className="sr-only">
+              מרכז בריאות
+            </h2>
+            <div className="empty:hidden">
+              <Safe name="PendingTray">
+                <PendingTray />
+              </Safe>
+            </div>
+            <div className="empty:hidden">
+              <Safe name="AttentionBanner">
+                <AttentionBanner />
+              </Safe>
+            </div>
+            <SectionHeader
+              title="בדיקות, מנויים וחריגות"
+              subtitle="התראות, מנויים חשודים ופריטים לאישור"
+            />
+            <Safe name="WatchLauncher">
+              <WatchLauncher />
+            </Safe>
+          </section>
+        </SubPager>
 
         <PrimaryActionDock
           onExpense={() => setOpen(true)}
