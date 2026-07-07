@@ -30,12 +30,13 @@ import { AnimatedBackground } from "@/components/dashboard/animated-background";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TabPager } from "@/components/app/tab-pager";
 import { soft as hapticSoft, tap as hapticTap } from "@/lib/haptics";
+import { Settings as SettingsGearIcon } from "lucide-react";
 
 import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { ExpensesTab } from "@/components/expenses/expenses-tab";
 import { FutureTab } from "@/components/future/future-tab";
 import { InsightsTab } from "@/components/insights/insights-tab";
-import { SettingsTab } from "@/components/settings/settings-tab";
+import { SettingsCenter } from "@/components/settings/settings-shell";
 import { SeedPanel } from "@/components/dev/seed-panel";
 import { AutoSync } from "@/components/sync/auto-sync";
 import { HeaderUser } from "@/components/auth/header-user";
@@ -46,18 +47,9 @@ import { PendingConfirmOverlay } from "@/components/confirmation/pending-confirm
 const isDev = process.env.NODE_ENV !== "production";
 
 /** Tab order for the swipe pager. Matches the visual right-to-left
- *  order of the TabsList in the header. */
+ *  order of the TabsList in the header. Settings is intentionally
+ *  absent — it lives behind the header gear button. */
 const TAB_ORDER: TabId[] = [
-  "dashboard",
-  "analytics",
-  "history",
-  "setup",
-  "settings",
-];
-
-/** Tabs that participate in the swipe pager. Settings is excluded
- *  and rendered directly — see comment in the render tree. */
-const TAB_ORDER_SWIPE: TabId[] = [
   "dashboard",
   "analytics",
   "history",
@@ -111,13 +103,33 @@ function AppShellContent() {
 
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     if (typeof window === "undefined") return "dashboard";
-    return tabFromHash(window.location.hash) ?? "dashboard";
+    const fromHash = tabFromHash(window.location.hash);
+    // Legacy #settings deep-link keeps working — it just opens the
+    // Settings Center overlay on top of the dashboard rather than
+    // switching tabs.
+    if (fromHash === "settings") return "dashboard";
+    return fromHash ?? "dashboard";
+  });
+
+  // Settings Center overlay — opened from the header gear. Held
+  // in local state (not the hash) so hash routing continues to
+  // model only the 4 top-level tabs.
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return tabFromHash(window.location.hash) === "settings";
   });
 
   // Central tab-change handler. Both the tab-bar clicks and swipe
   // gestures route through here so hash sync, collapse reset and
   // haptic feedback stay identical between input methods.
   function handleTabChange(next: TabId, source: "click" | "swipe") {
+    // "settings" is no longer a first-class tab — every call
+    // becomes an overlay open on top of whatever tab is active.
+    if (next === "settings") {
+      setSettingsOpen(true);
+      if (source === "click") hapticTap();
+      return;
+    }
     if (next === activeTab) return;
     setActiveTab(next);
     resetAllCollapseState();
@@ -143,10 +155,13 @@ function AppShellContent() {
     if (typeof window === "undefined") return;
     const onHashChange = () => {
       const next = tabFromHash(window.location.hash);
-      if (next) {
-        setActiveTab(next);
-        resetAllCollapseState();
+      if (!next) return;
+      if (next === "settings") {
+        setSettingsOpen(true);
+        return;
       }
+      setActiveTab(next);
+      resetAllCollapseState();
     };
     window.addEventListener("hashchange", onHashChange);
     // Phase 271 — leaving the tab (browser hidden) wipes collapse state
@@ -158,6 +173,10 @@ function AppShellContent() {
     };
     document.addEventListener("visibilitychange", onVisibility);
     const unsubNav = subscribeTabNav(({ tab: next, section }) => {
+      if (next === "settings") {
+        setSettingsOpen(true);
+        return;
+      }
       setActiveTab(next);
       resetAllCollapseState();
       if (next === "dashboard") {
@@ -289,7 +308,24 @@ function AppShellContent() {
               תקציב נקי, החלטות חכמות.
             </h1>
           </div>
-          <HeaderUser />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="app-gear"
+              onClick={() => {
+                hapticTap();
+                setSettingsOpen(true);
+              }}
+              aria-label="פתח מרכז הגדרות"
+            >
+              <SettingsGearIcon
+                className="size-4"
+                strokeWidth={1.7}
+                aria-hidden
+              />
+            </button>
+            <HeaderUser />
+          </div>
         </motion.header>
 
         <Tabs
@@ -336,48 +372,39 @@ function AppShellContent() {
                 ) : null}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* Settings gets rendered DIRECTLY, bypassing the pager
-           entirely. Framer's motion.div + useTransform layers
-           around each panel were still gating pointer events on
-           dense scroll surfaces despite the intent-detect guard;
-           removing them for Settings guarantees no ancestor
-           between the tab surface and the DOM root touches the
-           pointer event path. Other tabs keep the swipe pager.
-           Swap is instantaneous — no cross-fade — because the
-           unmount + mount replaces the tree wholesale. */}
+        {/* 4-tab swipe carousel. Settings is no longer a tab —
+           it lives behind the header gear button as a full-screen
+           SettingsCenter overlay so the pager never has to skip a
+           dense-tap surface. */}
         <div className="tp-outer mt-2">
-          {activeTab === "settings" ? (
-            <ErrorBoundary name="SettingsTab">
-              <SettingsTab />
+          <TabPager
+            activeIndex={TAB_ORDER.indexOf(activeTab)}
+            onIndexChange={(i) => handleTabChange(TAB_ORDER[i], "swipe")}
+            onDragSelect={() => hapticSoft()}
+          >
+            <ErrorBoundary name="DashboardTab">
+              <DashboardTab />
             </ErrorBoundary>
-          ) : (
-            <TabPager
-              activeIndex={TAB_ORDER_SWIPE.indexOf(activeTab)}
-              onIndexChange={(i) =>
-                handleTabChange(TAB_ORDER_SWIPE[i], "swipe")
-              }
-              onDragSelect={() => hapticSoft()}
-            >
-              <ErrorBoundary name="DashboardTab">
-                <DashboardTab />
-              </ErrorBoundary>
-              <ErrorBoundary name="ExpensesTab">
-                <ExpensesTab />
-              </ErrorBoundary>
-              <ErrorBoundary name="FutureTab">
-                <FutureTab />
-              </ErrorBoundary>
-              <ErrorBoundary name="InsightsTab">
-                <InsightsTab />
-              </ErrorBoundary>
-            </TabPager>
-          )}
+            <ErrorBoundary name="ExpensesTab">
+              <ExpensesTab />
+            </ErrorBoundary>
+            <ErrorBoundary name="FutureTab">
+              <FutureTab />
+            </ErrorBoundary>
+            <ErrorBoundary name="InsightsTab">
+              <InsightsTab />
+            </ErrorBoundary>
+          </TabPager>
         </div>
       </div>
+
+      <SettingsCenter
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       <AutoSync />
       <PendingConfirmListener />

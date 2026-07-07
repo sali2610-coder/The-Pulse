@@ -122,7 +122,14 @@ const MONTH_FMT_HE = new Intl.DateTimeFormat("he-IL", {
   year: "numeric",
 });
 
-export function SettingsShell() {
+export function SettingsShell({
+  onClose,
+}: {
+  /** When provided, the shell renders its X-close chip and calls
+   *  this handler on tap. Used by the Settings Center overlay in
+   *  the top nav; omit to render inline (dev routes). */
+  onClose?: () => void;
+} = {}) {
   const { on: devOn } = useDevMode();
   const [sheet, setSheet] = useState<SheetId>(null);
 
@@ -174,17 +181,15 @@ export function SettingsShell() {
 
   const sections: Section[] = [
     {
-      emoji: "⚙️",
-      title: "כללי",
+      emoji: "👤",
+      title: "פרופיל ומערכת",
       cards: [
         {
-          id: "language",
-          icon: Languages,
-          tone: "neutral",
-          title: "שפה",
-          description: "עברית · ברירת מחדל של המערכת",
-          preview: "עברית",
-          disabled: true,
+          id: "account",
+          icon: UserCircle2,
+          tone: "purple",
+          title: "פרטי חשבון",
+          description: "התחברות, יציאה וטוקנים",
         },
         {
           id: "theme",
@@ -200,11 +205,28 @@ export function SettingsShell() {
           title: "גודל טקסט",
           description: "קומפקטי · רגיל · גדול",
         },
+        {
+          id: "language",
+          icon: Languages,
+          tone: "neutral",
+          title: "שפה",
+          description: "עברית · ברירת מחדל של המערכת",
+          preview: "עברית",
+          disabled: true,
+        },
+        {
+          id: "about",
+          icon: Info,
+          tone: "neutral",
+          title: "אודות Sally",
+          description: "גרסה, קרדיטים ופלטפורמה",
+          preview: "0.1.0",
+        },
       ],
     },
     {
-      emoji: "💳",
-      title: "פיננסים",
+      emoji: "💰",
+      title: "כספים",
       cards: [
         {
           id: "bank-accounts",
@@ -290,59 +312,6 @@ export function SettingsShell() {
       ],
     },
     {
-      emoji: "🔔",
-      title: "התראות",
-      cards: [
-        {
-          id: "notifications",
-          icon: Bell,
-          tone: "cyan",
-          title: "Push וצליל",
-          description: "אישור הוצאה, צליל סנכרון",
-          preview: audioEnabled ? "צליל פעיל" : "פעיל",
-        },
-      ],
-    },
-    {
-      emoji: "📱",
-      title: "iPhone · Apple Pay",
-      cards: [
-        {
-          id: "iphone",
-          icon: Smartphone,
-          tone: "purple",
-          title: "קיצור iPhone",
-          description: "קליטה אוטומטית מ-CAL / MAX",
-        },
-      ],
-    },
-    {
-      emoji: "📤",
-      title: "ייבוא וייצוא",
-      cards: [
-        {
-          id: "io",
-          icon: FileDown,
-          tone: "gold",
-          title: "דפי חיוב וקבלות",
-          description: "CSV, גיבוי Sally, סריקת קבלה",
-        },
-      ],
-    },
-    {
-      emoji: "☁️",
-      title: "גיבוי וסנכרון",
-      cards: [
-        {
-          id: "backup",
-          icon: Cloud,
-          tone: "cyan",
-          title: "גיבויים",
-          description: "מקומי, ענן והתאוששות",
-        },
-      ],
-    },
-    {
       emoji: "🤖",
       title: "אוטומציות",
       cards: [
@@ -359,12 +328,41 @@ export function SettingsShell() {
                 ? `${importantAlerts} חשובות`
                 : `${alertCount} התראות`,
         },
+        {
+          id: "notifications",
+          icon: Bell,
+          tone: "cyan",
+          title: "Push וצליל",
+          description: "אישור הוצאה, צליל סנכרון",
+          preview: audioEnabled ? "צליל פעיל" : "פעיל",
+        },
+        {
+          id: "iphone",
+          icon: Smartphone,
+          tone: "purple",
+          title: "קיצור iPhone / Apple Pay",
+          description: "קליטה אוטומטית מ-CAL / MAX",
+        },
       ],
     },
     {
-      emoji: "🔒",
-      title: "פרטיות ואבטחה",
+      emoji: "🗂",
+      title: "נתונים וגיבוי",
       cards: [
+        {
+          id: "io",
+          icon: FileDown,
+          tone: "gold",
+          title: "ייבוא / ייצוא",
+          description: "CSV, גיבוי Sally, סריקת קבלה",
+        },
+        {
+          id: "backup",
+          icon: Cloud,
+          tone: "cyan",
+          title: "גיבויים וסנכרון ענן",
+          description: "מקומי, ענן והתאוששות",
+        },
         {
           id: "privacy",
           icon: ShieldCheck,
@@ -372,12 +370,6 @@ export function SettingsShell() {
           title: "פרטיות ואבטחה",
           description: "אימות, טוקנים, מזהה מכשיר",
         },
-      ],
-    },
-    {
-      emoji: "📊",
-      title: "נתונים ומנוע חישוב",
-      cards: [
         {
           id: "engine",
           icon: Database,
@@ -387,33 +379,6 @@ export function SettingsShell() {
             ? "יומני Sync, Push ומזהה"
             : "הפעל מצב פיתוח כדי לראות",
           preview: devOn ? "פעיל" : "כבוי",
-        },
-      ],
-    },
-    {
-      emoji: "👤",
-      title: "החשבון שלי",
-      cards: [
-        {
-          id: "account",
-          icon: UserCircle2,
-          tone: "purple",
-          title: "פרטי חשבון",
-          description: "התחברות, יציאה וטוקנים",
-        },
-      ],
-    },
-    {
-      emoji: "ℹ️",
-      title: "אודות",
-      cards: [
-        {
-          id: "about",
-          icon: Info,
-          tone: "neutral",
-          title: "אודות Sally",
-          description: "גרסה, קרדיטים ופלטפורמה",
-          preview: "0.1.0",
         },
       ],
     },
@@ -431,6 +396,26 @@ export function SettingsShell() {
 
   return (
     <div className="set-shell" dir="rtl">
+      {onClose ? (
+        <div className="set-shell-hero">
+          <button
+            type="button"
+            className="set-shell-close"
+            onClick={onClose}
+            aria-label="סגור הגדרות"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <div className="set-shell-hero-text">
+            <span className="set-shell-hero-eyebrow">SALLY · CONTROL</span>
+            <h2 className="set-shell-hero-title">מרכז הגדרות המערכת</h2>
+            <span className="set-shell-hero-sub">
+              פרופיל, כספים, אוטומציות ונתונים — הכל במקום אחד.
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       {sections.map((section) => (
         <section key={section.title} className="set-section">
           <header className="set-section-head">
@@ -701,5 +686,72 @@ function AboutCard() {
         </span>
       </div>
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// Settings Center — full-screen overlay opened from the header
+// gear button. Wraps the same SettingsShell inside a plain
+// fixed overlay (NOT a Dialog) so nested BottomSheets that
+// carry the mini-apps can still open without a focus-trap
+// fight. Body scroll is locked while open.
+// ────────────────────────────────────────────────────────────
+
+export function SettingsCenter({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <div
+          className="set-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="מרכז הגדרות המערכת"
+        >
+          <motion.div
+            className="set-center-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0.12 : 0.28 }}
+            onClick={onClose}
+            aria-hidden
+          />
+          <motion.div
+            className="set-center-panel"
+            initial={reduced ? { opacity: 0 } : { y: "100%" }}
+            animate={reduced ? { opacity: 1 } : { y: 0 }}
+            exit={reduced ? { opacity: 0 } : { y: "100%" }}
+            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            dir="rtl"
+          >
+            <div className="set-center-scroll">
+              <SettingsShell onClose={onClose} />
+            </div>
+          </motion.div>
+        </div>
+      ) : null}
+    </AnimatePresence>
   );
 }

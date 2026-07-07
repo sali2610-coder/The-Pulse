@@ -11490,3 +11490,148 @@ button.sally-glass {
   transform-origin: 50% 40%;
   will-change: transform, opacity, filter;
 }
+
+/* ───────────────────────────────────────────────────────────
+   App · Header gear + Settings Center overlay
+   ─────────────────────────────────────────────────────────── */
+.app-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.008));
+  color: var(--sally-ink-2, rgba(255, 255, 255, 0.85));
+  cursor: pointer;
+  transition:
+    border-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 160ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 6px 16px -12px rgba(0, 0, 0, 0.55);
+}
+.app-gear:hover {
+  border-color: color-mix(in srgb, var(--sally-gold-loud, #E4C158) 40%, rgba(255, 255, 255, 0.16));
+  color: var(--sally-gold-loud, #E4C158);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 8px 22px -12px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 45%, transparent);
+}
+.app-gear:active { transform: scale(0.94) rotate(-14deg); }
+.app-gear:focus-visible {
+  outline: 2px solid var(--sally-gold-loud, #E4C158);
+  outline-offset: 2px;
+}
+
+/* Settings Center overlay — plain fixed layer (NOT a Dialog),
+   opens with a spring drawer from the bottom. Body scroll is
+   locked while open. */
+.set-center {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+.set-center-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.set-center-panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 34rem;
+  max-height: 100dvh;
+  margin-top: max(env(safe-area-inset-top), 20px);
+  background:
+    linear-gradient(180deg, rgba(20, 20, 22, 0.98), rgba(10, 10, 12, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 0;
+  border-radius: 32px 32px 0 0;
+  box-shadow:
+    0 -32px 80px -20px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.set-center-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 28px;
+  flex: 1;
+  min-height: 0;
+}
+.set-center-scroll::-webkit-scrollbar { display: none; }
+.set-center-scroll { scrollbar-width: none; }
+
+/* SettingsShell hero (rendered only when onClose is provided) */
+.set-shell-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 4px 18px;
+  margin-inline: -4px;
+}
+.set-shell-close {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sally-ink-2, rgba(255, 255, 255, 0.85));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    border-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    background 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 160ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.set-shell-close:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+}
+.set-shell-close:active { transform: scale(0.94); }
+.set-shell-close:focus-visible {
+  outline: 2px solid var(--sally-gold-loud, #E4C158);
+  outline-offset: 2px;
+}
+.set-shell-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+.set-shell-hero-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--sally-gold-loud, #E4C158);
+}
+.set-shell-hero-title {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--sally-ink-1, #F6F6F6);
+  margin: 0;
+}
+.set-shell-hero-sub {
+  font-size: 12px;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.6));
+  line-height: 1.5;
+}
