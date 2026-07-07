@@ -397,27 +397,58 @@ export function SettingsShell({
   return (
     <div className="set-shell" dir="rtl">
       {onClose ? (
-        <div className="set-shell-hero">
-          <button
-            type="button"
-            className="set-shell-close"
-            onClick={onClose}
-            aria-label="סגור הגדרות"
-          >
-            <X className="size-4" strokeWidth={2} />
-          </button>
-          <div className="set-shell-hero-text">
-            <span className="set-shell-hero-eyebrow">SALLY · CONTROL</span>
-            <h2 className="set-shell-hero-title">מרכז הגדרות המערכת</h2>
-            <span className="set-shell-hero-sub">
-              פרופיל, כספים, אוטומציות ונתונים — הכל במקום אחד.
-            </span>
+        <motion.header
+          className="set-shell-hero"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
+        >
+          <div className="set-shell-hero-topbar">
+            <button
+              type="button"
+              className="set-shell-close"
+              onClick={onClose}
+              aria-label="סגור מרכז הבקרה"
+            >
+              <X className="size-4" strokeWidth={2} />
+            </button>
+            <span className="set-shell-hero-brand">SALLY · CONTROL CENTER</span>
+            <span aria-hidden className="set-shell-hero-brand-spacer" />
           </div>
-        </div>
+          <motion.span
+            aria-hidden
+            className="set-shell-hero-icon"
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{
+              type: "spring",
+              stiffness: 260,
+              damping: 22,
+              delay: 0.08,
+            }}
+          >
+            <Palette className="size-6" strokeWidth={1.6} />
+          </motion.span>
+          <h2 className="set-shell-hero-title">מרכז הבקרה</h2>
+          <p className="set-shell-hero-sub">
+            נהל את החשבונות, הכרטיסים, ההלוואות, ההתראות והאוטומציות שלך —
+            הכל במקום אחד.
+          </p>
+        </motion.header>
       ) : null}
 
-      {sections.map((section) => (
-        <section key={section.title} className="set-section">
+      {sections.map((section, sIdx) => (
+        <motion.section
+          key={section.title}
+          className="set-section"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: 0.42,
+            ease: [0.32, 0.72, 0, 1],
+            delay: 0.06 + sIdx * 0.06,
+          }}
+        >
           <header className="set-section-head">
             <span aria-hidden className="set-section-emoji">
               {section.emoji}
@@ -431,7 +462,7 @@ export function SettingsShell({
               </li>
             ))}
           </ul>
-        </section>
+        </motion.section>
       ))}
 
       {/* Sheets — one per card. */}
@@ -727,7 +758,7 @@ export function SettingsCenter({
           className="set-center"
           role="dialog"
           aria-modal="true"
-          aria-label="מרכז הגדרות המערכת"
+          aria-label="מרכז הבקרה של Sally"
         >
           <motion.div
             className="set-center-backdrop"
@@ -735,15 +766,22 @@ export function SettingsCenter({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduced ? 0.12 : 0.28 }}
-            onClick={onClose}
             aria-hidden
           />
           <motion.div
             className="set-center-panel"
-            initial={reduced ? { opacity: 0 } : { y: "100%" }}
-            animate={reduced ? { opacity: 1 } : { y: 0 }}
-            exit={reduced ? { opacity: 0 } : { y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            /* Slide in from the start edge (right in RTL). Feels
+               like navigating to a new system page — not opening
+               a drawer over the current one. Spring keeps the
+               velocity iOS-natural. */
+            initial={
+              reduced ? { opacity: 0 } : { opacity: 0, x: "6%", scale: 0.985 }
+            }
+            animate={reduced ? { opacity: 1 } : { opacity: 1, x: 0, scale: 1 }}
+            exit={
+              reduced ? { opacity: 0 } : { opacity: 0, x: "6%", scale: 0.985 }
+            }
+            transition={{ type: "spring", stiffness: 260, damping: 32 }}
             dir="rtl"
           >
             <div className="set-center-scroll">
