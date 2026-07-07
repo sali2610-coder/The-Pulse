@@ -16,13 +16,19 @@
 // Each migrated screen wires its own state + actions and feeds the
 // primitives below. NO engine math is touched.
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import { Minus, Plus, Trash2, X } from "lucide-react";
 
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { tap as hapticTap } from "@/lib/haptics";
+
+/** Debounce window in ms — a second tap on the primary CTA within
+ *  this window is ignored. Prevents duplicate saves (double-add,
+ *  double-mutation) from a fast double-tap or an accidental
+ *  synthetic click. */
+const PRIMARY_DEBOUNCE_MS = 700;
 
 // ────────────────────────────────────────────────────────────────────
 // Shell wrapper
@@ -401,6 +407,39 @@ export function FullScreenFooter({
   cancelLabel?: string;
   onCancel?: () => void;
 }) {
+  // Double-save guard. Fast double-taps on the primary CTA used
+  // to fire two store mutations (double addRule / addLoan /
+  // addIncome / addExpense) — visible in the list as duplicated
+  // rows. Timestamp-based debounce is cheaper than a busy state
+  // + doesn't need consumers to opt in.
+  const lastPrimaryAt = useRef(0);
+  const lastDestructiveAt = useRef(0);
+  const lastCancelAt = useRef(0);
+
+  function handlePrimary() {
+    const now = Date.now();
+    if (now - lastPrimaryAt.current < PRIMARY_DEBOUNCE_MS) return;
+    lastPrimaryAt.current = now;
+    hapticTap();
+    onPrimary();
+  }
+  function handleCancel() {
+    if (!onCancel) return;
+    const now = Date.now();
+    if (now - lastCancelAt.current < 300) return;
+    lastCancelAt.current = now;
+    hapticTap();
+    onCancel();
+  }
+  function handleDestructive() {
+    if (!onDestructive) return;
+    const now = Date.now();
+    if (now - lastDestructiveAt.current < PRIMARY_DEBOUNCE_MS) return;
+    lastDestructiveAt.current = now;
+    hapticTap();
+    onDestructive();
+  }
+
   return (
     <div
       className="fs-footer"
@@ -413,10 +452,7 @@ export function FullScreenFooter({
         {cancelLabel && onCancel ? (
           <button
             type="button"
-            onClick={() => {
-              hapticTap();
-              onCancel();
-            }}
+            onClick={handleCancel}
             className="fs-cancel"
             aria-label={cancelLabel}
           >
@@ -425,10 +461,7 @@ export function FullScreenFooter({
         ) : null}
         <button
           type="button"
-          onClick={() => {
-            hapticTap();
-            onPrimary();
-          }}
+          onClick={handlePrimary}
           disabled={primaryDisabled}
           aria-label={primaryLabel}
           className="fs-primary"
@@ -439,11 +472,9 @@ export function FullScreenFooter({
       {destructiveLabel && onDestructive ? (
         <button
           type="button"
-          onClick={() => {
-            hapticTap();
-            onDestructive();
-          }}
+          onClick={handleDestructive}
           className="fs-destructive"
+          aria-label={destructiveLabel}
         >
           <Trash2 className="size-3.5" aria-hidden />
           {destructiveLabel}
