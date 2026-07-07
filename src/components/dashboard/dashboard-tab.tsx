@@ -11,8 +11,7 @@
 // headers. Each header shows a single colored summary chip so the
 // user reads the bottom-line of every section without expanding.
 
-import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 
 import { useFinanceStore } from "@/lib/store";
@@ -38,7 +37,6 @@ import { PortfolioHeroCard } from "@/components/home/portfolio-hero-card";
 import { PrimaryActionDock } from "@/components/home/primary-action-dock";
 import { IncomeActualSheet } from "@/components/income/income-actual-sheet";
 import { navigateToTab } from "@/lib/tab-nav";
-import { SubPager } from "@/components/app/sub-pager";
 
 const lazy = (
   loader: () => Promise<{
@@ -148,52 +146,10 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
 
-function StationTitle({
-  id,
-  eyebrow,
-  children,
-}: {
-  id: string;
-  eyebrow: string;
-  children: ReactNode;
-}) {
-  return (
-    <header className="home-station-title" dir="rtl">
-      <span className="home-station-title-eyebrow" data-mono="true" dir="ltr">
-        {eyebrow}
-      </span>
-      <h2 id={id} className="home-station-title-h">
-        {children}
-      </h2>
-    </header>
-  );
-}
-
-/** The PrimaryActionDock is `position: fixed` — but the outer
- *  TabPager panel carries `will-change: transform` which
- *  establishes a containing block for fixed descendants in
- *  modern browsers. Portal to document.body so the dock stays
- *  truly viewport-fixed above every station. Client-only. */
-function DockPortal({ children }: { children: ReactNode }) {
-  if (typeof document === "undefined") return null;
-  return createPortal(children, document.body);
-}
-// keep useEffect import used (avoids future ESLint churn if the
-// dock portal grows to need mount lifecycle again).
-void useEffect;
-
-const HOME_STATIONS = [
-  { id: "portfolio", label: "פורטפוליו" },
-  { id: "overview", label: "סקירה" },
-  { id: "activity", label: "פעילות" },
-  { id: "health", label: "בריאות" },
-] as const;
-
 export function DashboardTab() {
   const [open, setOpen] = useState(false);
   const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const [incomeSheetOpen, setIncomeSheetOpen] = useState(false);
-  const [station, setStation] = useState(0);
   const cloudSync = useCloudSyncState();
 
   const showCurtain = Boolean(
@@ -209,99 +165,124 @@ export function DashboardTab() {
   return (
     <SnapshotProvider>
       <TapDiscoveryToast />
-      <div className="home-sub-shell">
-        <SubPager
-          stations={HOME_STATIONS as unknown as { id: string; label: string }[]}
-          activeIndex={station}
-          onIndexChange={setStation}
-        >
-          {/* ── Station 1 · Portfolio ───────────────────────────── */}
-          <section className="home-station" aria-labelledby="hs-portfolio">
-            <StationTitle id="hs-portfolio" eyebrow="1 / 4">
-              פורטפוליו
-            </StationTitle>
-            <div className="home-station-body">
-              <Safe name="PortfolioHeroCard">
-                <PortfolioHeroCard />
-              </Safe>
-              <div className="empty:hidden">
-                <Safe name="WelcomeSetupCard">
-                  <WelcomeSetupCard />
-                </Safe>
-              </div>
-            </div>
-          </section>
+      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+        {/* ── Critical banners — render only when relevant.
+            Phase 276 — `empty:hidden` collapses the wrapper div when
+            the lazy-loaded child renders null so the grid doesn't
+            accumulate phantom rows (each empty row was still adding
+            a gap-4 between visible cards). */}
+        {/* ── Portfolio Hero · single dominant Home card.
+            Replaced legacy StaleAnchorsBanner / TodayPulseCard /
+            HeroSpendableCard / HeroInsightCard. Component files
+            preserved on disk; only unmounted from Home. */}
+        <div className="sm:col-span-6">
+          <Safe name="PortfolioHeroCard">
+            <PortfolioHeroCard />
+          </Safe>
+        </div>
 
-          {/* ── Station 2 · Financial Overview ─────────────────── */}
-          <section className="home-station" aria-labelledby="hs-overview">
-            <StationTitle id="hs-overview" eyebrow="2 / 4">
-              סקירה חודשית
-            </StationTitle>
-            <div className="home-station-body">
-              <Safe name="ObligationsDashboard">
-                <ObligationsDashboard />
-              </Safe>
-              <Safe name="IncomeLauncher">
-                <IncomeLauncher />
-              </Safe>
-            </div>
-          </section>
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="WelcomeSetupCard">
+            <WelcomeSetupCard />
+          </Safe>
+        </div>
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="PendingTray">
+            <PendingTray />
+          </Safe>
+        </div>
 
-          {/* ── Station 3 · Monthly Activity ───────────────────── */}
-          <section className="home-station" aria-labelledby="hs-activity">
-            <StationTitle id="hs-activity" eyebrow="3 / 4">
-              פעילות החודש
-            </StationTitle>
-            <div className="home-station-body home-station-body-activity">
-              <Safe name="RecentActivity">
-                <RecentActivity />
-              </Safe>
-            </div>
-          </section>
+        {/* Phase 294 — Attention Center entry banner. Renders only
+           when there's at least one item; opens the bottom sheet
+           that lists pending confirmations, AI risks, and recurring
+           review items. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="AttentionBanner">
+            <AttentionBanner />
+          </Safe>
+        </div>
 
-          {/* ── Station 4 · Health Center (טייס פיננסי inside) ── */}
-          <section className="home-station" aria-labelledby="hs-health">
-            <StationTitle id="hs-health" eyebrow="4 / 4">
-              בריאות פיננסית
-            </StationTitle>
-            <div className="home-station-body home-station-body-health">
-              <Safe name="CopilotCard">
-                <CopilotCard />
-              </Safe>
-              <div className="empty:hidden">
-                <Safe name="AttentionBanner">
-                  <AttentionBanner />
-                </Safe>
-              </div>
-              <Safe name="WatchLauncher">
-                <WatchLauncher />
-              </Safe>
-              <div className="empty:hidden">
-                <Safe name="PendingTray">
-                  <PendingTray />
-                </Safe>
-              </div>
-            </div>
-          </section>
-        </SubPager>
+        {/* Phase — TimeRecapCard removed from Home mount; component
+           file preserved on disk. Portfolio Hero now carries the
+           live-forecast surface at the top of the tab. */}
 
-        {/* Dock is only useful on the Portfolio station where the
-           user first meets the balance + upcoming events. Stations
-           2/3/4 are context-heavy (Overview / Activity / Health)
-           and the dock would compete with the rail + swipe as the
-           navigation surface. Portal it to body so the outer
-           TabPager's transform never traps it. */}
-        {station === 0 ? (
-          <DockPortal>
-            <PrimaryActionDock
-              onExpense={() => setOpen(true)}
-              onIncome={() => setIncomeSheetOpen(true)}
-              onTransfer={() => setWithdrawalOpen(true)}
-              onCredit={() => navigateToTab("analytics")}
-              onLoan={() => navigateToTab("setup", "loans-mini-app")}
-            />
-          </DockPortal>
-        ) : null}
+        {/* Phase 295 — "טייס פיננסי" Home AI hero. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="CopilotCard">
+            <CopilotCard />
+          </Safe>
+        </div>
+
+        {/* Visual separator between hero stack and grouped sections —
+           gives the L1 cards breathing room before L2 starts. */}
+        <div className="sm:col-span-6 h-1" aria-hidden />
+
+        {/* ── Sections — collapsed by default with a summary chip ──
+            Phase 285 — "תזרים עתידי" removed from Home. The full
+            forward-looking surfaces (MonthlyCashflowCard,
+            LiquidityCurveCard, CashflowBucketsCard,
+            UpcomingOutflowsCard, ForecastTimelineCard) all still
+            render inside the dedicated "עתידי" tab. Home stays
+            focused on today / now / immediate state. */}
+
+        {/* Phase 286 — "כרטיסי אשראי" section removed from Home. The
+           CardsHierarchyCard, CardsPressureCard, ActiveInstallmentsCard
+           experience still ships inside the "הוצאות" tab. Home stays
+           focused on executive overview. */}
+
+        <SectionHeader
+          title="חיובים קבועים והלוואות"
+          subtitle="שירותים שיורדים אוטומטית כל חודש"
+        />
+        <div className="sm:col-span-6">
+          <Safe name="ObligationsDashboard">
+            <ObligationsDashboard />
+          </Safe>
+        </div>
+
+        <SectionHeader
+          title="הכנסות"
+          subtitle="משכורות, פריסה והכנסה צפויה"
+        />
+        <div className="sm:col-span-6">
+          <Safe name="IncomeLauncher">
+            <IncomeLauncher />
+          </Safe>
+        </div>
+
+        <SectionHeader
+          title="בדיקות, מנויים וחריגות"
+          subtitle="התראות, מנויים חשודים ופריטים לאישור"
+        />
+        <div className="sm:col-span-6">
+          <Safe name="WatchLauncher">
+            <WatchLauncher />
+          </Safe>
+        </div>
+
+        {/* Phase 295 — "פירוט מתקדם" removed entirely from Home.
+           CopilotCard ("טייס פיננסי") was promoted to the executive
+           hero slot at the top of Home (above the hero stack), and
+           RecentActivity stays as a single compact preview below.
+           Every other card it used to host (HeroEomCard, PulseBar,
+           SmartSummaryCard, SpentThisMonthCard, AccountBridgeCard,
+           ExpectedBalanceCard, DailyInsightsCard) is a duplicate of
+           data already surfaced in Expenses / Future / Insights and
+           is no longer mounted on Home. Components remain on disk so
+           other tabs that import them keep working. */}
+        <div className="sm:col-span-6 empty:hidden">
+          <Safe name="RecentActivity">
+            <RecentActivity />
+          </Safe>
+        </div>
+
+        <PrimaryActionDock
+          onExpense={() => setOpen(true)}
+          onIncome={() => setIncomeSheetOpen(true)}
+          onTransfer={() => setWithdrawalOpen(true)}
+          onCredit={() => navigateToTab("analytics")}
+          onLoan={() => navigateToTab("setup", "loans-mini-app")}
+        />
 
         <ExpenseDialog open={open} onOpenChange={setOpen} />
         <WithdrawalDialog

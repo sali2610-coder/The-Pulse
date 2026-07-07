@@ -27,9 +27,8 @@ import {
 } from "@/components/dashboard/attention-center";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TabPager } from "@/components/app/tab-pager";
-import { soft as hapticSoft, tap as hapticTap } from "@/lib/haptics";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { tap as hapticTap } from "@/lib/haptics";
 import { Settings as SettingsGearIcon } from "lucide-react";
 
 import { DashboardTab } from "@/components/dashboard/dashboard-tab";
@@ -45,16 +44,6 @@ import { PendingConfirmListener } from "@/components/app/pending-confirm-listene
 import { PendingConfirmOverlay } from "@/components/confirmation/pending-confirm-overlay";
 
 const isDev = process.env.NODE_ENV !== "production";
-
-/** Tab order for the swipe pager. Matches the visual right-to-left
- *  order of the TabsList in the header. Settings is intentionally
- *  absent — it lives behind the header gear button. */
-const TAB_ORDER: TabId[] = [
-  "dashboard",
-  "analytics",
-  "history",
-  "setup",
-];
 
 // The full Sally app — tabs, dashboard, sync, dev tools. Rendered only when
 // auth is either disabled (single-user fallback) or the user is signed in.
@@ -119,21 +108,21 @@ function AppShellContent() {
     return tabFromHash(window.location.hash) === "settings";
   });
 
-  // Central tab-change handler. Both the tab-bar clicks and swipe
-  // gestures route through here so hash sync, collapse reset and
-  // haptic feedback stay identical between input methods.
-  function handleTabChange(next: TabId, source: "click" | "swipe") {
+  // Central tab-change handler. Handles the tab-bar clicks +
+  // hash-based deep links; every call plays the haptic once and
+  // syncs the URL hash.
+  function handleTabChange(next: TabId) {
     // "settings" is no longer a first-class tab — every call
     // becomes an overlay open on top of whatever tab is active.
     if (next === "settings") {
       setSettingsOpen(true);
-      if (source === "click") hapticTap();
+      hapticTap();
       return;
     }
     if (next === activeTab) return;
     setActiveTab(next);
     resetAllCollapseState();
-    if (source === "click") hapticTap();
+    hapticTap();
     if (typeof window !== "undefined") {
       if (next === "dashboard") {
         if (window.location.hash) {
@@ -332,7 +321,7 @@ function AppShellContent() {
           value={activeTab}
           onValueChange={(v) => {
             if (typeof v === "string" && isTabId(v)) {
-              handleTabChange(v, "click");
+              handleTabChange(v);
             }
           }}
         >
@@ -373,32 +362,31 @@ function AppShellContent() {
               </span>
             </TabsTrigger>
           </TabsList>
-        </Tabs>
 
-        {/* 4-tab swipe carousel. Settings is no longer a tab —
-           it lives behind the header gear button as a full-screen
-           SettingsCenter overlay so the pager never has to skip a
-           dense-tap surface. */}
-        <div className="tp-outer mt-2">
-          <TabPager
-            activeIndex={TAB_ORDER.indexOf(activeTab)}
-            onIndexChange={(i) => handleTabChange(TAB_ORDER[i], "swipe")}
-            onDragSelect={() => hapticSoft()}
-          >
+          {/* 4-tab content — classic TabsContent pattern, no swipe
+             pager. Settings lives behind the header gear button as
+             a full-screen SettingsCenter overlay. */}
+          <TabsContent value="dashboard" className="mt-2">
             <ErrorBoundary name="DashboardTab">
               <DashboardTab />
             </ErrorBoundary>
+          </TabsContent>
+          <TabsContent value="analytics" className="mt-2">
             <ErrorBoundary name="ExpensesTab">
               <ExpensesTab />
             </ErrorBoundary>
+          </TabsContent>
+          <TabsContent value="history" className="mt-2">
             <ErrorBoundary name="FutureTab">
               <FutureTab />
             </ErrorBoundary>
+          </TabsContent>
+          <TabsContent value="setup" className="mt-2">
             <ErrorBoundary name="InsightsTab">
               <InsightsTab />
             </ErrorBoundary>
-          </TabPager>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <SettingsCenter
