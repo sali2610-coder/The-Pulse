@@ -11053,6 +11053,9 @@ button.sally-glass {
   border: 1px solid rgba(248, 113, 113, 0.20);
 }
 .fs-primary {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   flex: 1;
   height: 56px;
   border: 0;
@@ -11071,7 +11074,38 @@ button.sally-glass {
     box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1),
     opacity 200ms;
 }
+/* Subtle sheen sweep — a soft highlight glides across every ~5s
+   so the gold CTA never feels static. Fades on tap so the press
+   feels crisp. */
+.fs-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.42) 45%,
+    rgba(255, 255, 255, 0.62) 50%,
+    rgba(255, 255, 255, 0.42) 55%,
+    transparent 75%
+  );
+  transform: translateX(-120%);
+  animation: fs-primary-sheen 5.5s cubic-bezier(0.32, 0.72, 0, 1) infinite;
+}
+.fs-primary > * { position: relative; z-index: 1; }
+.fs-primary:active::before { opacity: 0; }
 .fs-primary:active { transform: scale(0.985); }
+.fs-primary:disabled::before { display: none; }
+
+@keyframes fs-primary-sheen {
+  0% { transform: translateX(-120%); }
+  55%, 100% { transform: translateX(120%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-primary::before { animation: none; display: none; }
+}
 .fs-primary:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -11530,6 +11564,22 @@ button.sally-glass {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.08) inset,
     0 0 22px -8px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 55%, transparent) !important;
+  animation: app-tab-breath 4.5s ease-in-out infinite;
+}
+@keyframes app-tab-breath {
+  0%, 100% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 0 22px -8px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 55%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.10) inset,
+      0 0 30px -6px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 68%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-tabs > [data-slot="tabs-trigger"][data-active] { animation: none; }
 }
 .app-tabs > [data-slot="tabs-trigger"]:not([data-active]):hover {
   color: var(--sally-ink-1, #F6F6F6) !important;
@@ -11564,7 +11614,16 @@ button.sally-glass {
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
     0 8px 22px -12px color-mix(in srgb, var(--sally-gold-loud, #E4C158) 45%, transparent);
 }
+.app-gear:hover > svg {
+  transform: rotate(24deg);
+}
+.app-gear > svg {
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
 .app-gear:active { transform: scale(0.94) rotate(-14deg); }
+@media (prefers-reduced-motion: reduce) {
+  .app-gear:hover > svg { transform: none; }
+}
 .app-gear:focus-visible {
   outline: 2px solid var(--sally-gold-loud, #E4C158);
   outline-offset: 2px;
@@ -11780,6 +11839,24 @@ button.sally-glass {
     box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1),
     transform 160ms cubic-bezier(0.32, 0.72, 0, 1);
 }
+.set-shell .set-card::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 20% 20%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--set-card-tone, transparent) 75%, transparent),
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 2;
+  pointer-events: none;
+}
+.set-shell .set-card:hover::before { opacity: 1; }
 .set-shell .set-card:hover {
   border-color: color-mix(in srgb, var(--set-card-tone, transparent) 34%, rgba(255, 255, 255, 0.16));
   background:
@@ -11789,6 +11866,7 @@ button.sally-glass {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.05) inset,
     0 14px 30px -18px color-mix(in srgb, var(--set-card-tone, #000) 45%, rgba(0, 0, 0, 0.7));
+  transform: translateY(-1px);
 }
 .set-shell .set-card:active {
   transform: scale(0.985);
