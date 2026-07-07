@@ -172,50 +172,34 @@ export function ExpensesCommitmentsCockpit() {
     cash: { amount: breakdown.cashTotal, count: breakdown.counts.cash },
   };
 
+  const activeTone =
+    openLane !== null ? LANE_META[openLane].tone : "#D4AF37";
   return (
     <section
-      className="glass-card relative overflow-hidden rounded-3xl p-4"
+      className="cc-hero"
       dir="rtl"
       aria-label="סך התחייבויות החודש"
+      data-open-tone={openLane ?? undefined}
+      style={{ ["--cc-active-tone" as string]: activeTone }}
     >
-      {/* Soft gold atmosphere — calm, premium */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-28"
-        style={{
-          background:
-            "radial-gradient(circle at 50% -10%, rgba(212,175,55,0.16) 0%, transparent 65%)",
-        }}
-      />
+      <span aria-hidden className="cc-hero-aurora" />
+      <span aria-hidden className="cc-hero-gloss" />
+      <span aria-hidden className="cc-hero-emboss" />
 
-      {/* Hero total */}
-      <header className="flex flex-col items-center gap-1 pb-3">
-        <span className="inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.3em] text-muted-foreground">
-          <Sparkles className="size-3 text-gold/80" aria-hidden />
+      <header className="cc-hero-head">
+        <span className="cc-hero-eyebrow">
+          <Sparkles className="size-3" aria-hidden />
           סך התחייבויות החודש
         </span>
-        <SpringAmount
-          amount={breakdown.total}
-          tone="#D4AF37"
-          size="hero"
-        />
-        <span className="text-[10.5px] text-muted-foreground/80">
-          {breakdown.monthKey}
+        <SpringAmount amount={breakdown.total} tone={activeTone} size="hero" />
+        <span className="cc-hero-sub">
+          {breakdown.monthKey} · לחץ כרטיס לפירוט
         </span>
       </header>
 
-      {/* Soft divider */}
-      <div
-        aria-hidden
-        className="mx-auto mb-3 h-px w-40"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent, rgba(212,175,55,0.4), transparent)",
-        }}
-      />
+      <span aria-hidden className="cc-hairline" />
 
-      {/* 2×2 grid of lane blocks */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="cc-grid" role="tablist" aria-label="חלוקת התחייבויות">
         {LANE_ORDER.map((id) => (
           <LaneBlock
             key={id}
@@ -231,9 +215,6 @@ export function ExpensesCommitmentsCockpit() {
         ))}
       </div>
 
-      {/* Inline expansion — rendered ONCE below the grid so the
-         expanded panel always lives in a predictable spot. No
-         modal / drawer / sheet / nav. */}
       <AnimatePresence initial={false}>
         {openLane ? (
           <motion.div
@@ -241,8 +222,8 @@ export function ExpensesCommitmentsCockpit() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.28, ease: "easeOut" }}
-            className="overflow-hidden"
+            transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+            className="cc-detail-wrap"
           >
             <LaneDetail
               lane={openLane}
@@ -255,9 +236,7 @@ export function ExpensesCommitmentsCockpit() {
 
       {orphans.length > 0 ? <OrphanWarning orphans={orphans} /> : null}
 
-      <p className="mt-3 text-center text-[10.5px] text-muted-foreground/80">
-        כל חיוב נספר פעם אחת בלבד
-      </p>
+      <p className="cc-footer">כל חיוב נספר פעם אחת בלבד</p>
     </section>
   );
 }
@@ -338,34 +317,31 @@ function LaneBlock({
   return (
     <motion.button
       type="button"
+      role="tab"
+      aria-selected={open}
       onClick={onTap}
-      whileTap={{ scale: 0.97 }}
-      animate={{ scale: open ? 1.01 : 1 }}
+      whileTap={{ scale: 0.965 }}
+      animate={{ scale: open ? 1.015 : 1 }}
       transition={{ type: "spring", stiffness: 320, damping: 26 }}
-      className="flex flex-col items-center gap-1.5 rounded-2xl border bg-white/[0.02] p-3 text-center"
-      style={{
-        borderColor: open ? `${meta.tone}66` : "rgba(255,255,255,0.10)",
-        boxShadow: open
-          ? `0 0 24px -8px ${meta.tone}88, 0 1px 0 rgba(255,255,255,0.06) inset`
-          : inactive
-            ? "none"
-            : `0 0 18px -12px ${meta.tone}66`,
-        opacity: inactive ? 0.55 : 1,
-      }}
+      className="cc-tile"
+      data-tone={lane}
+      data-open={open ? "true" : undefined}
+      data-inactive={inactive ? "true" : undefined}
+      style={{ ["--cc-tone" as string]: meta.tone }}
       aria-pressed={open}
-      aria-label={`${meta.label} ${ILS.format(amount)}`}
+      aria-label={`${meta.label} ${ILS.format(amount)} · ${count} ${meta.countWord}`}
     >
-      <span
-        aria-hidden
-        className="flex size-7 items-center justify-center rounded-full"
-        style={{ background: `${meta.tone}22`, color: meta.tone }}
-      >
-        <meta.icon className="size-3.5" />
+      <span aria-hidden className="cc-tile-glow" />
+      <span aria-hidden className="cc-tile-gloss" />
+      <span className="cc-tile-row">
+        <span aria-hidden className="cc-tile-icon">
+          <meta.icon className="size-4" strokeWidth={1.7} />
+        </span>
+        <span className="cc-tile-label">{meta.label}</span>
       </span>
-      <span className="text-[11px] text-muted-foreground">{meta.label}</span>
-      <SpringAmount amount={amount} tone={meta.tone} />
-      <span className="text-[10px] text-muted-foreground/70">
-        {count > 0 ? `${count} ${meta.countWord}` : "—"}
+      <SpringAmount amount={amount} tone={meta.tone} size="tile" />
+      <span className="cc-tile-count">
+        {count > 0 ? `${count} ${meta.countWord}` : "אין פריטים החודש"}
       </span>
     </motion.button>
   );
@@ -393,10 +369,20 @@ function LaneDetail({
       { label: "ממתינים לאישור", value: exposure.pendingTransactions },
     ];
     return (
-      <div className="pt-3" dir="rtl">
-        <ul className="grid grid-cols-2 gap-1.5">
+      <div
+        className="cc-detail"
+        dir="rtl"
+        style={{ ["--cc-tone" as string]: meta.tone }}
+      >
+        <span aria-hidden className="cc-detail-hairline" />
+        <ul className="cc-detail-grid">
           {cells.map((c) => (
-            <DetailRow key={c.label} label={c.label} value={c.value} tone={meta.tone} />
+            <DetailRow
+              key={c.label}
+              label={c.label}
+              value={c.value}
+              tone={meta.tone}
+            />
           ))}
         </ul>
       </div>
@@ -408,47 +394,45 @@ function LaneDetail({
   if (rows.length === 0) {
     return (
       <div
-        className="mt-3 rounded-xl border border-white/8 bg-white/[0.02] p-3 text-center text-[11.5px] text-muted-foreground"
+        className="cc-detail cc-detail-empty"
         dir="rtl"
+        style={{ ["--cc-tone" as string]: meta.tone }}
       >
-        אין פריטים בקטגוריה הזו החודש.
+        <span aria-hidden className="cc-detail-hairline" />
+        <p>אין פריטים בקטגוריה הזו החודש.</p>
       </div>
     );
   }
   return (
-    <ul className="mt-3 flex flex-col gap-1.5" dir="rtl">
-      {rows.map((r) => (
-        <li
-          key={r.id}
-          className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2"
-        >
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="line-clamp-1 text-[12.5px] text-foreground/90">
-              {r.label}
+    <div
+      className="cc-detail"
+      dir="rtl"
+      style={{ ["--cc-tone" as string]: meta.tone }}
+    >
+      <span aria-hidden className="cc-detail-hairline" />
+      <ul className="cc-detail-list">
+        {rows.map((r) => (
+          <li key={r.id} className="cc-detail-row">
+            <div className="cc-detail-row-body">
+              <span className="cc-detail-row-title">{r.label}</span>
+              {r.chargeDate ? (
+                <span className="cc-detail-row-date">
+                  {formatRowDate(r.chargeDate)}
+                </span>
+              ) : null}
+            </div>
+            <span
+              data-mono="true"
+              dir="ltr"
+              className="cc-detail-row-amount"
+              style={{ color: meta.tone }}
+            >
+              {ILS.format(Math.round(r.amount))}
             </span>
-            {r.chargeDate ? (
-              <span
-                className="text-[10.5px] text-muted-foreground/75"
-                dir="rtl"
-              >
-                {formatRowDate(r.chargeDate)}
-              </span>
-            ) : null}
-          </div>
-          <span
-            data-mono="true"
-            dir="ltr"
-            className="text-[12.5px] font-medium"
-            style={{
-              color: meta.tone,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {ILS.format(Math.round(r.amount))}
-          </span>
-        </li>
-      ))}
-    </ul>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -475,16 +459,13 @@ function DetailRow({
   tone: string;
 }) {
   return (
-    <li className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-2">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+    <li className="cc-detail-cell">
+      <span className="cc-detail-cell-label">{label}</span>
       <span
         data-mono="true"
         dir="ltr"
-        className="text-[12px] font-medium"
-        style={{
-          color: tone,
-          fontVariantNumeric: "tabular-nums",
-        }}
+        className="cc-detail-cell-value"
+        style={{ color: tone }}
       >
         {ILS.format(value)}
       </span>
@@ -499,7 +480,7 @@ function SpringAmount({
 }: {
   amount: number;
   tone: string;
-  size?: "hero" | "small";
+  size?: "hero" | "small" | "tile";
 }) {
   const mv = useMotionValue(amount);
   const spring = useSpring(mv, { stiffness: 90, damping: 24, mass: 0.5 });
@@ -510,10 +491,24 @@ function SpringAmount({
       <motion.span
         data-mono="true"
         dir="ltr"
-        className="text-[34px] font-light leading-none tracking-tight text-foreground sm:text-[40px]"
+        className="cc-hero-amount"
         style={{
-          fontVariantNumeric: "tabular-nums",
-          textShadow: `0 0 26px ${tone}44`,
+          textShadow: `0 0 26px ${tone}55, 0 0 60px ${tone}22`,
+        }}
+      >
+        <motion.span>{text}</motion.span>
+      </motion.span>
+    );
+  }
+  if (size === "tile") {
+    return (
+      <motion.span
+        data-mono="true"
+        dir="ltr"
+        className="cc-tile-amount"
+        style={{
+          color: tone,
+          textShadow: `0 0 14px ${tone}55`,
         }}
       >
         <motion.span>{text}</motion.span>
