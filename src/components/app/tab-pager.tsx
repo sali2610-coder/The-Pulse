@@ -8,21 +8,16 @@
 // SAME activeIndex, so both surfaces animate through the same
 // spring transition.
 //
-// Behavior:
-//   • Horizontal drag on ANY area of the pager pans the track.
-//   • Release past 35% of viewport width OR velocity |>500| px/s
-//     completes the transition. Otherwise snaps back.
-//   • On success: selection haptic + tab-bar sync (parent state).
-//   • Every panel stays mounted so state, scroll position and
-//     hooks survive tab switches (no re-render cascade).
-//   • Non-active panels dim + scale to ~0.96 to give a subtle
-//     parallax feel while the current panel bounces in.
-//   • Reduced-motion users get a 120ms crossfade instead of a
-//     spring so the pager remains usable.
-//
-// Pager frame is forced dir="ltr" for translation math sanity;
-// panel children keep the app's dir="rtl" internally, so panel
-// contents behave identically to before.
+// Gesture handling: raw pointer events, not framer-motion drag/pan.
+// Both `drag` and `onPan` in framer call setPointerCapture on
+// pointer-down — which redirects every subsequent pointerup back
+// to the pager and blocks every nested tap on Settings rows, form
+// fields, and buttons. Instead, we track pointer coordinates on
+// the viewport and only call setPointerCapture AFTER the user has
+// confirmed horizontal intent (>= 8px horizontally AND horizontal
+// dominant over vertical). Below the threshold, native click
+// bubbles up untouched, so every nested button receives its
+// onClick natively.
 
 import { Children, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -31,14 +26,8 @@ import {
   useMotionValue,
   useReducedMotion,
   useTransform,
-  type PanInfo,
   type MotionValue,
 } from "framer-motion";
-
-// Minimum horizontal distance before the pan is considered a swipe.
-// Below this threshold, pointer events pass through untouched so
-// nested taps (Settings rows, buttons, links) still fire natively.
-const INTENT_DISTANCE = 8;
 
 const SPRING = {
   type: "spring" as const,
@@ -48,30 +37,66 @@ const SPRING = {
 };
 const THRESHOLD = 0.35;
 const VELOCITY_TRIGGER = 500;
+// Distance the finger must travel horizontally BEFORE the pager
+// starts tracking a swipe. Kept high (30px) so ambiguous
+// diagonal gestures never win — nested taps and vertical scrolls
+// on scroll-heavy panels (Settings shell) always pass through.
+const INTENT_DISTANCE = 30;
+
+type GestureState = {
+  active: boolean;
+  captured: boolean;
+  pointerId: number | null;
+  startX: number;
+  startY: number;
+  startTime: number;
+  baseX: number;
+  lastX: number;
+  lastTime: number;
+};
+
+const initialGesture = (): GestureState => ({
+  active: false,
+  captured: false,
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  startTime: 0,
+  baseX: 0,
+  lastX: 0,
+  lastTime: 0,
+});
 
 export function TabPager({
   activeIndex,
   onIndexChange,
   onDragSelect,
+  gestureEnabled = true,
   children,
 }: {
   activeIndex: number;
   onIndexChange: (i: number) => void;
   /** Fired only when a DRAG (not a tab-bar click) completes a
-   *  transition. Lets the parent play a selection haptic and skip
-   *  double-fires. Optional. */
+   *  transition. Lets the parent play a selection haptic. Optional. */
   onDragSelect?: (i: number) => void;
+  /** When false, the pager stops attaching pointer handlers to the
+   *  viewport — every touch bubbles straight to the panel content
+   *  (no capture, no motion). Used to hard-disable the swipe on
+   *  scroll-heavy tabs where accidental capture has caused taps
+   *  to feel dead. */
+  gestureEnabled?: boolean;
   children: React.ReactNode;
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   const x = useMotionValue(0);
   const reduced = useReducedMotion();
   const panels = Children.toArray(children);
   const count = panels.length;
+  const gesture = useRef<GestureState>(initialGesture());
 
   useLayoutEffect(() => {
-    const el = containerRef.current;
+    const el = viewportRef.current;
     if (!el) return;
     const measure = () => setWidth(el.clientWidth);
     measure();
@@ -91,47 +116,10 @@ export function TabPager({
     return () => controls.stop();
   }, [activeIndex, width, x, reduced]);
 
-  // Manual gesture recognizer:
-  //   • onPanStart snapshots the current x baseline.
-  //   • onPan holds fire until the pointer has moved > INTENT_DISTANCE
-  //     horizontally AND the horizontal delta is bigger than the
-  //     vertical one. Below the threshold, nothing happens — nested
-  //     taps and vertical scrolls behave natively.
-  //   • Once engaged, we track the x motion value directly. Framer's
-  //     `drag="x"` is deliberately NOT used because it calls
-  //     setPointerCapture on pointerdown, which would swallow every
-  //     nested button click on the settings surface.
-  const pan = useRef({ started: false, baseX: 0 });
-
-  function handlePanStart() {
-    pan.current = { started: false, baseX: x.get() };
-  }
-
-  function handlePan(_: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
-    if (width === 0 || reduced) return;
-    if (!pan.current.started) {
-      const ax = Math.abs(info.offset.x);
-      const ay = Math.abs(info.offset.y);
-      if (ax < INTENT_DISTANCE || ax < ay) return;
-      pan.current.started = true;
-    }
-    // Elastic clamp at the edges.
-    const min = -width * (count - 1);
-    const max = 0;
-    let next = pan.current.baseX + info.offset.x;
-    if (next > max) next = max + (next - max) * 0.35;
-    else if (next < min) next = min + (next - min) * 0.35;
-    x.set(next);
-  }
-
-  function handlePanEnd(_: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
-    if (width === 0) return;
-    if (!pan.current.started) return;
-    pan.current.started = false;
-    const dx = info.offset.x;
-    const vx = info.velocity.x;
+  function completeTransition(dx: number, vx: number) {
     let target = activeIndex;
-    // Pan LEFT (dx negative) → next tab index+1.
+    // Pan LEFT (dx negative) → next tab index+1 (feels like the
+    // next tab entering from the right).
     if (dx < -width * THRESHOLD || vx < -VELOCITY_TRIGGER) {
       target = Math.min(count - 1, activeIndex + 1);
     } else if (dx > width * THRESHOLD || vx > VELOCITY_TRIGGER) {
@@ -145,12 +133,88 @@ export function TabPager({
     }
   }
 
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!gestureEnabled) return;
+    // Skip synthetic mouse pointer types when a real touch is
+    // active — avoids double-tracking on hybrid devices.
+    if (reduced) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    gesture.current = {
+      active: true,
+      captured: false,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startTime: e.timeStamp,
+      baseX: x.get(),
+      lastX: e.clientX,
+      lastTime: e.timeStamp,
+    };
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const g = gesture.current;
+    if (!g.active || e.pointerId !== g.pointerId) return;
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
+    if (!g.captured) {
+      // Wait for confirmed horizontal intent — below the threshold
+      // the browser still fires native click / vertical scroll.
+      if (Math.abs(dx) < INTENT_DISTANCE || Math.abs(dx) < Math.abs(dy)) {
+        return;
+      }
+      g.captured = true;
+      try {
+        viewportRef.current?.setPointerCapture(e.pointerId);
+      } catch {
+        /* iOS Safari may throw on synthetic pointers — ignore. */
+      }
+    }
+    // Elastic clamp at the edges so the pager tugs at the ends.
+    const min = -width * (count - 1);
+    const max = 0;
+    let next = g.baseX + dx;
+    if (next > max) next = max + (next - max) * 0.35;
+    else if (next < min) next = min + (next - min) * 0.35;
+    x.set(next);
+    g.lastX = e.clientX;
+    g.lastTime = e.timeStamp;
+  }
+
+  function endGesture(e: React.PointerEvent<HTMLDivElement>) {
+    const g = gesture.current;
+    if (!g.active || e.pointerId !== g.pointerId) return;
+    const captured = g.captured;
+    if (captured) {
+      try {
+        viewportRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    gesture.current = initialGesture();
+    if (!captured) {
+      // Never engaged — this was a tap. Let the native click fall
+      // through to the child button.
+      return;
+    }
+    const dx = e.clientX - g.startX;
+    // Approximate velocity from the last two samples.
+    const dt = Math.max(1, e.timeStamp - g.lastTime);
+    const vx = ((e.clientX - g.lastX) / dt) * 1000;
+    completeTransition(dx, vx);
+  }
+
   return (
     <div
-      ref={containerRef}
+      ref={viewportRef}
       className="tp-viewport"
       style={{ direction: "ltr" }}
       role="presentation"
+      onPointerDown={gestureEnabled ? onPointerDown : undefined}
+      onPointerMove={gestureEnabled ? onPointerMove : undefined}
+      onPointerUp={gestureEnabled ? endGesture : undefined}
+      onPointerCancel={gestureEnabled ? endGesture : undefined}
     >
       <motion.div
         className="tp-track"
@@ -158,9 +222,6 @@ export function TabPager({
           x,
           width: width * Math.max(1, count),
         }}
-        onPanStart={handlePanStart}
-        onPan={handlePan}
-        onPanEnd={handlePanEnd}
       >
         {panels.map((child, i) => (
           <Panel
@@ -191,9 +252,6 @@ function Panel({
   isActive: boolean;
   children: React.ReactNode;
 }) {
-  // Distance from active panel, normalized to [0, 1+]. When active
-  // → 0 (full opacity, scale 1). Neighboring panels dim + scale
-  // down for parallax depth.
   const distance = useTransform(x, (v) => {
     if (width === 0) return 0;
     return Math.abs(v + index * width) / width;

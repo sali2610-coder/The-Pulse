@@ -341,6 +341,12 @@ function AppShellContent() {
             activeIndex={TAB_ORDER.indexOf(activeTab)}
             onIndexChange={(i) => handleTabChange(TAB_ORDER[i], "swipe")}
             onDragSelect={() => hapticSoft()}
+            /* Settings is dense with nested taps (rows, sheets,
+               sliders). Hard-disable the pager gesture there so
+               no pointer is ever captured — clicks bubble straight
+               to the row buttons. Swipes are still available on
+               every other tab. */
+            gestureEnabled={activeTab !== "settings"}
           >
             <ErrorBoundary name="DashboardTab">
               <DashboardTab />
