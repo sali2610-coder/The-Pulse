@@ -69,9 +69,17 @@ export function BottomSheet({
                   animate={{ y: 0 }}
                   exit={{ y: "100%" }}
                   transition={reduced ? REDUCED : SPRING_SOFT}
-                  drag={reduced ? false : "y"}
+                  // Framer's pan gesture always calls setPointerCapture on
+                  // pointer-down. When lockDismiss is on, drag can't
+                  // dismiss anyway — but keeping `drag="y"` here steals
+                  // pointer events from every nested <button> (Save /
+                  // Add / delete). The result is a Save button that
+                  // "looks disabled" because clicks never reach it.
+                  // Drag stays enabled only for the free (dismissible)
+                  // variant so the drag-to-close gesture still works.
+                  drag={reduced || lockDismiss ? false : "y"}
                   dragConstraints={{ top: 0, bottom: 0 }}
-                  dragElastic={lockDismiss ? 0.08 : { top: 0, bottom: 0.5 }}
+                  dragElastic={{ top: 0, bottom: 0.5 }}
                   onDragEnd={(_, info) => {
                     if (lockDismiss) return;
                     if (

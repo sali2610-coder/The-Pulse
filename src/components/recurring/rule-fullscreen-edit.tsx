@@ -116,8 +116,13 @@ function EditBody({
 
   const meta = getCategory(category);
   const amountNumber = Number(amount || 0);
+  // Variable rules ("סכום משתנה") legitimately carry an estimate of 0
+  // — the user isn't sure yet. Don't block the save on it.
+  const amountRequired = !(mode === "regular" && variable);
   const canSave =
-    label.trim().length > 0 && amountNumber > 0 && dayOfMonth >= 1;
+    label.trim().length > 0 &&
+    dayOfMonth >= 1 &&
+    (!amountRequired || amountNumber > 0);
 
   function handleSave() {
     if (!canSave) return;
