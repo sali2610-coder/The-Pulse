@@ -339,7 +339,7 @@ function AppShellContent() {
           {/* Phase 254 — 5-tab consumer hierarchy.
               IDs preserved for hash-link backward compatibility; the
               content + labels are remapped. */}
-          <TabsList className="w-full bg-surface/60 backdrop-blur-md">
+          <TabsList className="app-tabs w-full">
             <TabsTrigger value="dashboard">
               <span className="relative inline-flex items-center gap-1">
                 בית
