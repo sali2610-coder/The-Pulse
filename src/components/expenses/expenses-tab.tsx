@@ -24,11 +24,7 @@ import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 
 import { ErrorBoundary } from "@/components/error-boundary";
-import { navigateToTab } from "@/lib/tab-nav";
-import { tap as hapticTap } from "@/lib/haptics";
-import { ChevronLeft, Sparkles } from "lucide-react";
 import { ExpensesCommitmentsCockpit } from "@/components/expenses/expenses-commitments-cockpit";
-import { ExpensesKpiRow } from "@/components/expenses/expenses-kpi-row";
 import { FinancialDebugPanel } from "@/components/dev/financial-debug-panel";
 import { FinancialAuditReport } from "@/components/dev/financial-audit-report";
 
@@ -92,19 +88,14 @@ export function ExpensesTab() {
         </Safe>
       </div>
 
-      {/* KPI chip row — new. Six tone-tinted mini cards derived
-         from live store selectors. Read-only. */}
-      <div className="ex-slot">
-        <Safe name="ExpensesKpiRow">
-          <ExpensesKpiRow />
-        </Safe>
-      </div>
-
-      {/* Forecast pointer chip — restyled to match Time-tab
-         callouts. */}
-      <div className="ex-slot">
-        <ForecastHeader />
-      </div>
+      {/* KPI chip row + "תחזית סוף החודש חיה בלשונית זמן" pointer
+         removed — the row (חיובים על הכרטיסים / תשלומים פתוחים /
+         SMS יבוא / Wallet / תיעוד ידני / ממתינים לאישור) and the
+         forecast pointer were adding noise without decisions. All
+         underlying data lives on Home / Time / Settings and the
+         engine still exposes every count via ExpensesKpiRow for
+         future callers. This tab renders only the sections that
+         drive user action. */}
 
       <SectionHeader
         title="לאן הולך הכסף"
@@ -175,29 +166,3 @@ function SectionHeader({
   );
 }
 
-function ForecastHeader() {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        hapticTap();
-        navigateToTab("history");
-      }}
-      className="ex-forecast-cta"
-      dir="rtl"
-      aria-label="פתח את זמן — תחזית מלאה"
-    >
-      <span aria-hidden className="ex-forecast-cta-glyph">
-        <Sparkles className="size-3.5" />
-      </span>
-      <span className="ex-forecast-cta-text">
-        תחזית סוף החודש חיה בלשונית{" "}
-        <span className="ex-forecast-cta-strong">זמן</span>
-      </span>
-      <ChevronLeft
-        className="size-4 text-muted-foreground"
-        aria-hidden
-      />
-    </button>
-  );
-}
