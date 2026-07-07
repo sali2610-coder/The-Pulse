@@ -10573,22 +10573,22 @@ button.sally-glass {
   padding-inline: 6px;
 }
 .set-section-emoji {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1;
   filter: saturate(0.85);
 }
 .set-section-title {
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--sally-ink-4, rgba(255, 255, 255, 0.55));
+  color: var(--sally-ink-4, rgba(255, 255, 255, 0.62));
   margin: 0;
 }
 .set-cards {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   list-style: none;
   padding: 0;
   margin: 0;
@@ -10598,9 +10598,10 @@ button.sally-glass {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  gap: 14px;
+  padding: 15px 16px;
+  border-radius: 18px;
+  min-height: 68px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008));
@@ -10610,7 +10611,8 @@ button.sally-glass {
   transition:
     border-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
     background 220ms cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 160ms cubic-bezier(0.32, 0.72, 0, 1);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.02) inset,
     0 6px 18px -14px rgba(0, 0, 0, 0.45);
@@ -10621,7 +10623,12 @@ button.sally-glass {
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.014));
 }
 .set-card:active {
-  transform: scale(0.995);
+  transform: scale(0.985);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 10px 22px -14px rgba(0, 0, 0, 0.55),
+    0 0 24px -12px currentColor;
 }
 .set-card:focus-visible {
   outline: 2px solid var(--sally-gold-loud, #E4C158);
@@ -10636,13 +10643,14 @@ button.sally-glass {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.05);
   color: var(--sally-ink-2, rgba(255, 255, 255, 0.85));
 }
+.set-card-icon > svg { width: 18px; height: 18px; }
 .set-card[data-tone="gold"] .set-card-icon {
   background: rgba(228, 193, 88, 0.14);
   color: var(--sally-gold-loud, #E4C158);
@@ -10676,29 +10684,31 @@ button.sally-glass {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 .set-card-title {
-  font-size: 13.5px;
+  font-size: 15.5px;
   font-weight: 500;
   color: var(--sally-ink-1, #F6F6F6);
   letter-spacing: -0.005em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 .set-card-desc {
-  font-size: 11px;
-  color: var(--sally-ink-3, rgba(255, 255, 255, 0.55));
+  font-size: 12.5px;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.62));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.35;
 }
 .set-card-preview {
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: 9999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--sally-ink-2, rgba(255, 255, 255, 0.75));
   background: rgba(255, 255, 255, 0.04);

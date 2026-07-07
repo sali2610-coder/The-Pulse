@@ -569,12 +569,12 @@ function SettingsCard({
       disabled={card.disabled}
       className="set-card"
       data-tone={card.tone}
-      whileTap={card.disabled ? undefined : { scale: 0.99 }}
+      whileTap={card.disabled ? undefined : { scale: 0.985 }}
       transition={{ type: "spring", stiffness: 380, damping: 34 }}
       aria-label={`${card.title} · ${card.description}`}
     >
       <span aria-hidden className="set-card-icon">
-        <Icon className="size-4" strokeWidth={1.7} />
+        <Icon strokeWidth={1.7} />
       </span>
       <span className="set-card-body">
         <span className="set-card-title">{card.title}</span>
@@ -582,7 +582,7 @@ function SettingsCard({
       </span>
       {preview ? <span className="set-card-preview">{preview}</span> : null}
       <span aria-hidden className="set-card-chev">
-        <ChevronLeft className="size-3.5" />
+        <ChevronLeft className="size-4" />
       </span>
     </motion.button>
   );

@@ -35,6 +35,11 @@ import {
   type MotionValue,
 } from "framer-motion";
 
+// Minimum horizontal distance before the pan is considered a swipe.
+// Below this threshold, pointer events pass through untouched so
+// nested taps (Settings rows, buttons, links) still fire natively.
+const INTENT_DISTANCE = 8;
+
 const SPRING = {
   type: "spring" as const,
   stiffness: 320,
@@ -86,13 +91,47 @@ export function TabPager({
     return () => controls.stop();
   }, [activeIndex, width, x, reduced]);
 
-  function handleDragEnd(_: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
+  // Manual gesture recognizer:
+  //   • onPanStart snapshots the current x baseline.
+  //   • onPan holds fire until the pointer has moved > INTENT_DISTANCE
+  //     horizontally AND the horizontal delta is bigger than the
+  //     vertical one. Below the threshold, nothing happens — nested
+  //     taps and vertical scrolls behave natively.
+  //   • Once engaged, we track the x motion value directly. Framer's
+  //     `drag="x"` is deliberately NOT used because it calls
+  //     setPointerCapture on pointerdown, which would swallow every
+  //     nested button click on the settings surface.
+  const pan = useRef({ started: false, baseX: 0 });
+
+  function handlePanStart() {
+    pan.current = { started: false, baseX: x.get() };
+  }
+
+  function handlePan(_: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
+    if (width === 0 || reduced) return;
+    if (!pan.current.started) {
+      const ax = Math.abs(info.offset.x);
+      const ay = Math.abs(info.offset.y);
+      if (ax < INTENT_DISTANCE || ax < ay) return;
+      pan.current.started = true;
+    }
+    // Elastic clamp at the edges.
+    const min = -width * (count - 1);
+    const max = 0;
+    let next = pan.current.baseX + info.offset.x;
+    if (next > max) next = max + (next - max) * 0.35;
+    else if (next < min) next = min + (next - min) * 0.35;
+    x.set(next);
+  }
+
+  function handlePanEnd(_: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
     if (width === 0) return;
+    if (!pan.current.started) return;
+    pan.current.started = false;
     const dx = info.offset.x;
     const vx = info.velocity.x;
     let target = activeIndex;
-    // Drag LEFT (dx negative) → next tab index+1 (feels like the
-    // next tab entering from the right, standard iOS).
+    // Pan LEFT (dx negative) → next tab index+1.
     if (dx < -width * THRESHOLD || vx < -VELOCITY_TRIGGER) {
       target = Math.min(count - 1, activeIndex + 1);
     } else if (dx > width * THRESHOLD || vx > VELOCITY_TRIGGER) {
@@ -102,7 +141,6 @@ export function TabPager({
       onIndexChange(target);
       onDragSelect?.(target);
     } else {
-      // Snap back.
       animate(x, -activeIndex * width, reduced ? { duration: 0.12 } : SPRING);
     }
   }
@@ -120,11 +158,9 @@ export function TabPager({
           x,
           width: width * Math.max(1, count),
         }}
-        drag={reduced ? false : "x"}
-        dragDirectionLock
-        dragElastic={0.14}
-        dragConstraints={{ left: -width * (count - 1), right: 0 }}
-        onDragEnd={handleDragEnd}
+        onPanStart={handlePanStart}
+        onPan={handlePan}
+        onPanEnd={handlePanEnd}
       >
         {panels.map((child, i) => (
           <Panel
