@@ -289,6 +289,19 @@ function EditBody({
         primaryLabel={loan ? "שמור שינויים" : "הוסף הלוואה"}
         onPrimary={handleSave}
         primaryDisabled={!canSave}
+        disabledReason={
+          !canSave
+            ? [
+                label.trim().length === 0 ? "שם ההלוואה" : null,
+                monthly <= 0 ? "תשלום חודשי" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+                .replace(/^/, "חסר: ")
+            : undefined
+        }
+        cancelLabel="בטל"
+        onCancel={() => onOpenChange(false)}
         destructiveLabel={loan ? "מחק הלוואה" : undefined}
         onDestructive={loan ? handleDelete : undefined}
       />

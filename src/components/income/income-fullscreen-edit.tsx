@@ -268,6 +268,19 @@ function EditBody({
         primaryLabel={income ? "שמור שינויים" : "הוסף הכנסה"}
         onPrimary={handleSave}
         primaryDisabled={!canSave}
+        disabledReason={
+          !canSave
+            ? [
+                label.trim().length === 0 ? "מקור הכנסה" : null,
+                amountNumber <= 0 ? "סכום צפוי" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+                .replace(/^/, "חסר: ")
+            : undefined
+        }
+        cancelLabel="בטל"
+        onCancel={() => onOpenChange(false)}
         destructiveLabel={income ? "מחק הכנסה" : undefined}
         onDestructive={income ? handleDelete : undefined}
       />

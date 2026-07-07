@@ -270,6 +270,15 @@ function EditBody({
         }
         onPrimary={handleSave}
         primaryDisabled={!canSave}
+        disabledReason={
+          !canSave
+            ? label.trim().length === 0
+              ? "חסר: שם החשבון"
+              : undefined
+            : undefined
+        }
+        cancelLabel="בטל"
+        onCancel={() => onOpenChange(false)}
         destructiveLabel={
           account ? (kind === "bank" ? "מחק חשבון" : "מחק כרטיס") : undefined
         }

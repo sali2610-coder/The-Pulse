@@ -137,12 +137,17 @@ export function FullScreenHero({
         ) : null}
       </div>
 
-      <div className="flex flex-col items-center gap-1 pb-1">
-        <div
-          className="flex items-baseline gap-1 text-foreground"
-          dir="ltr"
-        >
+      <div
+        className="fs-hero-amount"
+        data-tone-color
+        style={{ ["--fs-tone" as string]: tone }}
+      >
+        <label className="fs-hero-amount-frame" htmlFor="fs-hero-amount-input">
+          <span className="fs-hero-amount-currency" aria-hidden>
+            ₪
+          </span>
           <input
+            id="fs-hero-amount-input"
             inputMode="decimal"
             value={amount}
             onChange={
@@ -153,17 +158,14 @@ export function FullScreenHero({
             readOnly={amountReadOnly || !onAmountChange}
             aria-label={amountLabel}
             data-mono="true"
-            className="w-56 bg-transparent text-center text-[52px] font-light leading-none tracking-tight outline-none ring-0"
-            style={{
-              fontVariantNumeric: "tabular-nums",
-              color: tone,
-              textShadow: `0 0 28px ${tone}44`,
-            }}
+            placeholder="0"
+            dir="ltr"
+            autoComplete="off"
+            className="fs-hero-amount-input"
           />
-          <span className="text-[26px] text-muted-foreground">₪</span>
-        </div>
-        <span className="text-[11.5px] uppercase tracking-[0.3em] text-muted-foreground">
-          {amountLabel}
+        </label>
+        <span className="fs-hero-amount-label">
+          {amount.trim().length === 0 ? "הקלד סכום" : amountLabel}
         </span>
       </div>
     </div>
@@ -380,36 +382,60 @@ export function FullScreenFooter({
   primaryDisabled = false,
   destructiveLabel,
   onDestructive,
+  disabledReason,
+  cancelLabel,
+  onCancel,
 }: {
   primaryLabel: string;
   onPrimary: () => void;
   primaryDisabled?: boolean;
   destructiveLabel?: string;
   onDestructive?: () => void;
+  /** Short sentence explaining WHY the primary CTA is disabled.
+   *  Rendered as a muted line above the button so the user always
+   *  knows what's missing. */
+  disabledReason?: string;
+  /** Optional secondary "בטל" ghost button placed beside the
+   *  primary CTA. When passed, the primary occupies the majority
+   *  of the row and cancel takes ~30%. */
+  cancelLabel?: string;
+  onCancel?: () => void;
 }) {
   return (
     <div
-      className="flex flex-col gap-2 border-t border-white/8 pt-3"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
+      className="fs-footer"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
     >
-      <button
-        type="button"
-        onClick={() => {
-          hapticTap();
-          onPrimary();
-        }}
-        disabled={primaryDisabled}
-        aria-label={primaryLabel}
-        className="fs-primary h-14 rounded-2xl text-[16px] font-semibold transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          background: "linear-gradient(180deg, #F6D970 0%, #D4AF37 100%)",
-          color: "#1A140A",
-          boxShadow:
-            "0 1px 0 rgba(255,255,255,0.45) inset, 0 10px 28px -8px rgba(212,175,55,0.65)",
-        }}
-      >
-        {primaryLabel}
-      </button>
+      {primaryDisabled && disabledReason ? (
+        <p className="fs-footer-hint">{disabledReason}</p>
+      ) : null}
+      <div className="fs-footer-row">
+        {cancelLabel && onCancel ? (
+          <button
+            type="button"
+            onClick={() => {
+              hapticTap();
+              onCancel();
+            }}
+            className="fs-cancel"
+            aria-label={cancelLabel}
+          >
+            {cancelLabel}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            hapticTap();
+            onPrimary();
+          }}
+          disabled={primaryDisabled}
+          aria-label={primaryLabel}
+          className="fs-primary"
+        >
+          {primaryLabel}
+        </button>
+      </div>
       {destructiveLabel && onDestructive ? (
         <button
           type="button"
@@ -417,7 +443,7 @@ export function FullScreenFooter({
             hapticTap();
             onDestructive();
           }}
-          className="inline-flex h-11 items-center justify-center gap-1.5 rounded-2xl text-[13px] text-red-400 transition-colors hover:text-red-300"
+          className="fs-destructive"
         >
           <Trash2 className="size-3.5" aria-hidden />
           {destructiveLabel}

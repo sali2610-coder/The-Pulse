@@ -314,6 +314,20 @@ function EditBody({
         primaryLabel={rule ? "שמור שינויים" : "הוסף חיוב קבוע"}
         onPrimary={handleSave}
         primaryDisabled={!canSave}
+        disabledReason={
+          !canSave
+            ? [
+                label.trim().length === 0 ? "שם החיוב" : null,
+                amountRequired && amountNumber <= 0 ? "סכום צפוי" : null,
+                dayOfMonth < 1 ? "יום החיוב" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+                .replace(/^/, "חסר: ")
+            : undefined
+        }
+        cancelLabel="בטל"
+        onCancel={() => onOpenChange(false)}
         destructiveLabel={rule ? "מחק חיוב" : undefined}
         onDestructive={rule ? handleDelete : undefined}
       />
