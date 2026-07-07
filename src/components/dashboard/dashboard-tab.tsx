@@ -209,7 +209,7 @@ export function DashboardTab() {
   return (
     <SnapshotProvider>
       <TapDiscoveryToast />
-      <div className="home-sub-shell pb-28">
+      <div className="home-sub-shell">
         <SubPager
           stations={HOME_STATIONS as unknown as { id: string; label: string }[]}
           activeIndex={station}
