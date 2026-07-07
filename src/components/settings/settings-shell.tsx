@@ -563,14 +563,12 @@ function SettingsCard({
   const Icon = card.icon;
   const preview = card.preview;
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
       disabled={card.disabled}
       className="set-card"
       data-tone={card.tone}
-      whileTap={card.disabled ? undefined : { scale: 0.985 }}
-      transition={{ type: "spring", stiffness: 380, damping: 34 }}
       aria-label={`${card.title} · ${card.description}`}
     >
       <span aria-hidden className="set-card-icon">
@@ -584,7 +582,7 @@ function SettingsCard({
       <span aria-hidden className="set-card-chev">
         <ChevronLeft className="size-4" />
       </span>
-    </motion.button>
+    </button>
   );
 }
 

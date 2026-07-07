@@ -55,6 +55,15 @@ const TAB_ORDER: TabId[] = [
   "settings",
 ];
 
+/** Tabs that participate in the swipe pager. Settings is excluded
+ *  and rendered directly — see comment in the render tree. */
+const TAB_ORDER_SWIPE: TabId[] = [
+  "dashboard",
+  "analytics",
+  "history",
+  "setup",
+];
+
 // The full Sally app — tabs, dashboard, sync, dev tools. Rendered only when
 // auth is either disabled (single-user fallback) or the user is signed in.
 // The server-side <Home /> chooses between this and the welcome screen.
@@ -331,39 +340,42 @@ function AppShellContent() {
           </TabsList>
         </Tabs>
 
-        {/* Swipeable pager. All 5 panels stay mounted — state,
-           scroll, hooks preserved. Drag > 35% of viewport OR
-           |velocity| > 500 px/s completes the transition; tap on
-           TabsList feeds through the same activeTab state so the
-           spring animation plays either way. */}
+        {/* Settings gets rendered DIRECTLY, bypassing the pager
+           entirely. Framer's motion.div + useTransform layers
+           around each panel were still gating pointer events on
+           dense scroll surfaces despite the intent-detect guard;
+           removing them for Settings guarantees no ancestor
+           between the tab surface and the DOM root touches the
+           pointer event path. Other tabs keep the swipe pager.
+           Swap is instantaneous — no cross-fade — because the
+           unmount + mount replaces the tree wholesale. */}
         <div className="tp-outer mt-2">
-          <TabPager
-            activeIndex={TAB_ORDER.indexOf(activeTab)}
-            onIndexChange={(i) => handleTabChange(TAB_ORDER[i], "swipe")}
-            onDragSelect={() => hapticSoft()}
-            /* Settings is dense with nested taps (rows, sheets,
-               sliders). Hard-disable the pager gesture there so
-               no pointer is ever captured — clicks bubble straight
-               to the row buttons. Swipes are still available on
-               every other tab. */
-            gestureEnabled={activeTab !== "settings"}
-          >
-            <ErrorBoundary name="DashboardTab">
-              <DashboardTab />
-            </ErrorBoundary>
-            <ErrorBoundary name="ExpensesTab">
-              <ExpensesTab />
-            </ErrorBoundary>
-            <ErrorBoundary name="FutureTab">
-              <FutureTab />
-            </ErrorBoundary>
-            <ErrorBoundary name="InsightsTab">
-              <InsightsTab />
-            </ErrorBoundary>
+          {activeTab === "settings" ? (
             <ErrorBoundary name="SettingsTab">
               <SettingsTab />
             </ErrorBoundary>
-          </TabPager>
+          ) : (
+            <TabPager
+              activeIndex={TAB_ORDER_SWIPE.indexOf(activeTab)}
+              onIndexChange={(i) =>
+                handleTabChange(TAB_ORDER_SWIPE[i], "swipe")
+              }
+              onDragSelect={() => hapticSoft()}
+            >
+              <ErrorBoundary name="DashboardTab">
+                <DashboardTab />
+              </ErrorBoundary>
+              <ErrorBoundary name="ExpensesTab">
+                <ExpensesTab />
+              </ErrorBoundary>
+              <ErrorBoundary name="FutureTab">
+                <FutureTab />
+              </ErrorBoundary>
+              <ErrorBoundary name="InsightsTab">
+                <InsightsTab />
+              </ErrorBoundary>
+            </TabPager>
+          )}
         </div>
       </div>
 
