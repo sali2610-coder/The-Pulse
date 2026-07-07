@@ -23,6 +23,7 @@ import { Minus, Plus, Trash2, X } from "lucide-react";
 
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { tap as hapticTap } from "@/lib/haptics";
+import { SPRING_BOUNCE, SPRING_SHARP } from "@/lib/motion-tokens";
 
 /** Debounce window in ms — a second tap on the primary CTA within
  *  this window is ignored. Prevents duplicate saves (double-add,
@@ -122,7 +123,7 @@ export function FullScreenHero({
         <motion.span
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: "spring", stiffness: 300, damping: 22 }}
+          transition={SPRING_BOUNCE}
           className="flex size-24 items-center justify-center rounded-3xl"
           style={{
             background: `linear-gradient(180deg, ${tone}26, ${tone}0f)`,
@@ -367,7 +368,7 @@ export function FullScreenSegmented<T extends string>({
                     "linear-gradient(180deg,#F6D970 0%,#D4AF37 100%)",
                   boxShadow: "0 1px 0 rgba(255,255,255,0.4) inset",
                 }}
-                transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                transition={SPRING_SHARP}
               />
             ) : null}
             <span className="relative z-10">{o.label}</span>

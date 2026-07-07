@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { SPRING_SOFT, SPRING_BOUNCE } from "@/lib/motion-tokens";
 import {
   Bell,
   Cloud,
@@ -419,12 +420,7 @@ export function SettingsShell({
             className="set-shell-hero-icon"
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{
-              type: "spring",
-              stiffness: 260,
-              damping: 22,
-              delay: 0.08,
-            }}
+            transition={{ ...SPRING_BOUNCE, delay: 0.08 }}
           >
             <Palette className="size-6" strokeWidth={1.6} />
           </motion.span>
@@ -657,7 +653,7 @@ function SheetShell({
             initial={reduced ? { opacity: 0 } : { y: "100%" }}
             animate={reduced ? { opacity: 1 } : { y: 0 }}
             exit={reduced ? { opacity: 0 } : { y: "100%" }}
-            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            transition={reduced ? { duration: 0.12 } : SPRING_SOFT}
             dir="rtl"
           >
             <div className="set-overlay-head">
@@ -780,7 +776,7 @@ export function SettingsCenter({
             exit={
               reduced ? { opacity: 0 } : { opacity: 0, x: "6%", scale: 0.985 }
             }
-            transition={{ type: "spring", stiffness: 260, damping: 32 }}
+            transition={reduced ? { duration: 0.12 } : SPRING_SOFT}
             dir="rtl"
           >
             <div className="set-center-scroll">
