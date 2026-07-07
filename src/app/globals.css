@@ -11709,13 +11709,138 @@ button.sally-glass {
   letter-spacing: 0.12em;
 }
 .set-shell .set-cards {
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 .set-shell .set-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: 116px;
+  padding: 14px 14px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 12px 26px -20px rgba(0, 0, 0, 0.55);
+  text-align: start;
+  transition:
+    border-color 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    background 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 160ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 .set-shell .set-card:hover {
+  border-color: color-mix(in srgb, var(--set-card-tone, transparent) 34%, rgba(255, 255, 255, 0.16));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018));
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--set-card-tone, transparent) 10%, rgba(255, 255, 255, 0.06)),
+      rgba(255, 255, 255, 0.02));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 14px 30px -18px color-mix(in srgb, var(--set-card-tone, #000) 45%, rgba(0, 0, 0, 0.7));
 }
+.set-shell .set-card:active {
+  transform: scale(0.985);
+}
+.set-shell .set-card[data-tone="gold"] { --set-card-tone: var(--sally-gold-loud, #E4C158); }
+.set-shell .set-card[data-tone="cyan"] { --set-card-tone: #22D3EE; }
+.set-shell .set-card[data-tone="purple"] { --set-card-tone: #A78BFA; }
+.set-shell .set-card[data-tone="safe"] { --set-card-tone: var(--sally-safe, #34D399); }
+.set-shell .set-card[data-tone="watch"] { --set-card-tone: var(--sally-watch, #FBBF24); }
+.set-shell .set-card[data-tone="danger"] { --set-card-tone: var(--sally-danger, #F87171); }
+.set-shell .set-card[data-tone="neutral"] { --set-card-tone: rgba(255, 255, 255, 0.5); }
+
+.set-shell .set-card-glow {
+  position: absolute;
+  inset: -30% -25% auto -25%;
+  height: 110px;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    60% 100% at 50% 0%,
+    color-mix(in srgb, var(--set-card-tone, transparent) 22%, transparent) 0%,
+    transparent 70%
+  );
+  opacity: 0.9;
+  transition: opacity 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.set-shell .set-card:hover .set-card-glow { opacity: 1; }
+
+.set-shell .set-card-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.set-shell .set-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--set-card-tone, rgba(255, 255, 255, 0.08)) 22%, transparent);
+  color: var(--set-card-tone, var(--sally-ink-1, #F6F6F6));
+  box-shadow:
+    0 0 20px -8px color-mix(in srgb, var(--set-card-tone, transparent) 60%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+.set-shell .set-card-icon > svg { width: 20px; height: 20px; }
+.set-shell .set-card-preview {
+  padding: 4px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--set-card-tone, var(--sally-ink-2));
+  background: color-mix(in srgb, var(--set-card-tone, transparent) 12%, rgba(255, 255, 255, 0.04));
+  border: 1px solid color-mix(in srgb, var(--set-card-tone, transparent) 30%, rgba(255, 255, 255, 0.10));
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.set-shell .set-card-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  min-width: 0;
+  margin-top: auto;
+}
+.set-shell .set-card-title {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  color: var(--sally-ink-1, #F6F6F6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.set-shell .set-card-desc {
+  font-size: 11.5px;
+  color: var(--sally-ink-3, rgba(255, 255, 255, 0.6));
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-width: 100%;
+}
+.set-shell .set-card-chev { display: none; }
+.set-shell .set-card:disabled { opacity: 0.48; cursor: not-allowed; }
+
+.set-shell-hero-brand-spacer { width: 40px; height: 40px; }

@@ -17,7 +17,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Bell,
-  ChevronLeft,
   Cloud,
   CreditCard,
   Database,
@@ -587,16 +586,16 @@ function SettingsCard({
       data-tone={card.tone}
       aria-label={`${card.title} · ${card.description}`}
     >
-      <span aria-hidden className="set-card-icon">
-        <Icon strokeWidth={1.7} />
+      <span aria-hidden className="set-card-glow" />
+      <span className="set-card-top">
+        <span aria-hidden className="set-card-icon">
+          <Icon strokeWidth={1.7} />
+        </span>
+        {preview ? <span className="set-card-preview">{preview}</span> : null}
       </span>
       <span className="set-card-body">
         <span className="set-card-title">{card.title}</span>
         <span className="set-card-desc">{card.description}</span>
-      </span>
-      {preview ? <span className="set-card-preview">{preview}</span> : null}
-      <span aria-hidden className="set-card-chev">
-        <ChevronLeft className="size-4" />
       </span>
     </button>
   );
