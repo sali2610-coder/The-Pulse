@@ -11264,3 +11264,34 @@ button.sally-glass {
   color: var(--sally-ink-4, rgba(255, 255, 255, 0.5));
   letter-spacing: 0.02em;
 }
+
+/* ───────────────────────────────────────────────────────────
+   App · Tab Pager (.tp-*)
+   Full-width horizontal swipe carousel. Preserves per-panel
+   state and hooks (all panels stay mounted). Parallax scale +
+   opacity + blur on non-active panels.
+   ─────────────────────────────────────────────────────────── */
+.tp-outer {
+  position: relative;
+  isolation: isolate;
+}
+.tp-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  /* touch-action: pan-y so a vertical scroll inside any panel
+     still works; framer's own drag detection handles X. */
+  touch-action: pan-y;
+}
+.tp-track {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  will-change: transform;
+}
+.tp-panel {
+  flex: 0 0 auto;
+  min-height: 200px;
+  transform-origin: 50% 40%;
+  will-change: transform, opacity, filter;
+}

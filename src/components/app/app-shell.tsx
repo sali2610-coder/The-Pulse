@@ -7,6 +7,7 @@ import { useFinanceStore } from "@/lib/store";
 import { currentMonthKey } from "@/lib/dates";
 import { projectMonth } from "@/lib/projections";
 import {
+  isTabId,
   subscribeTabNav,
   tabFromHash,
   type TabId,
@@ -26,7 +27,9 @@ import {
 } from "@/components/dashboard/attention-center";
 
 import { AnimatedBackground } from "@/components/dashboard/animated-background";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabPager } from "@/components/app/tab-pager";
+import { soft as hapticSoft, tap as hapticTap } from "@/lib/haptics";
 
 import { DashboardTab } from "@/components/dashboard/dashboard-tab";
 import { ExpensesTab } from "@/components/expenses/expenses-tab";
@@ -41,6 +44,16 @@ import { PendingConfirmListener } from "@/components/app/pending-confirm-listene
 import { PendingConfirmOverlay } from "@/components/confirmation/pending-confirm-overlay";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+/** Tab order for the swipe pager. Matches the visual right-to-left
+ *  order of the TabsList in the header. */
+const TAB_ORDER: TabId[] = [
+  "dashboard",
+  "analytics",
+  "history",
+  "setup",
+  "settings",
+];
 
 // The full Sally app — tabs, dashboard, sync, dev tools. Rendered only when
 // auth is either disabled (single-user fallback) or the user is signed in.
@@ -91,6 +104,29 @@ function AppShellContent() {
     if (typeof window === "undefined") return "dashboard";
     return tabFromHash(window.location.hash) ?? "dashboard";
   });
+
+  // Central tab-change handler. Both the tab-bar clicks and swipe
+  // gestures route through here so hash sync, collapse reset and
+  // haptic feedback stay identical between input methods.
+  function handleTabChange(next: TabId, source: "click" | "swipe") {
+    if (next === activeTab) return;
+    setActiveTab(next);
+    resetAllCollapseState();
+    if (source === "click") hapticTap();
+    if (typeof window !== "undefined") {
+      if (next === "dashboard") {
+        if (window.location.hash) {
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+        }
+      } else if (window.location.hash !== `#${next}`) {
+        window.history.replaceState(null, "", `#${next}`);
+      }
+    }
+  }
 
   // Hash change + in-app nav listeners. Initial hash is read by the
   // useState lazy initializer above so we don't setState in effect.
@@ -250,22 +286,8 @@ function AppShellContent() {
         <Tabs
           value={activeTab}
           onValueChange={(v) => {
-            if (typeof v === "string") {
-              setActiveTab(v as TabId);
-              resetAllCollapseState();
-              if (typeof window !== "undefined") {
-                if (v === "dashboard") {
-                  if (window.location.hash) {
-                    window.history.replaceState(
-                      null,
-                      "",
-                      window.location.pathname + window.location.search,
-                    );
-                  }
-                } else if (window.location.hash !== `#${v}`) {
-                  window.history.replaceState(null, "", `#${v}`);
-                }
-              }
+            if (typeof v === "string" && isTabId(v)) {
+              handleTabChange(v, "click");
             }
           }}
         >
@@ -307,33 +329,36 @@ function AppShellContent() {
             </TabsTrigger>
             <TabsTrigger value="settings">הגדרות</TabsTrigger>
           </TabsList>
+        </Tabs>
 
-          <TabsContent value="dashboard" className="mt-2">
+        {/* Swipeable pager. All 5 panels stay mounted — state,
+           scroll, hooks preserved. Drag > 35% of viewport OR
+           |velocity| > 500 px/s completes the transition; tap on
+           TabsList feeds through the same activeTab state so the
+           spring animation plays either way. */}
+        <div className="tp-outer mt-2">
+          <TabPager
+            activeIndex={TAB_ORDER.indexOf(activeTab)}
+            onIndexChange={(i) => handleTabChange(TAB_ORDER[i], "swipe")}
+            onDragSelect={() => hapticSoft()}
+          >
             <ErrorBoundary name="DashboardTab">
               <DashboardTab />
             </ErrorBoundary>
-          </TabsContent>
-          <TabsContent value="analytics" className="mt-2">
             <ErrorBoundary name="ExpensesTab">
               <ExpensesTab />
             </ErrorBoundary>
-          </TabsContent>
-          <TabsContent value="history" className="mt-2">
             <ErrorBoundary name="FutureTab">
               <FutureTab />
             </ErrorBoundary>
-          </TabsContent>
-          <TabsContent value="setup" className="mt-2">
             <ErrorBoundary name="InsightsTab">
               <InsightsTab />
             </ErrorBoundary>
-          </TabsContent>
-          <TabsContent value="settings" className="mt-2">
             <ErrorBoundary name="SettingsTab">
               <SettingsTab />
             </ErrorBoundary>
-          </TabsContent>
-        </Tabs>
+          </TabPager>
+        </div>
       </div>
 
       <AutoSync />
