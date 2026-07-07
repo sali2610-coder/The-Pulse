@@ -11600,12 +11600,20 @@ button.sally-glass {
   will-change: transform, opacity;
   transform-origin: 50% 40%;
   /* One station = one screen. Reserve chrome above (safe-area
-     + brand header + tab bar + rail ≈ 210px) and dock below
-     (≈ 90px including safe-area). No vertical scroll — content
+     + brand header + tab bar + rail ≈ 220px) and dock below
+     (≈ 80px including safe-area). No vertical scroll — content
      that would overflow is expected to compact itself. */
   height: calc(100dvh - 300px);
-  min-height: 340px;
+  min-height: 320px;
   overflow: hidden;
+}
+/* iPhone SE and short screens — trim the reserve so stations
+   still show meaningful content before clipping. */
+@media (max-height: 700px) {
+  .sp-panel { height: calc(100dvh - 260px); min-height: 280px; }
+}
+@media (max-height: 620px) {
+  .sp-panel { height: calc(100dvh - 220px); min-height: 240px; }
 }
 
 /* Wallet-style rail — thin segmented track with a gold pill
@@ -11616,15 +11624,20 @@ button.sally-glass {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 10px 0 4px;
+  padding: 12px 0 6px;
+  position: relative;
+  z-index: 2;
 }
 .sp-rail-track {
   position: relative;
   height: 5px;
-  width: 180px;
+  width: 200px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.11);
   overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 20px -14px rgba(0, 0, 0, 0.5);
 }
 .sp-rail-fill {
   position: absolute;

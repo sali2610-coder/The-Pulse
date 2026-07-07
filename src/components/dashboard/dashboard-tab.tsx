@@ -289,15 +289,23 @@ export function DashboardTab() {
           </section>
         </SubPager>
 
-        <DockPortal>
-          <PrimaryActionDock
-            onExpense={() => setOpen(true)}
-            onIncome={() => setIncomeSheetOpen(true)}
-            onTransfer={() => setWithdrawalOpen(true)}
-            onCredit={() => navigateToTab("analytics")}
-            onLoan={() => navigateToTab("setup", "loans-mini-app")}
-          />
-        </DockPortal>
+        {/* Dock is only useful on the Portfolio station where the
+           user first meets the balance + upcoming events. Stations
+           2/3/4 are context-heavy (Overview / Activity / Health)
+           and the dock would compete with the rail + swipe as the
+           navigation surface. Portal it to body so the outer
+           TabPager's transform never traps it. */}
+        {station === 0 ? (
+          <DockPortal>
+            <PrimaryActionDock
+              onExpense={() => setOpen(true)}
+              onIncome={() => setIncomeSheetOpen(true)}
+              onTransfer={() => setWithdrawalOpen(true)}
+              onCredit={() => navigateToTab("analytics")}
+              onLoan={() => navigateToTab("setup", "loans-mini-app")}
+            />
+          </DockPortal>
+        ) : null}
 
         <ExpenseDialog open={open} onOpenChange={setOpen} />
         <WithdrawalDialog
