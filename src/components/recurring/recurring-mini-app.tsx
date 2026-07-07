@@ -47,14 +47,16 @@ import {
 import { ruleSchedule } from "@/lib/installment-schedule";
 import { isRuleCardSettled } from "@/lib/rule-settlement";
 import { getCategory } from "@/lib/categories";
+import { installmentProgress, sliceAmount } from "@/lib/projections";
 import {
   MiniAppAddCta,
   MiniAppEmpty,
   MiniAppListCard,
 } from "@/components/ui/mini-app-shell";
 import { RuleFullScreenEdit } from "@/components/recurring/rule-fullscreen-edit";
+import { ExpenseEditFullScreen } from "@/components/expense-form/expense-edit-fullscreen";
 import { tap as hapticTap } from "@/lib/haptics";
-import type { RecurringRule } from "@/types/finance";
+import type { ExpenseEntry, RecurringRule } from "@/types/finance";
 
 const ILS = new Intl.NumberFormat("he-IL", {
   style: "currency",
@@ -106,42 +108,123 @@ function sourceLabel(
   return "לא משויך";
 }
 
+type RuleRow = {
+  kind: "rule";
+  id: string;
+  rule: RecurringRule;
+  sched: ReturnType<typeof ruleSchedule>;
+  isEnding: boolean;
+  nextCharge: Date;
+  source: "bank" | "card" | "cash" | "unknown";
+  lane: "fixed" | "cardSubs" | "installments";
+  monthlyAmount: number;
+  isActive: boolean;
+};
+
+type EntryRow = {
+  kind: "entry";
+  id: string;
+  entry: ExpenseEntry;
+  progress: ReturnType<typeof installmentProgress>;
+  isEnding: boolean;
+  nextCharge: Date;
+  source: "bank" | "card" | "cash" | "unknown";
+  lane: "installments";
+  monthlyAmount: number;
+  isActive: boolean;
+};
+
+type LaneRow = RuleRow | EntryRow;
+
 export function RecurringMiniApp() {
   const hydrated = useFinanceStore((s) => s.hasHydrated);
   const rules = useFinanceStore((s) => s.rules);
+  const entries = useFinanceStore((s) => s.entries);
   const accounts = useFinanceStore((s) => s.accounts);
 
   const [sheet, setSheet] = useState<Sheet>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [entryEditOpen, setEntryEditOpen] = useState(false);
 
   const monthKey = currentMonthKey();
   const now = useMemo(() => new Date(), []);
   const nextMonthKey = addMonths(monthKeyOf(now), 1);
 
-  const enriched = useMemo(() => {
+  const enriched = useMemo<LaneRow[]>(() => {
     if (!hydrated) return [];
-    return rules
-      .map((r) => {
-        const sched = ruleSchedule(r, monthKey);
-        const there = ruleSchedule(r, nextMonthKey);
-        const isEnding = sched.active && !there.active;
-        const day = Math.max(1, Math.min(31, r.dayOfMonth ?? 1));
-        const chargeThisMonth = dayWithinMonth(monthKey, day);
-        const todayKey = monthKeyOf(now);
-        const todayDay = todayKey === monthKey ? now.getDate() : 1;
-        const nextCharge =
-          todayKey === monthKey && day >= todayDay
-            ? chargeThisMonth
-            : dayWithinMonth(nextMonthKey, day);
-        const source: "bank" | "card" | "cash" | "unknown" = isRuleCardSettled(r)
+    const rows: LaneRow[] = [];
+
+    // Rules — the historic recurring-rules feed.
+    for (const r of rules) {
+      const sched = ruleSchedule(r, monthKey);
+      const there = ruleSchedule(r, nextMonthKey);
+      const isEnding = sched.active && !there.active;
+      const day = Math.max(1, Math.min(31, r.dayOfMonth ?? 1));
+      const chargeThisMonth = dayWithinMonth(monthKey, day);
+      const todayKey = monthKeyOf(now);
+      const todayDay = todayKey === monthKey ? now.getDate() : 1;
+      const nextCharge =
+        todayKey === monthKey && day >= todayDay
+          ? chargeThisMonth
+          : dayWithinMonth(nextMonthKey, day);
+      const source: "bank" | "card" | "cash" | "unknown" = isRuleCardSettled(r)
+        ? "card"
+        : r.paymentSource ?? "unknown";
+      const lane = laneOf(r);
+      if (!(sched.active || r.active)) continue;
+      rows.push({
+        kind: "rule",
+        id: r.id,
+        rule: r,
+        sched,
+        isEnding,
+        nextCharge,
+        source,
+        lane,
+        monthlyAmount: r.estimatedAmount,
+        isActive: r.active,
+      });
+    }
+
+    // Installment ExpenseEntries — the missing bridge. Quick-add
+    // expenses with `installments > 1` land here as first-class
+    // installment rows so Settings → "עסקאות בתשלומים" sees them
+    // without a second source of truth. Rendering + edit still
+    // route back through the entry itself.
+    for (const e of entries) {
+      if ((e.installments ?? 1) <= 1) continue;
+      // Skip auto-ingested cash / refund / FX rows so only real
+      // multi-instalment plans surface.
+      if (e.isRefund) continue;
+      if (e.currency && e.currency !== "ILS") continue;
+      if (e.needsConfirmation) continue;
+      const prog = installmentProgress(e, now);
+      if (prog.isComplete) continue;
+      const source: "bank" | "card" | "cash" | "unknown" =
+        e.paymentMethod === "credit"
           ? "card"
-          : r.paymentSource ?? "unknown";
-        const lane = laneOf(r);
-        return { rule: r, sched, isEnding, nextCharge, source, lane };
-      })
-      .filter((e) => e.sched.active || e.rule.active);
-  }, [hydrated, rules, monthKey, nextMonthKey, now]);
+          : e.paymentMethod === "cash"
+            ? "cash"
+            : "bank";
+      const nextCharge = prog.nextChargeDate ?? new Date(e.chargeDate);
+      const isEnding = prog.remaining === 1;
+      rows.push({
+        kind: "entry",
+        id: e.id,
+        entry: e,
+        progress: prog,
+        isEnding,
+        nextCharge,
+        source,
+        lane: "installments",
+        monthlyAmount: sliceAmount(e),
+        isActive: true,
+      });
+    }
+    return rows;
+  }, [hydrated, rules, entries, monthKey, nextMonthKey, now]);
 
   const totals: Record<
     LaneId,
@@ -157,7 +240,7 @@ export function RecurringMiniApp() {
     const bucket = totals[e.lane];
     if (bucket) {
       bucket.count += 1;
-      if (e.sched.active) bucket.monthly += e.rule.estimatedAmount;
+      if (e.isActive) bucket.monthly += e.monthlyAmount;
       if (
         !bucket.nextDate ||
         e.nextCharge.getTime() < bucket.nextDate.getTime()
@@ -165,12 +248,12 @@ export function RecurringMiniApp() {
         bucket.nextDate = e.nextCharge;
       }
     }
-    // Derived 'this week' bucket — any active rule firing in the
+    // Derived 'this week' bucket — any active row firing in the
     // next 7 days regardless of its structural lane.
-    if (e.sched.active && e.nextCharge.getTime() <= weekCutoff) {
+    if (e.isActive && e.nextCharge.getTime() <= weekCutoff) {
       const wk = totals.thisWeek;
       wk.count += 1;
-      wk.monthly += e.rule.estimatedAmount;
+      wk.monthly += e.monthlyAmount;
       if (!wk.nextDate || e.nextCharge.getTime() < wk.nextDate.getTime()) {
         wk.nextDate = e.nextCharge;
       }
@@ -186,6 +269,11 @@ export function RecurringMiniApp() {
     hapticTap();
     setEditingId(id);
     setEditOpen(true);
+  }
+  function openEditEntry(id: string) {
+    hapticTap();
+    setEditingEntryId(id);
+    setEntryEditOpen(true);
   }
 
   if (!hydrated) return null;
@@ -248,9 +336,7 @@ export function RecurringMiniApp() {
         const items = enriched
           .filter((e) => {
             if (laneId === "thisWeek") {
-              return (
-                e.sched.active && e.nextCharge.getTime() <= weekCutoff
-              );
+              return e.isActive && e.nextCharge.getTime() <= weekCutoff;
             }
             return e.lane === laneId;
           })
@@ -296,69 +382,26 @@ export function RecurringMiniApp() {
                     onClick={openAdd}
                   />
                   <ul className="rc-list">
-                    {items.map((e) => {
-                      const cat = getCategory(e.rule.category);
-                      const tone = cat.accent;
-                      const linkedCard =
-                        e.source === "card" && e.rule.linkedCardId
-                          ? accounts.find((a) => a.id === e.rule.linkedCardId)
-                          : undefined;
-                      const daysToNext = Math.max(
-                        0,
-                        Math.floor(
-                          (e.nextCharge.getTime() - now.getTime()) /
-                            86_400_000,
-                        ),
-                      );
-                      const subtitleParts: string[] = [
-                        `יום ${e.rule.dayOfMonth}`,
-                        daysToNext === 0
-                          ? "חיוב היום"
-                          : daysToNext === 1
-                            ? "מחר"
-                            : `בעוד ${daysToNext} ימים`,
-                        linkedCard
-                          ? `${linkedCard.label}${linkedCard.cardLast4 ? ` ····${linkedCard.cardLast4}` : ""}`
-                          : sourceLabel(e.source),
-                      ];
-                      const total = e.rule.installmentTotal;
-                      const remaining = e.sched.remaining;
-                      const paid =
-                        total !== undefined && remaining !== undefined
-                          ? Math.max(0, total - remaining)
-                          : undefined;
-                      const progress =
-                        paid !== undefined && total !== undefined && total > 0
-                          ? paid / total
-                          : undefined;
-                      const progressLabel =
-                        paid !== undefined && total !== undefined
-                          ? `${paid}/${total} תשלומים שולמו`
-                          : undefined;
-                      const status = e.isEnding
-                        ? { tone: "#34D399", label: "מסתיים בחודש הבא" }
-                        : !e.rule.active
-                          ? { tone: "#A1A1AA", label: "מושהה" }
-                          : undefined;
-                      return (
-                        <li key={e.rule.id}>
-                          <MiniAppListCard
-                            icon={cat.icon}
-                            tone={tone}
-                            title={e.rule.label}
-                            subtitle={subtitleParts.join(" · ")}
-                            primaryValue={`−${ILS.format(e.rule.estimatedAmount)}`}
-                            primaryCaption={
-                              total !== undefined
-                                ? "/חודש"
-                                : sourceLabel(e.source)
-                            }
-                            progress={progress}
-                            progressLabel={progressLabel}
-                            status={status}
-                            onClick={() => openEdit(e.rule.id)}
+                    {items.map((row) => {
+                      if (row.kind === "rule") {
+                        return (
+                          <RuleRowCard
+                            key={`rule:${row.id}`}
+                            row={row}
+                            accounts={accounts}
+                            now={now}
+                            onClick={() => openEdit(row.rule.id)}
                           />
-                        </li>
+                        );
+                      }
+                      return (
+                        <EntryRowCard
+                          key={`entry:${row.id}`}
+                          row={row}
+                          accounts={accounts}
+                          now={now}
+                          onClick={() => openEditEntry(row.entry.id)}
+                        />
                       );
                     })}
                   </ul>
@@ -377,7 +420,143 @@ export function RecurringMiniApp() {
           if (!o) setEditingId(null);
         }}
       />
+      <ExpenseEditFullScreen
+        entryId={editingEntryId}
+        open={entryEditOpen}
+        onOpenChange={(o) => {
+          setEntryEditOpen(o);
+          if (!o) setEditingEntryId(null);
+        }}
+      />
     </div>
+  );
+}
+
+function RuleRowCard({
+  row,
+  accounts,
+  now,
+  onClick,
+}: {
+  row: RuleRow;
+  accounts: ReturnType<typeof useFinanceStore.getState>["accounts"];
+  now: Date;
+  onClick: () => void;
+}) {
+  const cat = getCategory(row.rule.category);
+  const tone = cat.accent;
+  const linkedCard =
+    row.source === "card" && row.rule.linkedCardId
+      ? accounts.find((a) => a.id === row.rule.linkedCardId)
+      : undefined;
+  const daysToNext = Math.max(
+    0,
+    Math.floor((row.nextCharge.getTime() - now.getTime()) / 86_400_000),
+  );
+  const subtitleParts: string[] = [
+    `יום ${row.rule.dayOfMonth}`,
+    daysToNext === 0
+      ? "חיוב היום"
+      : daysToNext === 1
+        ? "מחר"
+        : `בעוד ${daysToNext} ימים`,
+    linkedCard
+      ? `${linkedCard.label}${linkedCard.cardLast4 ? ` ····${linkedCard.cardLast4}` : ""}`
+      : sourceLabel(row.source),
+  ];
+  const total = row.rule.installmentTotal;
+  const remaining = row.sched.remaining;
+  const paid =
+    total !== undefined && remaining !== undefined
+      ? Math.max(0, total - remaining)
+      : undefined;
+  const progress =
+    paid !== undefined && total !== undefined && total > 0
+      ? paid / total
+      : undefined;
+  const progressLabel =
+    paid !== undefined && total !== undefined
+      ? `${paid}/${total} תשלומים שולמו`
+      : undefined;
+  const status = row.isEnding
+    ? { tone: "#34D399", label: "מסתיים בחודש הבא" }
+    : !row.rule.active
+      ? { tone: "#A1A1AA", label: "מושהה" }
+      : undefined;
+  return (
+    <li>
+      <MiniAppListCard
+        icon={cat.icon}
+        tone={tone}
+        title={row.rule.label}
+        subtitle={subtitleParts.join(" · ")}
+        primaryValue={`−${ILS.format(row.rule.estimatedAmount)}`}
+        primaryCaption={total !== undefined ? "/חודש" : sourceLabel(row.source)}
+        progress={progress}
+        progressLabel={progressLabel}
+        status={status}
+        onClick={onClick}
+      />
+    </li>
+  );
+}
+
+function EntryRowCard({
+  row,
+  accounts,
+  now,
+  onClick,
+}: {
+  row: EntryRow;
+  accounts: ReturnType<typeof useFinanceStore.getState>["accounts"];
+  now: Date;
+  onClick: () => void;
+}) {
+  const entry = row.entry;
+  const cat = getCategory(entry.category);
+  const tone = cat.accent;
+  const linkedCard = entry.accountId
+    ? accounts.find((a) => a.id === entry.accountId)
+    : undefined;
+  const day = row.nextCharge.getDate();
+  const daysToNext = Math.max(
+    0,
+    Math.floor((row.nextCharge.getTime() - now.getTime()) / 86_400_000),
+  );
+  const label = entry.merchant ?? entry.note ?? cat.label;
+  const subtitleParts: string[] = [
+    `יום ${day}`,
+    daysToNext === 0
+      ? "חיוב היום"
+      : daysToNext === 1
+        ? "מחר"
+        : `בעוד ${daysToNext} ימים`,
+    linkedCard
+      ? `${linkedCard.label}${linkedCard.cardLast4 ? ` ····${linkedCard.cardLast4}` : ""}`
+      : sourceLabel(row.source),
+  ];
+  const prog = row.progress;
+  const progress =
+    prog.total > 0 ? Math.max(0, Math.min(1, prog.paid / prog.total)) : undefined;
+  const progressLabel = `${prog.paid}/${prog.total} תשלומים שולמו`;
+  const status = row.isEnding
+    ? { tone: "#34D399", label: "תשלום אחרון" }
+    : undefined;
+  return (
+    <li>
+      <MiniAppListCard
+        icon={cat.icon}
+        tone={tone}
+        title={label}
+        subtitle={subtitleParts.join(" · ")}
+        primaryValue={`−${ILS.format(row.monthlyAmount)}`}
+        primaryCaption="/חודש"
+        progress={progress}
+        progressLabel={progressLabel}
+        status={status}
+        onClick={onClick}
+      />
+    </li>
   );
 }
 
