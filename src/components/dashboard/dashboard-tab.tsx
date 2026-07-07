@@ -11,7 +11,8 @@
 // headers. Each header shows a single colored summary chip so the
 // user reads the bottom-line of every section without expanding.
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 
 import { useFinanceStore } from "@/lib/store";
@@ -147,6 +148,40 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
   return <ErrorBoundary name={name}>{children}</ErrorBoundary>;
 }
 
+function StationTitle({
+  id,
+  eyebrow,
+  children,
+}: {
+  id: string;
+  eyebrow: string;
+  children: ReactNode;
+}) {
+  return (
+    <header className="home-station-title" dir="rtl">
+      <span className="home-station-title-eyebrow" data-mono="true" dir="ltr">
+        {eyebrow}
+      </span>
+      <h2 id={id} className="home-station-title-h">
+        {children}
+      </h2>
+    </header>
+  );
+}
+
+/** The PrimaryActionDock is `position: fixed` — but the outer
+ *  TabPager panel carries `will-change: transform` which
+ *  establishes a containing block for fixed descendants in
+ *  modern browsers. Portal to document.body so the dock stays
+ *  truly viewport-fixed above every station. Client-only. */
+function DockPortal({ children }: { children: ReactNode }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
+// keep useEffect import used (avoids future ESLint churn if the
+// dock portal grows to need mount lifecycle again).
+void useEffect;
+
 const HOME_STATIONS = [
   { id: "portfolio", label: "פורטפוליו" },
   { id: "overview", label: "סקירה" },
@@ -182,77 +217,87 @@ export function DashboardTab() {
         >
           {/* ── Station 1 · Portfolio ───────────────────────────── */}
           <section className="home-station" aria-labelledby="hs-portfolio">
-            <h2 id="hs-portfolio" className="sr-only">
+            <StationTitle id="hs-portfolio" eyebrow="1 / 4">
               פורטפוליו
-            </h2>
-            <Safe name="PortfolioHeroCard">
-              <PortfolioHeroCard />
-            </Safe>
-            <div className="empty:hidden">
-              <Safe name="WelcomeSetupCard">
-                <WelcomeSetupCard />
+            </StationTitle>
+            <div className="home-station-body">
+              <Safe name="PortfolioHeroCard">
+                <PortfolioHeroCard />
               </Safe>
+              <div className="empty:hidden">
+                <Safe name="WelcomeSetupCard">
+                  <WelcomeSetupCard />
+                </Safe>
+              </div>
             </div>
           </section>
 
           {/* ── Station 2 · Financial Overview ─────────────────── */}
           <section className="home-station" aria-labelledby="hs-overview">
-            <h2 id="hs-overview" className="sr-only">
-              סקירה פיננסית
-            </h2>
-            <Safe name="ObligationsDashboard">
-              <ObligationsDashboard />
-            </Safe>
-            <Safe name="IncomeLauncher">
-              <IncomeLauncher />
-            </Safe>
+            <StationTitle id="hs-overview" eyebrow="2 / 4">
+              סקירה חודשית
+            </StationTitle>
+            <div className="home-station-body">
+              <Safe name="ObligationsDashboard">
+                <ObligationsDashboard />
+              </Safe>
+              <Safe name="IncomeLauncher">
+                <IncomeLauncher />
+              </Safe>
+            </div>
           </section>
 
           {/* ── Station 3 · Monthly Activity ───────────────────── */}
           <section className="home-station" aria-labelledby="hs-activity">
-            <h2 id="hs-activity" className="sr-only">
+            <StationTitle id="hs-activity" eyebrow="3 / 4">
               פעילות החודש
-            </h2>
-            <div className="empty:hidden">
-              <Safe name="CopilotCard">
-                <CopilotCard />
-              </Safe>
-            </div>
-            <div className="empty:hidden">
-              <Safe name="RecentActivity">
-                <RecentActivity />
-              </Safe>
+            </StationTitle>
+            <div className="home-station-body">
+              <div className="empty:hidden">
+                <Safe name="CopilotCard">
+                  <CopilotCard />
+                </Safe>
+              </div>
+              <div className="empty:hidden">
+                <Safe name="RecentActivity">
+                  <RecentActivity />
+                </Safe>
+              </div>
             </div>
           </section>
 
           {/* ── Station 4 · Health Center ──────────────────────── */}
           <section className="home-station" aria-labelledby="hs-health">
-            <h2 id="hs-health" className="sr-only">
-              מרכז בריאות
-            </h2>
-            <div className="empty:hidden">
-              <Safe name="PendingTray">
-                <PendingTray />
+            <StationTitle id="hs-health" eyebrow="4 / 4">
+              בריאות פיננסית
+            </StationTitle>
+            <div className="home-station-body">
+              <div className="empty:hidden">
+                <Safe name="PendingTray">
+                  <PendingTray />
+                </Safe>
+              </div>
+              <div className="empty:hidden">
+                <Safe name="AttentionBanner">
+                  <AttentionBanner />
+                </Safe>
+              </div>
+              <Safe name="WatchLauncher">
+                <WatchLauncher />
               </Safe>
             </div>
-            <div className="empty:hidden">
-              <Safe name="AttentionBanner">
-                <AttentionBanner />
-              </Safe>
-            </div>
-            <Safe name="WatchLauncher">
-              <WatchLauncher />
-            </Safe>
           </section>
         </SubPager>
 
-        <PrimaryActionDock
-          onExpense={() => setOpen(true)}
-          onIncome={() => setIncomeSheetOpen(true)}
-          onTransfer={() => setWithdrawalOpen(true)}
-          onCredit={() => navigateToTab("analytics")}
-          onLoan={() => navigateToTab("setup", "loans-mini-app")}
-        />
+        <DockPortal>
+          <PrimaryActionDock
+            onExpense={() => setOpen(true)}
+            onIncome={() => setIncomeSheetOpen(true)}
+            onTransfer={() => setWithdrawalOpen(true)}
+            onCredit={() => navigateToTab("analytics")}
+            onLoan={() => navigateToTab("setup", "loans-mini-app")}
+          />
+        </DockPortal>
 
         <ExpenseDialog open={open} onOpenChange={setOpen} />
         <WithdrawalDialog

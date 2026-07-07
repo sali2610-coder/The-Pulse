@@ -11599,12 +11599,12 @@ button.sally-glass {
   flex: 0 0 auto;
   will-change: transform, opacity;
   transform-origin: 50% 40%;
-  /* One station = one screen. Chrome above the pager totals to
-     ~205px on standard mobile (safe-area + header + tabs + rail).
-     Content that would overflow is compacted by the components
-     themselves, not by adding scroll. */
-  height: calc(100dvh - 205px);
-  min-height: 320px;
+  /* One station = one screen. Reserve chrome above (safe-area
+     + brand header + tab bar + rail ≈ 210px) and dock below
+     (≈ 90px including safe-area). No vertical scroll — content
+     that would overflow is expected to compact itself. */
+  height: calc(100dvh - 300px);
+  min-height: 340px;
   overflow: hidden;
 }
 
@@ -11615,15 +11615,15 @@ button.sally-glass {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding-block-start: 2px;
+  gap: 12px;
+  padding: 10px 0 4px;
 }
 .sp-rail-track {
   position: relative;
-  height: 4px;
-  width: 140px;
+  height: 5px;
+  width: 180px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.10);
   overflow: hidden;
 }
 .sp-rail-fill {
@@ -11656,17 +11656,49 @@ button.sally-glass {
 .home-sub-shell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .home-station {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 4px;
+  gap: 8px;
+  padding: 2px 4px 4px;
   height: 100%;
   overflow: hidden;
 }
 .home-station > * { min-height: 0; }
+.home-station-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline: 6px;
+  padding-block-end: 4px;
+  flex-shrink: 0;
+}
+.home-station-title-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  color: color-mix(in srgb, var(--sally-gold-loud, #E4C158) 88%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.home-station-title-h {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  color: var(--sally-ink-1, #F6F6F6);
+  margin: 0;
+}
+.home-station-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.home-station-body > * { min-height: 0; }
 
 /* ───────────────────────────────────────────────────────────
    App · Header gear + Settings Center overlay
