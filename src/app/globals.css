@@ -8612,6 +8612,36 @@ button.sally-glass {
   outline-offset: 2px;
 }
 
+/* Drilldown section split — actual expenses feed the total,
+   fixed charges are informational only. Split visual so users
+   don't confuse the two. */
+.csp-drilldown-heading {
+  padding: 8px 16px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sally-ink-4, rgba(255, 255, 255, 0.55));
+}
+.csp-drilldown-heading-fixed {
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--sally-gold-loud, #E4C158) 70%, rgba(255, 255, 255, 0.5));
+}
+.csp-drilldown-empty {
+  color: var(--sally-ink-4, rgba(255, 255, 255, 0.45));
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  font-size: 11.5px;
+}
+.csp-drilldown-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.csp-drilldown-list-fixed { opacity: 0.85; }
+
 /* Progress bar polish inside category rows */
 .csp-card[data-polish="v2"] .h-1.w-full.bg-white\/5 {
   height: 3px !important;

@@ -454,7 +454,7 @@ function CategoryRow({
 
       <AnimatePresence initial={false}>
         {open ? (
-          <motion.ul
+          <motion.div
             key="items"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -465,7 +465,27 @@ function CategoryRow({
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden border-t border-white/8"
           >
-            {group.items.map((it, rowIdx) => {
+            {/* Split the drilldown into two clearly labeled groups:
+                actual expenses (drive the section total) and fixed
+                charges (informational overlay — do NOT contribute
+                to the total). Mixing them made the amounts feel
+                inconsistent even though the math was correct. */}
+            {(() => {
+              const actualItems = group.items.filter((it) => !it.isRecurring);
+              const fixedItems = group.items.filter((it) => it.isRecurring);
+              return (
+                <>
+                  {actualItems.length > 0 ? (
+                    <div className="csp-drilldown-heading">
+                      הוצאות בפועל · נכללות בסה״כ
+                    </div>
+                  ) : (
+                    <div className="csp-drilldown-heading csp-drilldown-empty">
+                      אין הוצאות בפועל בקטגוריה זו החודש
+                    </div>
+                  )}
+                  <ul className="csp-drilldown-list">
+                    {actualItems.map((it, rowIdx) => {
               // Phase 269 — pull installment progress so installment
               // rows show "תשלום 3 מתוך 12" + ₪/חודש · סה״כ.
               const installmentMeta = installmentMetaForSource({
@@ -548,7 +568,75 @@ function CategoryRow({
               </motion.li>
               );
             })}
-          </motion.ul>
+                  </ul>
+
+                  {fixedItems.length > 0 ? (
+                    <>
+                      <div className="csp-drilldown-heading csp-drilldown-heading-fixed">
+                        חיובים קבועים · לא נכללים בסה״כ
+                      </div>
+                      <ul className="csp-drilldown-list csp-drilldown-list-fixed">
+                        {fixedItems.map((it, rowIdx) => {
+                          const installmentMeta = installmentMetaForSource({
+                            source: it.source,
+                            id: it.id,
+                            monthKey,
+                            entries,
+                            rules,
+                          });
+                          const isInstallment = installmentMeta !== null;
+                          const kindLabel = isInstallment
+                            ? "תשלום"
+                            : "קבוע";
+                          return (
+                            <motion.li
+                              key={`${it.source}-${it.id}`}
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{
+                                delay: Math.min(rowIdx * 0.028, 0.25),
+                                duration: 0.2,
+                                ease: [0.22, 1, 0.36, 1],
+                              }}
+                              className={`flex items-start gap-2 px-4 py-2 ${
+                                isInstallment
+                                  ? "border-r-2 border-r-[#F59E0B]/60"
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate text-body text-foreground/85">
+                                    {it.label}
+                                  </span>
+                                  {isInstallment ? <InstallmentBadge /> : null}
+                                </span>
+                                {installmentMeta ? (
+                                  <InstallmentMetaLines meta={installmentMeta} />
+                                ) : (
+                                  <span className="text-caption text-muted-foreground/80">
+                                    {kindLabel} ·{" "}
+                                    {DAY_FMT.format(new Date(it.chargeDate))}
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                data-mono="true"
+                                dir="ltr"
+                                className="text-body font-medium text-foreground/70"
+                              >
+                                {ILS.format(Math.round(it.amount))}
+                              </span>
+                            </motion.li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  ) : null}
+                </>
+              );
+            })()}
+          </motion.div>
         ) : null}
       </AnimatePresence>
     </li>
