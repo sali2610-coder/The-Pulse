@@ -58,7 +58,7 @@ export function BottomSheet({
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={reduced ? REDUCED : FADE_QUICK}
-                  className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
+                  className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-md"
                 />
               }
             />
@@ -90,7 +90,7 @@ export function BottomSheet({
                     }
                   }}
                   className={cn(
-                    "glass-card fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] shadow-[0_-24px_60px_-12px_rgba(0,0,0,0.55)]",
+                    "glass-card fixed inset-x-0 bottom-0 z-[80] mx-auto flex w-full max-w-md flex-col rounded-t-[28px] shadow-[0_-24px_60px_-12px_rgba(0,0,0,0.55)]",
                     fullScreen
                       ? "top-[max(env(safe-area-inset-top),24px)] max-h-[100dvh] gap-3 px-5 pt-3"
                       : "pb-safe-plus max-h-[92dvh] gap-4 px-5 pt-3",

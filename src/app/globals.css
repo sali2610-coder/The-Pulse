@@ -10809,7 +10809,11 @@ button.sally-glass {
 .set-overlay {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  /* Must sit ABOVE the SettingsCenter panel (z-60). SettingsShell
+     is mounted inside SettingsCenter; when a card opens a sheet,
+     the sheet needs to cover the Center panel — not hide behind
+     it. */
+  z-index: 70;
   display: flex;
   align-items: flex-end;
   justify-content: center;
