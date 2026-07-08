@@ -51,7 +51,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function FutureTab() {
   return (
-    <div className="flex flex-col gap-3 pb-28 sm:pb-32">
+    <div className="pulse-stagger flex flex-col gap-3 pb-28 sm:pb-32">
       <Safe name="TimeScreenV3">
         <TimeScreenV3 />
       </Safe>

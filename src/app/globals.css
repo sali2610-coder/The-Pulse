@@ -12128,3 +12128,54 @@ button.sally-glass {
 .hm-cell:active {
   transform: scale(0.96);
 }
+
+/* ───────────────────────────────────────────────────────────
+   Pulse · unified motion vocabulary (.pulse-enter, .pulse-stagger)
+   Subtle entrance rhythm applied at tab / grid level so every
+   card in the app breathes in the same way. GPU-friendly:
+   transform + opacity + filter only. No layout thrash. No
+   infinite animations. Reduced-motion path drops the anim.
+   ─────────────────────────────────────────────────────────── */
+@keyframes pulse-card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.pulse-enter {
+  animation: pulse-card-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+/* Stagger: every direct child fades in with a 40ms delay step
+   so a tab's cards assemble as the user watches. Capped at
+   n(10) so extremely long lists don't drag past ~400ms. */
+.pulse-stagger > * {
+  animation: pulse-card-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+.pulse-stagger > *:nth-child(1) { animation-delay: 20ms; }
+.pulse-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.pulse-stagger > *:nth-child(3) { animation-delay: 100ms; }
+.pulse-stagger > *:nth-child(4) { animation-delay: 140ms; }
+.pulse-stagger > *:nth-child(5) { animation-delay: 180ms; }
+.pulse-stagger > *:nth-child(6) { animation-delay: 220ms; }
+.pulse-stagger > *:nth-child(7) { animation-delay: 260ms; }
+.pulse-stagger > *:nth-child(8) { animation-delay: 300ms; }
+.pulse-stagger > *:nth-child(9) { animation-delay: 340ms; }
+.pulse-stagger > *:nth-child(10) { animation-delay: 380ms; }
+.pulse-stagger > *:nth-child(n+11) { animation-delay: 400ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-enter,
+  .pulse-stagger > * {
+    animation: none;
+  }
+}

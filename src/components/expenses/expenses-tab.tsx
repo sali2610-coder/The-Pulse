@@ -69,7 +69,7 @@ function Safe({ name, children }: { name: string; children: ReactNode }) {
 
 export function ExpensesTab() {
   return (
-    <div className="ex-root" dir="rtl">
+    <div className="ex-root pulse-stagger" dir="rtl">
       {/* Pending tray surfaces only when there are items needing
          review. Collapsed via `empty:hidden` when the child renders
          null so the layout stays tight. */}

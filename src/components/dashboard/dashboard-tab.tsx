@@ -165,7 +165,7 @@ export function DashboardTab() {
   return (
     <SnapshotProvider>
       <TapDiscoveryToast />
-      <div className="grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
+      <div className="pulse-stagger grid grid-cols-1 gap-4 pb-28 sm:grid-cols-6 sm:gap-4 sm:pb-32">
         {/* ── Critical banners — render only when relevant.
             Phase 276 — `empty:hidden` collapses the wrapper div when
             the lazy-loaded child renders null so the grid doesn't

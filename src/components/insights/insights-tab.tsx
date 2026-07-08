@@ -254,7 +254,7 @@ export function InsightsTab() {
   }
 
   return (
-    <div className="fic-root" dir="rtl">
+    <div className="fic-root pulse-stagger" dir="rtl">
       <HeroCfo
         score={score}
         status={scoreStatus}
