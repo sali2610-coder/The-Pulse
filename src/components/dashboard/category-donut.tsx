@@ -188,7 +188,26 @@ export function CategoryDonut() {
 
       <div className="flex items-center gap-4">
         <div className="relative shrink-0">
-          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+          <svg
+            width={SIZE}
+            height={SIZE}
+            viewBox={`0 0 ${SIZE} ${SIZE}`}
+            className="cd-donut-svg"
+          >
+            {/* Premium filters: outer glow + inner shadow → glass depth. */}
+            <defs>
+              <filter id="cd-slice-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="2.4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <radialGradient id="cd-inner-shadow" cx="50%" cy="50%" r="50%">
+                <stop offset="60%" stopColor="rgba(0,0,0,0)" />
+                <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
+              </radialGradient>
+            </defs>
             {/* Track */}
             <circle
               cx={SIZE / 2}
@@ -210,16 +229,17 @@ export function CategoryDonut() {
                   stroke={a.accent}
                   fill="none"
                   strokeLinecap="butt"
+                  filter={isSelected ? "url(#cd-slice-glow)" : undefined}
                   initial={{ strokeDasharray: `0 ${CIRCUMFERENCE}` }}
                   animate={{
                     strokeDasharray: `${a.length} ${CIRCUMFERENCE - a.length}`,
                     strokeDashoffset: -a.offset,
                     strokeWidth: isSelected ? STROKE_SELECTED : STROKE,
-                    opacity: dim ? 0.35 : 1,
+                    opacity: dim ? 0.32 : 1,
                   }}
                   transition={{
                     delay: 0.15 + idx * 0.05,
-                    duration: 0.45,
+                    duration: 0.55,
                     ease: [0.22, 1, 0.36, 1],
                   }}
                   style={{
@@ -229,11 +249,30 @@ export function CategoryDonut() {
                   }}
                   onClick={() => {
                     hapticTap();
-                    setSelected((cur) => (cur === a.id ? null : a.id));
+                    if (selected === a.id) {
+                      // Second tap on the already-selected slice opens
+                      // the rich detail sheet (matches the Wallet /
+                      // Copilot pattern).
+                      setDrilldown(a.id);
+                    } else {
+                      setSelected(a.id);
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    hapticTap();
+                    setDrilldown(a.id);
                   }}
                 />
               );
             })}
+            {/* Inner shadow ring — added last so it sits above slices. */}
+            <circle
+              cx={SIZE / 2}
+              cy={SIZE / 2}
+              r={RADIUS - STROKE / 2 - 1}
+              fill="url(#cd-inner-shadow)"
+              pointerEvents="none"
+            />
           </svg>
 
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">

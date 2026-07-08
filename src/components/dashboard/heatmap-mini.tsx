@@ -165,15 +165,35 @@ export function HeatmapMini() {
       <div dir="ltr" className="grid grid-cols-7 gap-1.5">
         {data.days.map((d) => {
           const heavy = d.intensity >= 0.75;
-          const bg = d.isFuture
-            ? "rgba(255,255,255,0.04)"
-            : d.income > 0 && d.total === 0
-              ? "color-mix(in oklab, #34D399 26%, transparent)"
-              : d.intensity === 0
-                ? "rgba(255,255,255,0.05)"
-                : `color-mix(in oklab, var(--neon) ${Math.round(
-                    18 + d.intensity * 72,
-                  )}%, transparent)`;
+          // Tone rules (Nav V3 audit):
+          //   • future day       → neutral card, no fill.
+          //   • income only      → green wash, brighter with amount.
+          //   • expense only     → red wash, brighter with intensity.
+          //   • both             → red→green diagonal gradient.
+          //   • silent past      → very muted card so it reads as "0".
+          const expenseTone = "#F87171";
+          const incomeTone = "#34D399";
+          let bg: string;
+          let shadow = "none";
+          if (d.isFuture) {
+            bg = "rgba(255,255,255,0.035)";
+          } else if (d.income > 0 && d.total > 0) {
+            const intensityPct = Math.round(30 + d.intensity * 55);
+            bg = `linear-gradient(135deg, color-mix(in oklab, ${expenseTone} ${intensityPct}%, transparent) 0%, color-mix(in oklab, ${incomeTone} 55%, transparent) 100%)`;
+            shadow = `0 0 12px -4px color-mix(in oklab, ${expenseTone} 45%, transparent)`;
+          } else if (d.income > 0) {
+            bg = `color-mix(in oklab, ${incomeTone} 34%, transparent)`;
+            shadow = `0 0 12px -4px color-mix(in oklab, ${incomeTone} 55%, transparent)`;
+          } else if (d.intensity === 0) {
+            bg = "rgba(255,255,255,0.05)";
+          } else {
+            const strength = Math.round(20 + d.intensity * 70);
+            bg = `color-mix(in oklab, ${expenseTone} ${strength}%, transparent)`;
+            shadow =
+              d.intensity >= 0.6
+                ? `0 0 14px -4px color-mix(in oklab, ${expenseTone} 60%, transparent)`
+                : "none";
+          }
           return (
             <motion.button
               type="button"
@@ -191,8 +211,8 @@ export function HeatmapMini() {
                 setSelectedDay(d.day);
               }}
               aria-label={`יום ${d.day} · ${ILS.format(d.total)}${d.hasSalary ? " · משכורת" : ""}`}
-              className="relative flex aspect-square items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60 hover:brightness-125"
-              style={{ background: bg }}
+              className="hm-cell relative flex aspect-square items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--neon)]/60"
+              style={{ background: bg, boxShadow: shadow }}
               title={`יום ${d.day} · ${ILS.format(d.total)}`}
             >
               <span className="text-[9px] font-medium text-foreground/70">

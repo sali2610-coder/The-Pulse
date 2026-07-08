@@ -12103,3 +12103,28 @@ button.sally-glass {
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+/* ── Category Donut · premium SVG polish (.cd-*) ────────── */
+.cd-donut-svg {
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35));
+}
+.cd-donut-svg circle {
+  transition: stroke-width 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ── Heat calendar · premium day cells (.hm-*) ──────────── */
+.hm-cell {
+  transition:
+    transform 180ms cubic-bezier(0.32, 0.72, 0, 1),
+    filter 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.hm-cell:hover {
+  transform: translateY(-1px) scale(1.03);
+  filter: brightness(1.18);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.hm-cell:active {
+  transform: scale(0.96);
+}
