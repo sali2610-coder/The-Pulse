@@ -215,7 +215,16 @@ export function InsightsTab() {
   );
 
   const savings = sumOpportunityImpact(opportunities);
-  const eomBalance = eomForecast?.forecast ?? 0;
+  // Single source of truth for the EOM balance across Home / Time /
+  // Insights: the liquidity-curve point closest to the last day of
+  // the current month. Home reads the same value via
+  // `pickCurvePointForDate` in use-home-data.ts. The bucket-summed
+  // formula in `forecastEndOfMonth` is kept only for the breakdown
+  // rows inside ForecastLens (anchors / income / fixed / loans /
+  // slices); the headline number always uses the curve so users see
+  // the same "צפוי סוף חודש" everywhere.
+  const eomBalance =
+    pickEomFromCurve(curve) ?? eomForecast?.forecast ?? 0;
 
   const score = computeHealthScore(risks, opportunities, insights.length);
   const scoreStatus =
@@ -227,6 +236,7 @@ export function InsightsTab() {
 
   const summaryLines = composeSummaryLines(chip, now, {
     eomForecast,
+    eomBalance,
     risks,
     opportunities,
     anomalies,
@@ -346,7 +356,12 @@ export function InsightsTab() {
           />
         ) : null}
         {lens === "forecast" ? (
-          <ForecastLens key="forecast" eom={eomForecast} curve={curve} />
+          <ForecastLens
+            key="forecast"
+            eom={eomForecast}
+            eomBalance={eomBalance}
+            curve={curve}
+          />
         ) : null}
         {lens === "week" ? <WeekLens key="week" rows={week} /> : null}
         {lens === "recs" ? (
@@ -723,9 +738,11 @@ function InsightRow({
 
 function ForecastLens({
   eom,
+  eomBalance,
   curve,
 }: {
   eom: ReturnType<typeof forecastEndOfMonth> | null;
+  eomBalance: number;
   curve: LiquidityCurve | null;
 }) {
   if (!eom) {
@@ -738,7 +755,7 @@ function ForecastLens({
   return (
     <LensFrame eyebrow="תחזית 30 ימים">
       <div className="fic-forecast-chart">
-        <Sparkline curve={curve} tone={eom.forecast < 0 ? "danger" : "safe"} />
+        <Sparkline curve={curve} tone={eomBalance < 0 ? "danger" : "safe"} />
       </div>
       <ul className="fic-forecast-list">
         <ForecastItem
@@ -773,9 +790,9 @@ function ForecastLens({
         />
         <ForecastItem
           label="תחזית סוף חודש"
-          value={eom.forecast}
-          sign={eom.forecast < 0 ? "−" : "+"}
-          tone={eom.forecast < 0 ? "danger" : "safe"}
+          value={eomBalance}
+          sign={eomBalance < 0 ? "−" : "+"}
+          tone={eomBalance < 0 ? "danger" : "safe"}
           emphasize
         />
       </ul>
@@ -1217,6 +1234,26 @@ function startOfDay(d: Date): Date {
   return x;
 }
 
+/** EOM balance derived from the liquidity-curve — the same
+ *  source Home + Time consume. Returns null when the curve
+ *  isn't ready so callers can fall back to `forecastEndOfMonth`. */
+function pickEomFromCurve(curve: LiquidityCurve | null): number | null {
+  if (!curve || curve.points.length === 0) return null;
+  const now = new Date();
+  const eomDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59);
+  const targetT = eomDate.getTime();
+  let best = curve.points[0];
+  let bestDelta = Math.abs(new Date(best.whenISO).getTime() - targetT);
+  for (const p of curve.points) {
+    const d = Math.abs(new Date(p.whenISO).getTime() - targetT);
+    if (d < bestDelta) {
+      best = p;
+      bestDelta = d;
+    }
+  }
+  return Math.round(best.balance);
+}
+
 function safeCategory(id: string): string {
   try {
     return getCategory(id as CategoryId).label;
@@ -1239,6 +1276,7 @@ function composeSummaryLines(
   now: number,
   data: {
     eomForecast: ReturnType<typeof forecastEndOfMonth> | null;
+    eomBalance: number;
     risks: AiInsight[];
     opportunities: AiInsight[];
     anomalies: SpendAnomaly[];
@@ -1248,13 +1286,14 @@ function composeSummaryLines(
 ): Array<{ icon: string; text: string }> {
   const lines: Array<{ icon: string; text: string }> = [];
   const eom = data.eomForecast;
+  const eomBalance = data.eomBalance;
 
   if (chip === "risk") {
     const urgent = data.risks.filter((r) => r.severity === 3).length;
     lines.push(
       urgent > 0
         ? { icon: "🚨", text: `${urgent} סיכונים דחופים דורשים התייחסות` }
-        : eom && eom.forecast >= 0
+        : eom && eomBalance >= 0
           ? { icon: "✅", text: "אין סכנה למינוס החודש" }
           : { icon: "⚠", text: "צפויה יתרה שלילית בסוף החודש" },
     );
@@ -1280,7 +1319,7 @@ function composeSummaryLines(
     lines.push({
       icon: "💧",
       text: eom
-        ? `סוף חודש צפוי: ${ILS.format(Math.round(eom.forecast))}`
+        ? `סוף חודש צפוי: ${ILS.format(Math.round(eomBalance))}`
         : "אין תחזית זמינה",
     });
     lines.push({
@@ -1315,7 +1354,7 @@ function composeSummaryLines(
     lines.push({
       icon: "📈",
       text: eom
-        ? `יתרה צפויה בסוף החודש: ${ILS.format(Math.round(eom.forecast))}`
+        ? `יתרה צפויה בסוף החודש: ${ILS.format(Math.round(eomBalance))}`
         : "אין תחזית",
     });
     lines.push({
